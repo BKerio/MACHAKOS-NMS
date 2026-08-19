@@ -1,0 +1,685 @@
+// NMS-EOC Database Schema
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  WATCHER
+  DISPATCHER
+  DRIVER
+  EMT
+  NURSE
+  PARTNER
+}
+
+enum AgencyType {
+  INTERNAL
+  PARTNER
+}
+
+enum IncidentStatus {
+  DRAFT             // Created by watcher, not yet submitted
+  SUBMITTED         // Submitted to dispatch queue
+  DISPATCH_HANDLING // Dispatcher has taken it up
+  DISPATCH_ON_HOLD  // Dispatcher paused it
+  DISPATCHED        // Crew assigned and en route
+  RESOLVED          // Case closed
+}
+
+enum TaskStatus {
+  PENDING
+  ACCEPTED
+  EN_ROUTE
+  AT_SCENE
+  PATIENT_PICKED
+  AT_HOSPITAL
+  COMPLETED
+  CANCELLED
+}
+
+enum VehicleStatus {
+  READY
+  BUSY
+  MAINTENANCE
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Agency
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Agency {
+  id          String     @id @default(uuid())
+  name        String
+  type        AgencyType @default(INTERNAL)
+  location    String?
+  contactInfo Json?      @map("contact_info")
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  users            User[]
+  incidents        Incident[]      @relation("IncidentAgency")
+  vehicles         Vehicle[]
+  partnerAmbulances PartnerAmbulance[]
+  forwardingFrom   ForwardingLog[] @relation("ForwardingFromAgency")
+  forwardingTo     ForwardingLog[] @relation("ForwardingToAgency")
+
+  @@map("agencies")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  phone        String?
+  role         Role
+  // Every role the account may act as (max 2, enforced in the create/update
+  // validators). `role` above is the account's primary/default role and is
+  // always kept in sync with roles[0]. When roles.length > 1, login requires
+  // the user to pick which one to activate for the session (see AuthService).
+  roles        Role[]   @default([])
+  fcmToken     String?  @map("fcm_token")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  agencyId String @map("agency_id")
+  agency   Agency @relation(fields: [agencyId], references: [id])
+
+  watchedIncidents    Incident[] @relation("IncidentWatcher")
+  dispatchedIncidents Incident[] @relation("IncidentDispatcher")
+  driverTasks         Task[]     @relation("TaskDriver")
+  emtTasks            Task[]     @relation("TaskEmt")
+  nurseTasks          Task[]     @relation("TaskNurse")
+  auditLogs           AuditLog[]
+
+  currentDriverVehicles Vehicle[] @relation("VehicleCurrentDriver")
+  currentEmtVehicles    Vehicle[] @relation("VehicleCurrentEmt")
+  currentNurseVehicles  Vehicle[] @relation("VehicleCurrentNurse")
+
+  uploadedPatientCareReports PatientCareReport[] @relation("UserUploadedPatientCareReports")
+  checkIns                   CheckIn[]           @relation("UserCheckIns")
+  inventoryCheckouts         InventoryCheckout[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Incident
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Incident {
+  id             String         @id @default(uuid())
+  // Sequential human case number. caseSeq is a DB-assigned running number
+  // (1, 2, 3…); caseNumber is its display form "Case 001". The sweep resets
+  // the sequence so numbering starts fresh at Case 001.
+  caseSeq        Int            @unique @default(autoincrement()) @map("case_seq")
+  caseNumber     String         @unique @map("case_number")
+  // Client-generated idempotency key for offline capture + sync (#17). When an
+  // offline device replays a queued create, the same clientRef returns the existing
+  // incident instead of creating a duplicate.
+  clientRef      String?        @unique @map("client_ref")
+  status         IncidentStatus @default(DRAFT)
+  chiefComplaint String         @map("chief_complaint") @db.Text
+  locationName   String         @map("location_name")
+  subCounty      String         @map("sub_county")
+  subCountySource String?       @map("sub_county_source") // AUTO | MANUAL - how the sub-county was set
+  lat            Float?
+  lng            Float?
+  alertMode      String?        @map("alert_mode")
+  alertAt        DateTime?      @map("alert_at")
+  notifierDetails Json?         @map("notifier_details")
+
+  // Patient information
+  patientName       String? @map("patient_name")
+  patientAge        String? @map("patient_age")
+  patientGender     String? @map("patient_gender")
+  patientNhif       String? @map("patient_nhif")
+  patientNationalId String? @map("patient_national_id")
+  patientContact    String? @map("patient_contact")
+  nextOfKin         String? @map("next_of_kin")
+
+  // Mass casualty event
+  massCasualty      Boolean @default(false) @map("mass_casualty")
+  massCasualtyCount Int?    @map("mass_casualty_count")
+
+  // Notes and clinical info
+  watcherComments       String? @map("watcher_comments") @db.Text
+  dispatcherComments    String? @map("dispatcher_comments") @db.Text
+  dispatcherChallenges  String? @map("dispatcher_challenges") @db.Text
+  preHospitalManagement String? @map("pre_hospital_management") @db.Text
+  hospitalLevelRequired Int?    @map("hospital_level_required")
+
+  // Extended alert/referral fields
+  alertNature      String? @map("alert_nature")
+  alertNatureDetail String? @map("alert_nature_detail")
+  originOfAlert    String? @map("origin_of_alert")
+  nextOfKinPhone   String? @map("next_of_kin_phone")
+  placeOfReferral  String? @map("place_of_referral")
+  ambulanceUsed    String? @map("ambulance_used")
+  surveillanceNote String? @map("surveillance_note") @db.Text
+
+  // Healthcare worker contacted about this case (name + phone)
+  healthcareWorkerName    String? @map("healthcare_worker_name")
+  healthcareWorkerContact String? @map("healthcare_worker_contact")
+
+  // Maternity vitals (populated when alertNature is Maternity)
+  maternityVitals Json? @map("maternity_vitals")
+
+  // Patient vitals (Temperature, Pulse, Respiration, BP, SPO2, FH)
+  vitals Json? @map("vitals")
+
+  // GBV flag
+  isGbvCase    Boolean @default(false) @map("is_gbv_case")
+
+  // Partner update fields
+  partnerNotes String? @map("partner_notes") @db.Text
+  pcrUrl       String? @map("pcr_url")
+
+  // Case closure
+  closureReason String? @map("closure_reason") @db.Text
+  closedById    String? @map("closed_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  watcherId String @map("watcher_id")
+  watcher   User   @relation("IncidentWatcher", fields: [watcherId], references: [id])
+
+  dispatcherId String? @map("dispatcher_id")
+  dispatcher   User?   @relation("IncidentDispatcher", fields: [dispatcherId], references: [id])
+
+  assignedAgencyId String @map("assigned_agency_id")
+  assignedAgency   Agency @relation("IncidentAgency", fields: [assignedAgencyId], references: [id])
+
+  targetFacilityId String?   @map("target_facility_id")
+  targetFacility   Facility? @relation(fields: [targetFacilityId], references: [id])
+
+  tasks          Task[]
+  forwardingLogs ForwardingLog[]
+  callLogs       CallLog[]
+  gbvReport      GbvReport?
+
+  @@map("incidents")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Task {
+  id     String     @id @default(uuid())
+  status TaskStatus @default(PENDING)
+
+  // Lifecycle timestamps - used for TAT (Turnaround Time) calculations
+  receivedAt        DateTime  @default(now()) @map("received_at")
+  acceptedAt        DateTime? @map("accepted_at")
+  sceneArrivalAt    DateTime? @map("scene_arrival_at")
+  patientPickAt     DateTime? @map("patient_pick_at")
+  facilityArrivalAt DateTime? @map("facility_arrival_at")
+  completedAt       DateTime? @map("completed_at")
+  rejectedAt        DateTime? @map("rejected_at")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelReason      String?   @map("cancel_reason")
+
+  // Route coordinates
+  startLat Float? @map("start_lat")
+  startLng Float? @map("start_lng")
+  endLat   Float? @map("end_lat")
+  endLng   Float? @map("end_lng")
+
+  // Vital signs captured by the crew at hospital handover (Temperature, Pulse,
+  // Respiration, BP, SPO2, GCS, etc.) - JSON, same shape convention as Incident.vitals.
+  handoverVitals Json? @map("handover_vitals")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  incidentId String   @map("incident_id")
+  incident   Incident @relation(fields: [incidentId], references: [id])
+
+  vehicleId String  @map("vehicle_id")
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+
+  driverId String @map("driver_id")
+  driver   User   @relation("TaskDriver", fields: [driverId], references: [id])
+
+  emtId String? @map("emt_id")
+  emt   User?   @relation("TaskEmt", fields: [emtId], references: [id])
+
+  nurseId String? @map("nurse_id")
+  nurse   User?   @relation("TaskNurse", fields: [nurseId], references: [id])
+
+  patientCareReports PatientCareReport[]
+  stops              TaskStop[]
+
+  @@map("tasks")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TaskStop - additional destination(s) added during a task, e.g. re-routing from
+// one facility to another (KNH -> Mama Lucy). Ordered by `sequence`.
+// ─────────────────────────────────────────────────────────────────────────────
+model TaskStop {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  name       String                              // destination label, e.g. "Mama Lucy Hospital"
+  facilityId String?  @map("facility_id")         // optional link to a known facility
+  lat        Float?
+  lng        Float?
+  note       String?  @db.Text
+  sequence   Int      @default(0)                 // display/visit order
+  arrivedAt  DateTime? @map("arrived_at")
+
+  addedById  String?  @map("added_by_id")          // soft link to the crew/dispatcher who added it
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([taskId])
+  @@map("task_stops")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StandbyDeployment - an ambulance placed on standby for an event or at a location
+// (e.g. a match, a rally, a hospital). Used for fleet standby reporting (#11).
+// A row is "active" while endedAt is null.
+// ─────────────────────────────────────────────────────────────────────────────
+model StandbyDeployment {
+  id        String   @id @default(uuid())
+  vehicleId String   @map("vehicle_id")
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+
+  title     String                              // event / reason, e.g. "Derby match standby"
+  location  String?                             // where the vehicle is stationed
+  lat       Float?
+  lng       Float?
+  notes     String?  @db.Text
+
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")           // null = still on standby
+
+  createdById String? @map("created_by_id")      // soft link to the user who logged it
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([vehicleId])
+  @@index([startedAt])
+  @@map("standby_deployments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PartnerAmbulance - partner-owned ambulances (Red Cross, Fire Brigade, etc.).
+// These have no GPS trackers, so we store reference vehicle information only; they
+// are shown to dispatchers as available partner capacity, not live-tracked.
+// ─────────────────────────────────────────────────────────────────────────────
+model PartnerAmbulance {
+  id                 String   @id @default(uuid())
+  // Optional: county/EOC-owned no-tracker ambulances have no partner agency.
+  agencyId           String?  @map("agency_id")
+  agency             Agency?  @relation(fields: [agencyId], references: [id])
+
+  registrationNumber String   @map("registration_number")
+  vehicleType        String?  @map("vehicle_type")     // e.g. BLS / ALS / Fire engine
+  contactName        String?  @map("contact_name")
+  contactPhone       String?  @map("contact_phone")
+  baseLocation       String?  @map("base_location")    // where it is usually stationed
+  capacity           String?                            // free text, e.g. "2 stretchers"
+  notes              String?  @db.Text
+  isActive           Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([agencyId])
+  @@map("partner_ambulances")
+}
+
+model PatientCareReport {
+  id        String   @id @default(uuid())
+  note      String   @default("")
+  filePath  String   @map("file_path")
+  mimeType  String   @map("mime_type")
+  fileSize  Int      @map("file_size")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  taskId     String @map("task_id")
+  task       Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploaderId String @map("uploader_id")
+  uploader   User   @relation(fields: [uploaderId], references: [id], name: "UserUploadedPatientCareReports")
+
+  @@index([taskId])
+  @@map("patient_care_reports")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vehicle
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Vehicle {
+  id                 String        @id @default(uuid())
+  registrationNumber String        @unique @map("registration_number")
+  imei               String        @unique
+  status             VehicleStatus @default(READY)
+  isActive           Boolean       @default(true) @map("is_active")
+  lastLat            Float?    @map("last_lat")
+  lastLng            Float?    @map("last_lng")
+  lastLocationAt     DateTime? @map("last_location_at")
+  lastLocationName   String?   @map("last_location_name")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  agencyId String @map("agency_id")
+  agency   Agency @relation(fields: [agencyId], references: [id])
+
+  // Current crew checked in to this vehicle (set by the mobile app at shift start)
+  currentDriverId String? @map("current_driver_id")
+  currentDriver   User?   @relation("VehicleCurrentDriver", fields: [currentDriverId], references: [id])
+
+  currentEmtId    String? @map("current_emt_id")
+  currentEmt      User?   @relation("VehicleCurrentEmt", fields: [currentEmtId], references: [id])
+
+  currentNurseId  String? @map("current_nurse_id")
+  currentNurse    User?   @relation("VehicleCurrentNurse", fields: [currentNurseId], references: [id])
+
+  tasks     Task[]
+  checkIns  CheckIn[]
+  standbys  StandbyDeployment[]
+  inventoryCheckouts InventoryCheckout[]
+
+  @@map("vehicles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CheckIn - a crew member (driver/EMT/nurse) starting a shift on a vehicle.
+// Captures an accountability selfie + GPS location at the moment of check-in.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CheckIn {
+  id           String   @id @default(uuid())
+  role         Role
+  lat          Float
+  lng          Float
+  locationName String?  @map("location_name")
+  selfiePath   String   @map("selfie_path")
+  checkedInAt  DateTime @default(now()) @map("checked_in_at")
+
+  vehicleId String  @map("vehicle_id")
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+  userId String @map("user_id")
+  user   User   @relation("UserCheckIns", fields: [userId], references: [id])
+
+  @@index([vehicleId])
+  @@index([userId])
+  @@map("check_ins")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Facility
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Facility {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   // e.g., "Hospital", "Health Centre", "Clinic"
+  kephLevel Int      @map("keph_level") // 1–6, Kenya KEPH classification
+  subCounty String   @map("sub_county")
+  lat       Float
+  lng       Float
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  incidents Incident[]
+
+  @@map("facilities")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CallLog - Yeastar PBX call records
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+}
+
+enum CallStatus {
+  RINGING
+  ANSWERED
+  NO_ANSWER
+  BUSY
+  FAILED
+}
+
+model CallLog {
+  id           String        @id @default(uuid())
+  callId       String        @unique @map("call_id")
+  direction    CallDirection @default(INBOUND)
+  callFrom     String        @map("call_from")
+  callTo       String        @map("call_to")
+  startedAt    DateTime      @map("started_at")
+  endedAt      DateTime?     @map("ended_at")
+  duration     Int           @default(0)
+  talkDuration Int           @default(0) @map("talk_duration")
+  status       CallStatus    @default(RINGING)
+  recording    String?
+  trunkName    String?       @map("trunk_name")
+  didNumber    String?       @map("did_number")
+  notes        String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  incidentId String?   @map("incident_id")
+  incident   Incident? @relation(fields: [incidentId], references: [id])
+
+  @@map("call_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ForwardingLog
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ForwardingLog {
+  id        String   @id @default(uuid())
+  reason    String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  incidentId String   @map("incident_id")
+  incident   Incident @relation(fields: [incidentId], references: [id])
+
+  fromAgencyId String @map("from_agency_id")
+  fromAgency   Agency @relation("ForwardingFromAgency", fields: [fromAgencyId], references: [id])
+
+  toAgencyId String @map("to_agency_id")
+  toAgency   Agency @relation("ForwardingToAgency", fields: [toAgencyId], references: [id])
+
+  @@map("forwarding_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IncidentNatureOption - user-extensible nature/detail taxonomy
+// ─────────────────────────────────────────────────────────────────────────────
+
+model IncidentNatureOption {
+  id        String   @id @default(uuid())
+  nature    String   // e.g. "Maternity (maternal & neonatal disorders)"
+  detail    String?  // e.g. "Miscarriage" - null = top-level nature
+  sortOrder Int      @default(0) @map("sort_order") // preserves the intended display order
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([nature, detail])
+  @@map("incident_nature_options")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GbvReport - Gender-Based Violence supplementary data, one-to-one with Incident
+// ─────────────────────────────────────────────────────────────────────────────
+
+model GbvReport {
+  id String @id @default(uuid())
+
+  survivorResidence String?  @map("survivor_residence")
+  hasDisability     Boolean? @map("has_disability")
+  gbvTypes          String[] @map("gbv_types")
+  violationLocation String?  @map("violation_location")
+  referredFor       String[] @map("referred_for")
+  referralFacility  String?  @map("referral_facility")
+  firstDisclosedTo  String?  @map("first_disclosed_to") @db.Text
+  challenges        String?  @db.Text
+  recommendations   String?  @db.Text
+  comment           String?  @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  incidentId String   @unique @map("incident_id")
+  incident   Incident @relation(fields: [incidentId], references: [id])
+
+  @@map("gbv_reports")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AuditLog
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, FORWARD
+  subjectType String   @map("subject_type") // INCIDENT, TASK, USER, VEHICLE
+  subjectId   String   @map("subject_id")
+  oldValues   Json?    @map("old_values")
+  newValues   Json?    @map("new_values")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMS - outbound messaging via Advanta. SmsMessage is the audit log (one row
+// per recipient). SmsContact is a managed recipient list grouped by tag
+// (e.g. SURVEILLANCE). SmsTemplate holds editable message bodies.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SmsMessage {
+  id                String   @id @default(uuid())
+  recipient         String                            // normalized MSISDN, e.g. 2547XXXXXXXX
+  message           String   @db.Text
+  channel           String   @default("SMS")           // SMS | WHATSAPP
+  category          String   @default("MANUAL")       // MANUAL | AUTO_PARTNER | SURVEILLANCE
+  status            String   @default("SENT")          // SENT | FAILED
+  providerMessageId String?  @map("provider_message_id")
+  error             String?  @db.Text
+  groupLabel        String?  @map("group_label")       // e.g. recipient group / niche tag
+  incidentId        String?  @map("incident_id")       // soft link (no FK) for auto-notify dedup
+  sentById          String?  @map("sent_by_id")        // soft link to the user who triggered a manual send
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([incidentId])
+  @@index([category])
+  @@map("sms_messages")
+}
+
+model SmsContact {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String
+  group     String                                     // free tag, e.g. SURVEILLANCE, MEDIA
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([group])
+  @@map("sms_contacts")
+}
+
+model SmsTemplate {
+  id        String   @id @default(uuid())
+  key       String   @unique                           // GBV | MCI | SURVEILLANCE
+  label     String
+  body      String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sms_templates")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// InventoryItem - ambulance / EOC stock (vitals equipment, consumables, etc.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model InventoryItem {
+  id            String   @id @default(uuid())
+  name          String
+  category      String   // VITALS | CONSUMABLES | MEDICATION | AIRWAY | WOUND_CARE | OTHER
+  unit          String   @default("each") // each | box | pack | litre | set
+  quantityStock Int      @default(0) @map("quantity_stock")
+  reorderLevel  Int      @default(0) @map("reorder_level")
+  notes         String?  @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  checkouts InventoryCheckout[]
+
+  @@index([category])
+  @@index([isActive])
+  @@map("inventory_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// InventoryCheckout - stock drawn from central InventoryItem stock onto a
+// specific ambulance (crew "cart" checkout). Shared by all crew currently
+// checked into that vehicle. Returning reduces the outstanding quantity and
+// adds it back to the central InventoryItem stock.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model InventoryCheckout {
+  id               String    @id @default(uuid())
+  quantity         Int                                  // original quantity taken
+  returnedQuantity Int       @default(0) @map("returned_quantity")
+  status           String    @default("CHECKED_OUT")     // CHECKED_OUT | RETURNED
+  checkedOutAt     DateTime  @default(now()) @map("checked_out_at")
+  returnedAt       DateTime? @map("returned_at")
+
+  itemId String        @map("item_id")
+  item   InventoryItem @relation(fields: [itemId], references: [id])
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  vehicleId String  @map("vehicle_id")
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@index([itemId])
+  @@index([userId])
+  @@index([vehicleId])
+  @@index([status])
+  @@map("inventory_checkouts")
+}

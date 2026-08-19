@@ -1,0 +1,2 @@
+# Fastify plugins live here (Prisma, Redis, JWT, Socket.io).
+# Each plugin decorates the Fastify instance with a dependency.
