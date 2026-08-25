@@ -8,7 +8,7 @@
 /// flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
 ///
 /// # Physical device on same Wi‑Fi → your PC's LAN IP
-/// flutter run --dart-define=API_BASE_URL=http://192.168.1.42:3000
+/// flutter run --dart-define=API_BASE_URL=http://192.168.1.42:3000hh
 /// ```
 class Config {
   static const String baseUrl = String.fromEnvironment(
