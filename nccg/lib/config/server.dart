@@ -12,7 +12,7 @@
 /// ```
 class Config {
   static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
+    'API_BASE_URL',o
     defaultValue: 'http://192.168.100.147:3000/api',
   );
 }
