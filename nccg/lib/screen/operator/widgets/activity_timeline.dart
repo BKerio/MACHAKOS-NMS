@@ -93,7 +93,7 @@ class _TimelineRow extends StatelessWidget {
                           : null,
                 ),
                 if (!isLast)
-                  Expanded(
+                  Expanded(kk
                     child: Container(
                       width: 2,
                       margin: const EdgeInsets.only(top: 2),
