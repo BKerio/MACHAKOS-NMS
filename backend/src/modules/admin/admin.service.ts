@@ -130,10 +130,10 @@ export class AdminService {
 
   // ── Vehicles ───────────────────────────────────────────────────────────────
 
-  async listVehicles(filters: { agencyId?: string; page: number; limit: number }) {
-    const { agencyId, page, limit } = filters;
+  async listVehicles(filters: { agencyId?: string; page: number; limit: number; includeInactive?: boolean }) {
+    const { agencyId, page, limit, includeInactive } = filters;
     const skip = (page - 1) * limit;
-    const where: any = agencyId ? { agencyId } : {};
+    const where: any = { ...(agencyId ? { agencyId } : {}), ...(includeInactive ? {} : { isActive: true }) };
 
     const [vehicles, total] = await Promise.all([
       this.app.prisma.vehicle.findMany({

@@ -1,7 +1,22 @@
 import { FastifyInstance } from 'fastify';
+import crypto from 'node:crypto';
 import { hashPassword, comparePassword } from '../../shared/utils/hash.js';
 import { Role } from '../../shared/types/index.js';
-import { UnauthorizedError, ConflictError, BadRequestError, NotFoundError } from '../../shared/errors/AppError.js';
+import { AppError, UnauthorizedError, ConflictError, BadRequestError, NotFoundError } from '../../shared/errors/AppError.js';
+import { normalizeKenyanMobile, sendAdvantaSms } from '../../services/sms.js';
+import { getOtpStore } from './otp.store.js';
+
+// Field-crew roles that sign in with phone + SMS code instead of email + password.
+const OTP_ELIGIBLE_ROLES: Role[] = [Role.DRIVER, Role.EMT, Role.NURSE];
+const OTP_TTL_SECONDS = 300; // code lifetime
+const OTP_COOLDOWN_SECONDS = 60; // minimum gap between resend requests
+const OTP_MAX_ATTEMPTS = 5; // wrong guesses allowed before the code is invalidated
+
+interface OtpRecord {
+  codeHash: string;
+  userId: string;
+  attempts: number;
+}
 
 export class AuthService {
   constructor(private app: FastifyInstance) {}
@@ -76,6 +91,23 @@ export class AuthService {
       throw new UnauthorizedError('Invalid email or password');
     }
 
+    // Drivers/EMTs/Nurses sign in with phone + SMS code now - point them there
+    // instead of letting a stale password in.
+    const roles = user.roles.length ? user.roles : [user.role];
+    if (roles.some((r) => OTP_ELIGIBLE_ROLES.includes(r))) {
+      throw new UnauthorizedError('Drivers, EMTs, and Nurses now sign in with a phone number and SMS code. Use Field Crew Login.');
+    }
+
+    return this.issueSession(user);
+  }
+
+  /**
+   * Shared by password login and OTP login - decides between a full token
+   * and a pending role-selection token for multi-role accounts.
+   */
+  private issueSession(user: {
+    id: string; email: string; name: string; role: Role; roles: Role[]; agencyId: string;
+  }) {
     const roles = user.roles.length ? user.roles : [user.role];
 
     if (roles.length > 1) {
@@ -92,7 +124,6 @@ export class AuthService {
       };
     }
 
-    // 3. Generate token
     const token = this.app.jwt.sign({
       userId: user.id,
       role: user.role,
@@ -111,6 +142,92 @@ export class AuthService {
         agencyId: user.agencyId,
       },
     };
+  }
+
+  /**
+   * Step 1 of field-crew login: finds the Driver/EMT/Nurse account with this
+   * phone number, texts them a 6-digit code (via Advanta SMS), and stashes
+   * the code hash for 5 minutes. Rate-limited to one send per minute per
+   * phone number.
+   */
+  async requestOtp(phoneRaw: string) {
+    const phone = normalizeKenyanMobile(phoneRaw);
+    if (!phone) throw new BadRequestError('Enter a valid phone number');
+
+    const store = getOtpStore(this.app);
+
+    const cooldownKey = `otp:cooldown:${phone}`;
+    if (await store.get(cooldownKey)) {
+      throw new BadRequestError('A code was already sent - wait a minute before requesting another.');
+    }
+
+    const candidates = await this.app.prisma.user.findMany({
+      where: {
+        isActive: true,
+        phone: { not: null },
+        OR: [{ role: { in: OTP_ELIGIBLE_ROLES } }, { roles: { hasSome: OTP_ELIGIBLE_ROLES } }],
+      },
+    });
+    const user = candidates.find((u) => u.phone && normalizeKenyanMobile(u.phone) === phone);
+
+    if (!user) {
+      throw new UnauthorizedError('No Driver, EMT, or Nurse account found with that phone number');
+    }
+
+    const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+    const codeHash = await hashPassword(code);
+    const record: OtpRecord = { codeHash, userId: user.id, attempts: 0 };
+
+    const otpKey = `otp:${phone}`;
+    await store.set(otpKey, JSON.stringify(record), OTP_TTL_SECONDS);
+    await store.set(cooldownKey, '1', OTP_COOLDOWN_SECONDS);
+
+    try {
+      await sendAdvantaSms(phone, `Your NMS login code is ${code}. It expires in 5 minutes. Do not share this code.`);
+    } catch (err) {
+      // The code is worthless if the text never left, and keeping the cooldown
+      // would lock them out for a minute over a gateway fault they can't fix.
+      await store.del(otpKey, cooldownKey);
+      this.app.log.error({ err, phone }, 'OTP SMS send failed');
+      throw new AppError('We could not send the SMS just now. Please try again in a moment.', 502);
+    }
+
+    return { ok: true, expiresIn: OTP_TTL_SECONDS };
+  }
+
+  /**
+   * Step 2 of field-crew login: checks the code against the stored hash and,
+   * on success, issues the same session shape as password login.
+   */
+  async verifyOtp(phoneRaw: string, code: string) {
+    const phone = normalizeKenyanMobile(phoneRaw);
+    if (!phone) throw new BadRequestError('Enter a valid phone number');
+
+    const store = getOtpStore(this.app);
+
+    const otpKey = `otp:${phone}`;
+    const raw = await store.get(otpKey);
+    if (!raw) throw new UnauthorizedError('Code expired or was never requested - request a new one');
+
+    const record = JSON.parse(raw) as OtpRecord;
+
+    if (record.attempts >= OTP_MAX_ATTEMPTS) {
+      await store.del(otpKey);
+      throw new UnauthorizedError('Too many incorrect attempts - request a new code');
+    }
+
+    const isValid = await comparePassword(code, record.codeHash);
+    if (!isValid) {
+      await store.setKeepingTtl(otpKey, JSON.stringify({ ...record, attempts: record.attempts + 1 }));
+      throw new UnauthorizedError('Incorrect code');
+    }
+
+    await store.del(otpKey);
+
+    const user = await this.app.prisma.user.findUnique({ where: { id: record.userId } });
+    if (!user || !user.isActive) throw new UnauthorizedError('Account is no longer active');
+
+    return this.issueSession(user);
   }
 
   /**

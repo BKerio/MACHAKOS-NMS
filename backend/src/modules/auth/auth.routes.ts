@@ -22,6 +22,15 @@ const selectRoleSchema = z.object({
   role: z.nativeEnum(Role),
 });
 
+const otpRequestSchema = z.object({
+  phone: z.string().min(9, 'Enter a valid phone number'),
+});
+
+const otpVerifySchema = z.object({
+  phone: z.string().min(9, 'Enter a valid phone number'),
+  code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+});
+
 const updateMeSchema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters').optional(),
@@ -54,6 +63,27 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
 
     const result = await authService.login(parsed.data);
+    return reply.send({ ok: true, data: result });
+  });
+
+  // Field crew (Driver/EMT/Nurse) login: phone + SMS code, in place of a password.
+  app.post('/otp/request', async (request, reply) => {
+    const parsed = otpRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0].message);
+    }
+
+    const result = await authService.requestOtp(parsed.data.phone);
+    return reply.send({ ok: true, data: result });
+  });
+
+  app.post('/otp/verify', async (request, reply) => {
+    const parsed = otpVerifySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0].message);
+    }
+
+    const result = await authService.verifyOtp(parsed.data.phone, parsed.data.code);
     return reply.send({ ok: true, data: result });
   });
 

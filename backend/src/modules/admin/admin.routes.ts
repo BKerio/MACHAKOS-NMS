@@ -180,13 +180,14 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ── Vehicles ───────────────────────────────────────────────────────────────
 
-  app.get<{ Querystring: { agencyId?: string; page?: string; limit?: string } }>(
+  app.get<{ Querystring: { agencyId?: string; page?: string; limit?: string; includeInactive?: string } }>(
     '/vehicles',
     async (request, reply) => {
       const result = await adminService.listVehicles({
         agencyId: request.query.agencyId,
         page: parseInt(request.query.page ?? '1', 10),
         limit: parseInt(request.query.limit ?? '20', 10),
+        includeInactive: request.query.includeInactive === 'true',
       });
       return reply.send({ ok: true, ...result });
     }

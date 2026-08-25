@@ -104,14 +104,16 @@ export const dispatchRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
   );
 
   /**
-   * GET /dispatch/vehicles
-   * All vehicles with latest location - accessible to dispatchers for fleet map.
+   * GET /dispatch/vehicles?includeInactive=true
+   * Active vehicles with latest location - accessible to dispatchers for fleet map.
+   * Pass includeInactive=true to also see deactivated vehicles (e.g. for reactivating one).
    */
-  app.get(
+  app.get<{ Querystring: { includeInactive?: string } }>(
     '/vehicles',
     { preValidation: [requireRole(assignRoles)] },
-    async (_request, reply) => {
+    async (request, reply) => {
       const vehicles = await app.prisma.vehicle.findMany({
+        where: request.query.includeInactive === 'true' ? {} : { isActive: true },
         orderBy: { createdAt: 'desc' },
         include: {
           agency:        { select: { id: true, name: true } },
