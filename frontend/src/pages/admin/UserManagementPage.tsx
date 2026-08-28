@@ -44,11 +44,12 @@ function UserManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
-  const [editRoleTarget, setEditRoleTarget] = useState<{ id: string; name: string; email: string; roles: Role[]; agencyId: string | null } | null>(null);
+  const [editRoleTarget, setEditRoleTarget] = useState<{ id: string; name: string; email: string; phone: string; roles: Role[]; agencyId: string | null } | null>(null);
   const [editRolesValue, setEditRolesValue] = useState<Role[]>(['WATCHER']);
   const [editAgencyValue, setEditAgencyValue] = useState('');
   const [editNameValue, setEditNameValue] = useState('');
   const [editEmailValue, setEditEmailValue] = useState('');
+  const [editPhoneValue, setEditPhoneValue] = useState('');
   const [editPasswordValue, setEditPasswordValue] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [roleFilter, setRoleFilter] = useState<Role | 'ALL'>('ALL');
@@ -89,7 +90,7 @@ function UserManagementPage() {
   });
 
   const editRoleMutation = useMutation({
-    mutationFn: ({ userId, ...data }: { userId: string; name?: string; email?: string; password?: string; roles?: Role[]; agencyId?: string }) =>
+    mutationFn: ({ userId, ...data }: { userId: string; name?: string; email?: string; phone?: string; password?: string; roles?: Role[]; agencyId?: string }) =>
       api.patch(`/admin/users/${userId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
@@ -441,11 +442,12 @@ function UserManagementPage() {
                             <button
                               onClick={() => {
                                 const roles = u.roles?.length ? u.roles : [u.role];
-                                setEditRoleTarget({ id: u.id, name: u.name, email: u.email, roles, agencyId: u.agencyId });
+                                setEditRoleTarget({ id: u.id, name: u.name, email: u.email, phone: u.phone ?? '', roles, agencyId: u.agencyId });
                                 setEditRolesValue(roles);
                                 setEditAgencyValue(u.agencyId ?? '');
                                 setEditNameValue(u.name);
                                 setEditEmailValue(u.email);
+                                setEditPhoneValue(u.phone ?? '');
                                 setEditPasswordValue('');
                               }}
                               title="Edit User"
@@ -652,6 +654,19 @@ function UserManagementPage() {
 
               <div>
                 <label className="block text-[10px] font-black tracking-widest mb-2" style={{ color: 'var(--muted)' }}>
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  className={inputCls}
+                  style={inputStyle}
+                  value={editPhoneValue}
+                  onChange={e => setEditPhoneValue(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black tracking-widest mb-2" style={{ color: 'var(--muted)' }}>
                   Reset Password
                 </label>
                 <input
@@ -758,6 +773,7 @@ function UserManagementPage() {
                   userId: editRoleTarget.id,
                   name: editNameValue.trim() !== editRoleTarget.name ? editNameValue.trim() : undefined,
                   email: editEmailValue.trim() !== editRoleTarget.email ? editEmailValue.trim() : undefined,
+                  phone: editPhoneValue.trim() !== editRoleTarget.phone ? editPhoneValue.trim() : undefined,
                   password: editPasswordValue.length >= 8 ? editPasswordValue : undefined,
                   roles: !sameRoles(editRolesValue, editRoleTarget.roles) ? editRolesValue : undefined,
                   agencyId: editRolesValue.includes('PARTNER') && editAgencyValue && editAgencyValue !== (editRoleTarget.agencyId ?? '') ? editAgencyValue : undefined,
@@ -769,6 +785,7 @@ function UserManagementPage() {
                     sameRoles(editRolesValue, editRoleTarget.roles) &&
                     editNameValue.trim() === editRoleTarget.name &&
                     editEmailValue.trim() === editRoleTarget.email &&
+                    editPhoneValue.trim() === editRoleTarget.phone &&
                     editPasswordValue.length === 0
                   )
                 }
