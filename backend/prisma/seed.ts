@@ -194,7 +194,7 @@ async function main() {
       email: 'joe@afosi.org',
       passwordHash: joeHash,
       name: 'Joe',
-      role: Role.ADMIN,pp
+      role: Role.ADMIN,
       agencyId: nmsAgency.id,
       isActive: true,
     },
