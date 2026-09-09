@@ -144,7 +144,9 @@ export interface VehicleChecklistItem {
 export interface VehicleChecklist {
   resetAt: string;
   items: VehicleChecklistItem[];
-  summary: { complete: boolean; totalRequired: number; confirmed: number };
+  // Ready for dispatch is a spot-check: at least one confirmed medical item
+  // AND at least one confirmed vehicle item, not every item in the catalog.
+  summary: { complete: boolean; totalRequired: number; confirmed: number; medicalOk: boolean; vehicleOk: boolean };
 }
 
 export interface InventoryCheckout {

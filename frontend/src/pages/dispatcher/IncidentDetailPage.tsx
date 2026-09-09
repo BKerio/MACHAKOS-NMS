@@ -1139,7 +1139,7 @@ function IncidentDetailPage() {
                           {v.currentDriver ? ` - ${v.currentDriver.name}` : ' - no driver'}
                           {v.currentEmt ? ` / EMT ${v.currentEmt.name}` : ''}
                           {v.currentNurse ? ` / Nurse ${v.currentNurse.name}` : ''}
-                          {v.checklistComplete === false ? ` · ⚠ checklist ${v.checklistConfirmed}/${v.checklistTotal}` : ''}
+                          {v.checklistComplete === false ? ' · ⚠ checklist incomplete' : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -1212,8 +1212,8 @@ function IncidentDetailPage() {
                     )}
                     {sv.checklistComplete === false && (
                       <p className="text-xs text-status-warning font-medium mt-3">
-                        Equipment checklist incomplete ({sv.checklistConfirmed}/{sv.checklistTotal} confirmed) - crew
-                        must confirm the rest before this vehicle can be dispatched.
+                        Equipment checklist incomplete - crew must confirm at least one medical item and one vehicle
+                        item before this vehicle can be dispatched.
                       </p>
                     )}
                   </div>

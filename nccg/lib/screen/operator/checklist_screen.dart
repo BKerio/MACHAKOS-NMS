@@ -122,31 +122,44 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         AppCard(
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                checklist.summary.complete ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
-                color: checklist.summary.complete ? AppColors.green : AppColors.amber,
-                size: 26,
+              Row(
+                children: [
+                  Icon(
+                    checklist.summary.complete ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                    color: checklist.summary.complete ? AppColors.green : AppColors.amber,
+                    size: 26,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${checklist.summary.confirmed}/${checklist.summary.totalRequired} confirmed overall',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          checklist.summary.complete
+                              ? 'Ready for dispatch'
+                              : 'Confirm at least one medical item and one vehicle item to be dispatch-ready',
+                          style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${checklist.summary.confirmed}/${checklist.summary.totalRequired} confirmed',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      checklist.summary.complete
-                          ? 'Ready for dispatch'
-                          : 'Dispatch is blocked until every item is confirmed',
-                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _GroupTag(label: 'Medical', ok: checklist.summary.medicalOk),
+                  const SizedBox(width: 8),
+                  _GroupTag(label: 'Vehicle', ok: checklist.summary.vehicleOk),
+                ],
               ),
             ],
           ),
@@ -173,6 +186,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           const SizedBox(height: 8),
         ],
       ],
+    );
+  }
+}
+
+class _GroupTag extends StatelessWidget {
+  final String label;
+  final bool ok;
+  const _GroupTag({required this.label, required this.ok});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: ok ? AppColors.greenLight : AppColors.surface2,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(
+        '${ok ? '✓' : '·'} $label',
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: ok ? AppColors.green : AppColors.muted),
+      ),
     );
   }
 }

@@ -13,30 +13,62 @@ import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
  * (bumped whenever a driver checks in - see fleet.service.ts checkInToCrew), so
  * a new shift always starts unconfirmed even though old check rows are kept
  * around (not deleted) for history.
+ *
+ * Readiness is a spot-check, not an exhaustive one: a vehicle is dispatch-ready
+ * once at least one MEDICAL item AND at least one VEHICLE item have been
+ * confirmed OK this shift - not every one of the ~230 catalog items. A group
+ * with zero requiredForDispatch items is trivially satisfied (nothing to
+ * confirm in it).
  */
 export interface ChecklistSummary {
   complete: boolean;
   totalRequired: number;
   confirmed: number;
+  medicalOk: boolean;
+  vehicleOk: boolean;
+}
+
+async function computeSummary(
+  prisma: PrismaClient,
+  vehicleId: string,
+  checklistResetAt: Date,
+): Promise<ChecklistSummary> {
+  const baseWhere = { isActive: true, requiredForDispatch: true } as const;
+  const confirmedWhere = (extra: Record<string, unknown> = {}) => ({
+    vehicleId,
+    status: 'OK',
+    checkedAt: { gte: checklistResetAt },
+    item: { ...baseWhere, ...extra },
+  });
+
+  const [totalRequired, confirmed, medicalRequired, medicalConfirmed, vehicleRequired, vehicleConfirmed] =
+    await Promise.all([
+      prisma.inventoryItem.count({ where: baseWhere }),
+      prisma.vehicleChecklistCheck.count({ where: confirmedWhere() }),
+      prisma.inventoryItem.count({ where: { ...baseWhere, itemType: 'MEDICAL' } }),
+      prisma.vehicleChecklistCheck.count({ where: confirmedWhere({ itemType: 'MEDICAL' }) }),
+      prisma.inventoryItem.count({ where: { ...baseWhere, itemType: 'VEHICLE' } }),
+      prisma.vehicleChecklistCheck.count({ where: confirmedWhere({ itemType: 'VEHICLE' }) }),
+    ]);
+
+  const medicalOk = medicalRequired === 0 || medicalConfirmed > 0;
+  const vehicleOk = vehicleRequired === 0 || vehicleConfirmed > 0;
+
+  return { complete: medicalOk && vehicleOk, totalRequired, confirmed, medicalOk, vehicleOk };
 }
 
 export async function getChecklistSummary(prisma: PrismaClient, vehicleId: string): Promise<ChecklistSummary> {
   const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId }, select: { checklistResetAt: true } });
   if (!vehicle) throw new NotFoundError('Vehicle not found');
+  return computeSummary(prisma, vehicleId, vehicle.checklistResetAt);
+}
 
-  const totalRequired = await prisma.inventoryItem.count({
-    where: { isActive: true, requiredForDispatch: true },
-  });
-  const confirmed = await prisma.vehicleChecklistCheck.count({
-    where: {
-      vehicleId,
-      status: 'OK',
-      checkedAt: { gte: vehicle.checklistResetAt },
-      item: { isActive: true, requiredForDispatch: true },
-    },
-  });
-
-  return { complete: totalRequired > 0 ? confirmed >= totalRequired : true, totalRequired, confirmed };
+/** Human-readable reason an incomplete [summary] is blocking dispatch. */
+export function checklistIncompleteMessage(summary: ChecklistSummary): string {
+  const missing: string[] = [];
+  if (!summary.medicalOk) missing.push('a medical item');
+  if (!summary.vehicleOk) missing.push('a vehicle item');
+  return `Vehicle checklist incomplete: confirm at least ${missing.join(' and ')} before dispatch`;
 }
 
 /** Full checklist for one vehicle: every active+required item plus its current (this-shift) state, if any. */
@@ -71,12 +103,8 @@ export async function getChecklistDetail(prisma: PrismaClient, vehicleId: string
     };
   });
 
-  const confirmed = rows.filter((r) => r.status === 'OK').length;
-  return {
-    resetAt: vehicle.checklistResetAt,
-    items: rows,
-    summary: { complete: rows.length > 0 ? confirmed >= rows.length : true, totalRequired: rows.length, confirmed },
-  };
+  const summary = await computeSummary(prisma, vehicleId, vehicle.checklistResetAt);
+  return { resetAt: vehicle.checklistResetAt, items: rows, summary };
 }
 
 /** Throws if [userId] isn't currently occupying one of the vehicle's crew slots. */

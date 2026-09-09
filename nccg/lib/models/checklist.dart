@@ -36,17 +36,31 @@ class VehicleChecklistItem {
   );
 }
 
+/// Ready for dispatch is a spot-check: at least one confirmed medical item
+/// AND at least one confirmed vehicle item, not every item in the catalog -
+/// see [medicalOk]/[vehicleOk]. [totalRequired]/[confirmed] are raw catalog
+/// counts, kept for progress context only.
 class VehicleChecklistSummary {
   final bool complete;
   final int totalRequired;
   final int confirmed;
+  final bool medicalOk;
+  final bool vehicleOk;
 
-  VehicleChecklistSummary({required this.complete, required this.totalRequired, required this.confirmed});
+  VehicleChecklistSummary({
+    required this.complete,
+    required this.totalRequired,
+    required this.confirmed,
+    required this.medicalOk,
+    required this.vehicleOk,
+  });
 
   factory VehicleChecklistSummary.fromJson(Map<String, dynamic> json) => VehicleChecklistSummary(
     complete: json['complete'] as bool? ?? false,
     totalRequired: (json['totalRequired'] as num?)?.toInt() ?? 0,
     confirmed: (json['confirmed'] as num?)?.toInt() ?? 0,
+    medicalOk: json['medicalOk'] as bool? ?? false,
+    vehicleOk: json['vehicleOk'] as bool? ?? false,
   );
 }
 

@@ -4,7 +4,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/err
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { sendAdvantaSms } from '../../services/sms.js';
-import { getChecklistSummary } from '../fleet/checklist.js';
+import { getChecklistSummary, checklistIncompleteMessage } from '../fleet/checklist.js';
 
 type AssignmentIncident = {
   caseNumber: string;
@@ -162,10 +162,7 @@ export class TaskService {
 
     const checklist = await getChecklistSummary(this.app.prisma, data.vehicleId);
     if (!checklist.complete) {
-      const outstanding = checklist.totalRequired - checklist.confirmed;
-      throw new BadRequestError(
-        `Vehicle checklist incomplete: ${outstanding} item${outstanding === 1 ? '' : 's'} still need${outstanding === 1 ? 's' : ''} confirmation before dispatch`
-      );
+      throw new BadRequestError(checklistIncompleteMessage(checklist));
     }
 
     const [task] = await this.app.prisma.$transaction([
@@ -266,10 +263,7 @@ export class TaskService {
       }
       const replacementChecklist = await getChecklistSummary(this.app.prisma, newVehicle.id);
       if (!replacementChecklist.complete) {
-        const outstanding = replacementChecklist.totalRequired - replacementChecklist.confirmed;
-        throw new BadRequestError(
-          `Replacement vehicle's checklist incomplete: ${outstanding} item${outstanding === 1 ? '' : 's'} still need${outstanding === 1 ? 's' : ''} confirmation`
-        );
+        throw new BadRequestError(`Replacement ${checklistIncompleteMessage(replacementChecklist).toLowerCase()}`);
       }
       if (newVehicle.agencyId !== task.vehicle.agencyId) {
         throw new BadRequestError('Replacement vehicle must belong to the same agency');

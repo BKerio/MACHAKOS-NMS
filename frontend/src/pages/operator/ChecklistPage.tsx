@@ -150,19 +150,43 @@ function ChecklistPage() {
       </div>
 
       {summary && (
-        <div className="card card-pad flex items-center gap-3">
-          {summary.complete ? (
-            <CheckCircle2 size={22} style={{ color: 'var(--green)' }} />
-          ) : (
-            <TriangleAlert size={22} style={{ color: 'var(--amber)' }} />
-          )}
-          <div>
-            <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>
-              {summary.confirmed}/{summary.totalRequired} confirmed
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-              {summary.complete ? 'Ready for dispatch' : 'Dispatch is blocked until every item is confirmed'}
-            </p>
+        <div className="card card-pad">
+          <div className="flex items-center gap-3">
+            {summary.complete ? (
+              <CheckCircle2 size={22} style={{ color: 'var(--green)' }} />
+            ) : (
+              <TriangleAlert size={22} style={{ color: 'var(--amber)' }} />
+            )}
+            <div>
+              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>
+                {summary.confirmed}/{summary.totalRequired} confirmed overall
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                {summary.complete
+                  ? 'Ready for dispatch'
+                  : 'Confirm at least one medical item and one vehicle item to be dispatch-ready'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <span
+              className="text-[11px] font-black tracking-wide px-2.5 py-1 rounded-md"
+              style={{
+                background: summary.medicalOk ? 'var(--green-soft, #e7f3ea)' : 'var(--surface-2)',
+                color: summary.medicalOk ? 'var(--green)' : 'var(--muted)',
+              }}
+            >
+              {summary.medicalOk ? '✓' : '·'} Medical
+            </span>
+            <span
+              className="text-[11px] font-black tracking-wide px-2.5 py-1 rounded-md"
+              style={{
+                background: summary.vehicleOk ? 'var(--green-soft, #e7f3ea)' : 'var(--surface-2)',
+                color: summary.vehicleOk ? 'var(--green)' : 'var(--muted)',
+              }}
+            >
+              {summary.vehicleOk ? '✓' : '·'} Vehicle
+            </span>
           </div>
         </div>
       )}
