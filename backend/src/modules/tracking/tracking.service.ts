@@ -37,6 +37,25 @@ interface VehicleLocation {
   agencyId: string;
   isActive: boolean;
   dbStatus: 'READY' | 'BUSY' | 'MAINTENANCE';
+  /** Litres, only set when the tracker reports a real fuel-sensor port (see extractFuelLevel). */
+  fuelLevelL: number | null;
+}
+
+/**
+ * Uffizio's live "Fuel" array reports whatever analog/digital ports the unit
+ * has wired, e.g. [{ port_name: "Fuel level in Liter", value: 23 }] on units
+ * with an actual fuel probe, vs [{ port_name: "Analog Input 2", value: 0 }]
+ * (or an empty array) on a plain GPS-only unit. Only a port whose name
+ * mentions "fuel" is trusted - a generic analog input reading 0 means no
+ * sensor is fitted, not an empty tank (see FuelService's own doc comment on
+ * the same pitfall for the historical Fill/Drain report).
+ */
+function extractFuelLevel(raw: any): number | null {
+  const ports = Array.isArray(raw?.Fuel) ? raw.Fuel : [];
+  const fuelPort = ports.find((p: any) => /fuel/i.test(String(p?.port_name ?? '')));
+  if (!fuelPort) return null;
+  const value = parseFloat(String(fuelPort.value));
+  return Number.isFinite(value) ? value : null;
 }
 
 const POLL_INTERVAL_MS = 65_000;
@@ -296,6 +315,7 @@ export class TrackingService {
         agencyId: dbV.agencyId,
         isActive: dbV.isActive,
         dbStatus: (dbV.status as 'READY' | 'BUSY' | 'MAINTENANCE') ?? 'READY',
+        fuelLevelL: extractFuelLevel(raw),
       });
     }
 
@@ -313,6 +333,13 @@ export class TrackingService {
             lastLat: loc.lat,
             lastLng: loc.lng,
             lastLocationAt: new Date(loc.timestamp),
+            // Only touch fuel fields when this poll actually reported a real
+            // sensor reading - leaves the last-known value in place on a
+            // vehicle whose fuel port intermittently drops out of the
+            // response, rather than blanking it back to null.
+            ...(loc.fuelLevelL != null
+              ? { lastFuelLevelL: loc.fuelLevelL, lastFuelLevelAt: new Date(loc.timestamp) }
+              : {}),
           },
         }).catch(err =>
           this.app.log.warn({ err, vehicleId: loc.vehicleId }, 'Uffizio: failed to persist vehicle location')

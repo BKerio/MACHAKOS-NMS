@@ -60,6 +60,11 @@ export interface Vehicle {
   lastLng?: number | null;
   lastLocationAt?: string | null;
   lastLocationName?: string | null;
+  /** Litres, from a real fuel-sensor port on the GPS tracker. Null on units
+   * with no probe fitted (not the same as an empty tank) - see backend
+   * TrackingService.extractFuelLevel. */
+  lastFuelLevelL?: number | null;
+  lastFuelLevelAt?: string | null;
   checkInLocationName?: string | null;
   checkInLat?: number | null;
   checkInLng?: number | null;

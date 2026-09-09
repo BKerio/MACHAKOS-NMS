@@ -394,6 +394,13 @@ model Vehicle {
   lastLng            Float?    @map("last_lng")
   lastLocationAt     DateTime? @map("last_location_at")
   lastLocationName   String?   @map("last_location_name")
+  // Live fuel-level snapshot from the GPS poller (Uffizio's "Fuel" array on
+  // getTokenBaseLiveData), only set when the tracker reports a real fuel
+  // sensor port (name containing "fuel") - a generic "Analog Input" port
+  // reporting 0 means no probe is fitted, not an empty tank, so that case is
+  // left null rather than persisted as 0. See TrackingService.mapToInternalFormat.
+  lastFuelLevelL     Float?    @map("last_fuel_level_l")
+  lastFuelLevelAt    DateTime? @map("last_fuel_level_at")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 

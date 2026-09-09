@@ -12,6 +12,7 @@ import {
   Navigation as NavigationArrow,
   User,
   Radio,
+  Fuel as GasPump,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
@@ -56,6 +57,10 @@ function FleetPage() {
       const res = await api.get('/dispatch/vehicles');
       return res.data.data as Vehicle[];
     },
+    // Fuel level (and other DB-only fields) come from the background GPS
+    // poller, not the live socket - refetch on the same cadence so it
+    // doesn't sit stale until someone reloads the page.
+    refetchInterval: 65_000,
   });
 
   const total = vehicles.length;
@@ -78,13 +83,14 @@ function FleetPage() {
   });
 
   function exportCSV() {
-    const headers = ['Registration', 'IMEI', 'Status', 'Speed (km/h)', 'Last Seen', 'Lat', 'Lng'];
+    const headers = ['Registration', 'IMEI', 'Status', 'Speed (km/h)', 'Fuel (L)', 'Last Seen', 'Lat', 'Lng'];
     const rows = filtered.map((v) => {
       const live = liveVehicles.find((lv) => lv.registration === v.registrationNumber);
       const s = live ? getVehicleTrackingStatus(live) : 'offline';
       return [
         v.registrationNumber, v.imei, S_LABEL[s] ?? s,
         live?.speed ?? '-',
+        v.lastFuelLevelL ?? 'No sensor',
         live?.timestamp ? new Date(live.timestamp).toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' }) : v.lastLocationAt ? new Date(v.lastLocationAt).toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' }) : 'N/A',
         live?.lat ?? v.lastLat ?? '', live?.lng ?? v.lastLng ?? '',
       ];
@@ -227,6 +233,11 @@ function FleetPage() {
                             <Gauge size={11} /> {live.speed} km/h
                           </div>
                         )}
+                        {v.lastFuelLevelL != null && (
+                          <div className="muted row" style={{ fontSize: 12, gap: 4, marginTop: 2 }}>
+                            <GasPump size={11} /> {v.lastFuelLevelL.toFixed(0)} L
+                          </div>
+                        )}
                       </td>
                       <td className="mono" style={{ fontSize: 12, color: lat && lng ? 'var(--green)' : 'var(--muted-2)' }}>
                         {lat && lng ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : 'No signal'}
@@ -360,12 +371,16 @@ function FleetPage() {
               </div>
             )}
 
-            {/* Quick stats - compact 3-up grid for short values */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {/* Quick stats - compact grid for short values; Fuel only appears
+                when this unit's tracker actually has a fuel sensor fitted. */}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${selected.lastFuelLevelL != null ? 4 : 3}, 1fr)`, gap: 8 }}>
               {[
                 { Icon: Hash, label: 'IMEI', value: selected.imei },
                 { Icon: NavigationArrow, label: 'Heading', value: selectedLive?.heading != null ? `${selectedLive.heading}°` : '-' },
                 { Icon: Gauge, label: 'Speed', value: selectedLive?.speed != null ? `${selectedLive.speed} km/h` : '-' },
+                ...(selected.lastFuelLevelL != null
+                  ? [{ Icon: GasPump, label: 'Fuel', value: `${selected.lastFuelLevelL.toFixed(0)} L` }]
+                  : []),
               ].map(({ Icon, label, value }) => (
                 <div key={label} className="col" style={{ gap: 6, padding: 10, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                   <Icon size={14} color="var(--muted)" />
