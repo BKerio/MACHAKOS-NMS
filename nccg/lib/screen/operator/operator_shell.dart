@@ -52,10 +52,17 @@ class _OperatorShellState extends State<OperatorShell> {
 
   /// DRIVER gets a 4th "Navigate" tab; EMT/NURSE don't drive so they don't need it.
   List<_TabDef> get _tabs {
+    final isDriver = _role == 'DRIVER';
     final base = <_TabDef>[
-      _TabDef('Assignment', Icons.local_hospital_rounded, const AssignmentTab()),
+      _TabDef(
+        'Assignment',
+        Icons.local_hospital_rounded,
+        // The Assignment card's own "Navigate" shortcut jumps here too - it
+        // always lands at index 1 since Navigate is only ever inserted next.
+        AssignmentTab(onNavigateToMap: isDriver ? () => setState(() => _tabIndex = 1) : null),
+      ),
     ];
-    if (_role == 'DRIVER') {
+    if (isDriver) {
       base.add(_TabDef('Navigate', Icons.navigation_rounded, const NavigateTab()));
     }
     base.addAll([

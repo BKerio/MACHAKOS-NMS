@@ -214,6 +214,15 @@ function GoogleCanvas({
         });
         infoRef.current = new google.maps.InfoWindow({ maxWidth: 260 });
         setReady(true);
+
+        // Billing-disabled / quota-exceeded projects don't throw here and don't
+        // reliably fire gm_authFailure (that's reserved for bad-key/referrer
+        // errors) - Google's SDK just renders its own "can't load Google Maps"
+        // placeholder *inside* the div once tile loading fails. A tilesloaded
+        // watchdog catches that silent failure mode too: if tiles haven't
+        // loaded within a few seconds, treat it as failed and fall back to Leaflet.
+        const tilesTimeout = window.setTimeout(() => { if (!cancelled) onFail(); }, 5000);
+        google.maps.event.addListenerOnce(mapRef.current, 'tilesloaded', () => window.clearTimeout(tilesTimeout));
       } catch {
         if (!cancelled) onFail();
       }

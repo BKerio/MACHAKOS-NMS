@@ -17,7 +17,12 @@ import 'package:url_launcher/url_launcher.dart';
 /// case, the single "advance the stage" action, and the driver-only escape
 /// hatches (end the case, or transfer it to a nearby unit).
 class AssignmentTab extends StatefulWidget {
-  const AssignmentTab({super.key});
+  /// Switches OperatorShell to the in-app Navigate tab. Only passed (and only
+  /// used) for DRIVER - other crew fall back to external Google Maps, same
+  /// split as frontend/src/pages/operator/AssignmentPage.tsx.
+  final VoidCallback? onNavigateToMap;
+
+  const AssignmentTab({super.key, this.onNavigateToMap});
 
   @override
   State<AssignmentTab> createState() => _AssignmentTabState();
@@ -156,6 +161,12 @@ class _AssignmentTabState extends State<AssignmentTab> {
   Future<void> _openMaps() async {
     final incident = _task?.incident;
     if (incident?.lat == null || incident?.lng == null) return;
+
+    // Drivers get the in-app map (see NavigateTab); other crew still open Google Maps.
+    if (_role == 'DRIVER' && widget.onNavigateToMap != null) {
+      widget.onNavigateToMap!();
+      return;
+    }
     await launchUrl(
       Uri.parse('https://maps.google.com/?q=${incident!.lat},${incident.lng}'),
       mode: LaunchMode.externalApplication,
