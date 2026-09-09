@@ -4,7 +4,7 @@ import { requireRole } from '../../shared/guards/requireRole.js';
 import { Role } from '../../shared/types/index.js';
 import { BadRequestError } from '../../shared/errors/AppError.js';
 import { TrackingService } from '../tracking/tracking.service.js';
-import { getChecklistDetail, assertChecklistAccess, upsertChecklistCheck } from './checklist.js';
+import { getChecklistDetail, getChecklistSummary, assertChecklistAccess, upsertChecklistCheck } from './checklist.js';
 import { createReadStream, existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -78,6 +78,34 @@ export const fleetRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     async (request, reply) => {
       const vehicles = await fleetService.listAgencyVehicles(request.user.agencyId);
       return reply.send({ ok: true, data: vehicles });
+    }
+  );
+
+  /**
+   * GET /fleet/checklists
+   * Every active agency vehicle with its pre-dispatch checklist readiness -
+   * lets a dispatcher browse all vehicles' checklists up front, not just the
+   * ones surfaced while assigning one specific incident.
+   */
+  app.get(
+    '/checklists',
+    { preValidation: [requireRole([Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])] },
+    async (request, reply) => {
+      const vehicles = await fleetService.listAgencyVehicles(request.user.agencyId);
+      const withChecklist = await Promise.all(
+        vehicles.map(async (v) => {
+          const summary = await getChecklistSummary(app.prisma, v.id);
+          return {
+            ...v,
+            checklistComplete: summary.complete,
+            checklistConfirmed: summary.confirmed,
+            checklistTotal: summary.totalRequired,
+            checklistMedicalOk: summary.medicalOk,
+            checklistVehicleOk: summary.vehicleOk,
+          };
+        })
+      );
+      return reply.send({ ok: true, data: withChecklist });
     }
   );
 

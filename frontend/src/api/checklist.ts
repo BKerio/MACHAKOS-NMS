@@ -1,5 +1,5 @@
 import api from '@/api/client';
-import type { VehicleChecklist } from '@/types/api';
+import type { Vehicle, VehicleChecklist } from '@/types/api';
 
 // ── Pre-dispatch vehicle equipment checklist ────────────────────────────────
 // Crew (driver/EMT/nurse currently checked into the vehicle) confirm each
@@ -9,6 +9,12 @@ import type { VehicleChecklist } from '@/types/api';
 export async function getVehicleChecklist(vehicleId: string): Promise<VehicleChecklist> {
   const res = await api.get(`/fleet/${vehicleId}/checklist`);
   return res.data.data as VehicleChecklist;
+}
+
+/** Every active agency vehicle with its checklist readiness - dispatcher/admin browse view. */
+export async function getFleetChecklists(): Promise<Vehicle[]> {
+  const res = await api.get('/fleet/checklists');
+  return res.data.data;
 }
 
 export async function submitChecklistItem(

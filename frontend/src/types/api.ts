@@ -78,6 +78,8 @@ export interface Vehicle {
   checklistComplete?: boolean;
   checklistConfirmed?: number;
   checklistTotal?: number;
+  checklistMedicalOk?: boolean;
+  checklistVehicleOk?: boolean;
 }
 
 export interface PaginatedMeta {

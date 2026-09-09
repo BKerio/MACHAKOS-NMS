@@ -11,6 +11,7 @@ const WallboardPage = lazy(() => import('@/pages/dispatcher/WallboardPage'));
 const QueuePage = lazy(() => import('@/pages/dispatcher/QueuePage'));
 const IncidentDetailPage = lazy(() => import('@/pages/dispatcher/IncidentDetailPage'));
 const FleetPage = lazy(() => import('@/pages/dispatcher/FleetPage'));
+const FleetChecklistsPage = lazy(() => import('@/pages/dispatcher/FleetChecklistsPage'));
 const FuelPage = lazy(() => import('@/pages/dispatcher/FuelPage'));
 const CallLogPage = lazy(() => import('@/pages/dispatcher/CallLogPage'));
 const NewIncidentWizard = lazy(() => import('@/pages/watcher/NewIncidentWizard'));
@@ -193,6 +194,14 @@ export const router = createBrowserRouter([
         element: (
           <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN', 'DISPATCHER']}>
             <FleetPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'fleet/checklists',
+        element: (
+          <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN', 'DISPATCHER']}>
+            <FleetChecklistsPage />
           </RoleGuard>
         ),
       },

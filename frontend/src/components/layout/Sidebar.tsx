@@ -56,6 +56,7 @@ const menuSections: { title?: string; items: NavItem[] }[] = [
     items: [
       { label: 'Incident Feed', path: '/queue', Icon: ListBullets, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
       { label: 'Fleet Management', path: '/fleet', Icon: MapTrifold, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
+      { label: 'Vehicle Checklists', path: '/fleet/checklists', Icon: ClipboardText, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
       { label: 'Fuel Monitoring', path: '/fleet/fuel', Icon: GasPump, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
       { label: 'Standby', path: '/fleet/standby', Icon: Timer, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
       { label: 'Call Logs', path: '/call-logs', Icon: Phone, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
