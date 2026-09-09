@@ -54,7 +54,7 @@ const schema = {
     },
     UFFIZIO_BASE_URL: {
       type: 'string',
-      default: 'http://13.245.46.90',
+      default: 'https://gps.kimiitelematics.com',
     },
     UFFIZIO_USERNAME: {
       type: 'string',
@@ -70,7 +70,7 @@ const schema = {
     },
     UFFIZIO_COMPANY: {
       type: 'string',
-      default: 'Nairobi Emergency Operation Center',
+      default: 'MACHAKOS DISPATCH CENTER',
     },
     YEASTAR_BASE_URL: {
       type: 'string',

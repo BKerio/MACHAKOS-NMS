@@ -291,17 +291,30 @@ async function main() {
   console.log(`✅ Ambulance Checklist: ${checklistItems.length} inventory items across ${new Set(checklistItems.map((i) => CHECKLIST_CATEGORY_MAP[i.category] ?? 'OTHER')).size} categories`);
 
   // ── 5. Fleet - real vehicles from Uffizio/Kimii Telematics ─────────────────
-  // IMEIs confirmed from live Uffizio API response (getTokenBaseLiveData).
-  // The TrackingService matches by imei to write lastLat/lastLng every 30s.
-  // ⚠️  GKB 847V: IMEI below is 13 digits - real IMEIs are 15. Verify on Uffizio dashboard and correct here.
+  // IMEIs confirmed from live Uffizio API response (getTokenBaseLiveData),
+  // company "MACHAKOS DISPATCH CENTER" (as of 2026-09-09 - the account was
+  // switched from the earlier Nairobi EOC one; see the old fleet below).
+  // The TrackingService matches by imei to write lastLat/lastLng every 65s.
   const uffizioVehicles = [
-    { registrationNumber: 'GKB 847V', imei: '8642870320357'   },
-    { registrationNumber: 'GKB 645W', imei: '350317178839878' },
-    { registrationNumber: 'GKB 848V', imei: '862273048245427' },
-    { registrationNumber: 'GKB 849V', imei: '869270049176117' },
-    { registrationNumber: 'GKB 657W', imei: '350317178979112' },
-    { registrationNumber: '47CG036A', imei: '869467049288328' },
+    { registrationNumber: '16CG137A', imei: '354002394285991' },
+    { registrationNumber: '16CG109A', imei: '354002394285850' },
+    { registrationNumber: '16CG096A', imei: '354002392670129' },
+    { registrationNumber: 'JINBEI296A', imei: '354002394286023' },
+    { registrationNumber: '16CG094A', imei: '354002392666689' },
+    { registrationNumber: '16CG295A', imei: '354002394286056' },
+    { registrationNumber: '16CG095A', imei: '354002392666606' },
+    { registrationNumber: '16CG217A', imei: '354002394285793' },
+    { registrationNumber: '16CG120A', imei: '354002392670277' },
   ];
+
+  // Old (Nairobi-account) fleet, decommissioned when the Uffizio account
+  // switched - deactivated rather than deleted so any historical task/
+  // checkout rows referencing them stay intact. Not upserted/recreated here.
+  const decommissionedVehicles = ['GKB 848V', 'GKB 847V', '47CG036A', 'GKB 645W', 'GKB 657W', 'GKB 849V'];
+  await prisma.vehicle.updateMany({
+    where: { registrationNumber: { in: decommissionedVehicles } },
+    data: { isActive: false },
+  });
 
   for (const v of uffizioVehicles) {
     const created = await prisma.vehicle.upsert({

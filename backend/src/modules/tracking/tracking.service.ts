@@ -11,11 +11,17 @@ import { Role } from '../../shared/types/index.js';
  *      Body:   { company_names, vehicle_nos, imei_nos, format }
  *
  * Credentials configured via .env:
- *   UFFIZIO_BASE_URL  = http://13.245.46.90
- *   UFFIZIO_USERNAME  = nccg@brighton.co.ke
+ *   UFFIZIO_BASE_URL  = https://gps.kimiitelematics.com
+ *   UFFIZIO_USERNAME  = machakoseoc@brighton.co.ke
  *   UFFIZIO_PASSWORD  = Vision@123!!
  *   UFFIZIO_PROJECT_ID = 49
- *   UFFIZIO_COMPANY   = Nairobi Emergency Operation Center
+ *   UFFIZIO_COMPANY   = MACHAKOS DISPATCH CENTER
+ *
+ * UFFIZIO_COMPANY must match the company name Uffizio has on file for the
+ * given username exactly - getTokenBaseLiveData otherwise replies with
+ * "<company> Does Not Belongs To Given User" (200 OK, empty result). Query
+ * with company_names: '' first to see what the account actually reports if
+ * this ever needs re-verifying.
  */
 
 interface VehicleLocation {
@@ -53,7 +59,7 @@ export class TrackingService {
     this.username = app.config.UFFIZIO_USERNAME ?? '';
     this.password = app.config.UFFIZIO_PASSWORD ?? '';
     this.projectId = app.config.UFFIZIO_PROJECT_ID ?? '49';
-    this.companyName = app.config.UFFIZIO_COMPANY ?? 'Nairobi Emergency Operation Center';
+    this.companyName = app.config.UFFIZIO_COMPANY ?? 'MACHAKOS DISPATCH CENTER';
   }
 
   // ── Token management ──────────────────────────────────────────────────────
