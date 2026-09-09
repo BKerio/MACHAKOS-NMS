@@ -72,6 +72,12 @@ export interface Vehicle {
   currentDriver?: CrewMember | null;
   currentEmt?: CrewMember | null;
   currentNurse?: CrewMember | null;
+  /** Pre-dispatch equipment checklist readiness, present on dispatcher-facing
+   * vehicle lists (nearest-vehicles, admin vehicle list) - see backend
+   * fleet/checklist.ts. Absent on payloads that don't compute it. */
+  checklistComplete?: boolean;
+  checklistConfirmed?: number;
+  checklistTotal?: number;
 }
 
 export interface PaginatedMeta {
@@ -105,17 +111,40 @@ export type InventoryCategory =
   | 'WOUND_CARE'
   | 'OTHER';
 
+export type InventoryItemType = 'MEDICAL' | 'VEHICLE';
+
 export interface InventoryItem {
   id: string;
   name: string;
   category: InventoryCategory | string;
+  itemType: InventoryItemType;
   unit: string;
   quantityStock: number;
   reorderLevel: number;
+  /** Whether this item must be confirmed present before a vehicle can be dispatched. */
+  requiredForDispatch: boolean;
   notes: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VehicleChecklistItem {
+  id: string;
+  name: string;
+  category: string;
+  itemType: InventoryItemType;
+  unit: string;
+  status: 'OK' | 'ISSUE' | null;
+  note: string | null;
+  checkedAt: string | null;
+  checkedByName: string | null;
+}
+
+export interface VehicleChecklist {
+  resetAt: string;
+  items: VehicleChecklistItem[];
+  summary: { complete: boolean; totalRequired: number; confirmed: number };
 }
 
 export interface InventoryCheckout {

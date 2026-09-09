@@ -209,7 +209,10 @@ export class FleetService {
       },
     });
 
-    // 4. Set the crew FK and seed live location from the check-in GPS
+    // 4. Set the crew FK and seed live location from the check-in GPS. A new
+    // driver starting a shift resets the equipment checklist - it must be
+    // reconfirmed each shift. EMT/nurse checking in joins an already-started
+    // shift, so it doesn't reset anything already confirmed.
     const updated = await this.app.prisma.vehicle.update({
       where: { id: vehicleId },
       data: {
@@ -218,6 +221,7 @@ export class FleetService {
         lastLng: location.lng,
         lastLocationAt: new Date(),
         lastLocationName: locationName,
+        ...(role === Role.DRIVER ? { checklistResetAt: new Date() } : {}),
       },
       include: crewInclude,
     });

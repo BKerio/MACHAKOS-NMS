@@ -7,7 +7,11 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { Role } from '@/types/api';
 import { ROLE_ROUTES } from '@/components/dev/DevRoleSwitcher';
 
-const ALL_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'WATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
+// WATCHER is intentionally excluded here (no longer an offered/assignable
+// role - see AddPersonnelModal/UserManagementPage), but ROLE_LABEL below
+// still carries it so any pre-existing watcher-role account's own label still
+// renders correctly rather than falling through to undefined.
+const ALL_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
 
 const ROLE_LABEL: Record<Role, string> = {
   SUPER_ADMIN: 'Super Admin',

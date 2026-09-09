@@ -3,7 +3,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import {
   LayoutGrid as SquaresFour,
-  CircleAlert as WarningCircle,
   Map as MapTrifold,
   List as ListBullets,
   Users,
@@ -43,13 +42,13 @@ interface SidebarProps {
 
 type NavItem = { label: string; path: string; Icon: any; roles: string[] };
 
-const ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'WATCHER', 'DISPATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
+const ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
 
 const menuSections: { title?: string; items: NavItem[] }[] = [
   {
     items: [
       { label: 'Dashboard', path: '/dashboard', Icon: SquaresFour, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'Wallboard', path: '/wallboard', Icon: Broadcast, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'WATCHER'] },
+      { label: 'Wallboard', path: '/wallboard', Icon: Broadcast, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
     ],
   },
   {
@@ -78,16 +77,9 @@ const menuSections: { title?: string; items: NavItem[] }[] = [
   {
     title: 'Insights',
     items: [
-      { label: 'Analytics', path: '/admin/analytics', Icon: ChartLineUp, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'WATCHER', 'PARTNER'] },
+      { label: 'Analytics', path: '/admin/analytics', Icon: ChartLineUp, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER'] },
       { label: 'System Report', path: '/admin/system-report', Icon: FileBarChart, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'System Settings', path: '/admin/settings', Icon: Gear, roles: ['SUPER_ADMIN', 'ADMIN'] },
-    ],
-  },
-  {
-    title: 'Watcher',
-    items: [
-      { label: 'My Alerts', path: '/watcher', Icon: ClipboardText, roles: ['WATCHER'] },
-      { label: 'New Incident', path: '/watcher/new-incident', Icon: WarningCircle, roles: ['WATCHER'] },
     ],
   },
   {
@@ -105,6 +97,7 @@ const menuSections: { title?: string; items: NavItem[] }[] = [
       { label: 'Activity', path: '/operator/activity', Icon: Activity, roles: ['DRIVER', 'EMT', 'NURSE'] },
       { label: 'History', path: '/operator/history', Icon: HistoryIcon, roles: ['DRIVER', 'EMT', 'NURSE'] },
       { label: 'Inventory', path: '/operator/inventory', Icon: Package, roles: ['DRIVER', 'EMT', 'NURSE'] },
+      { label: 'Vehicle Checklist', path: '/operator/checklist', Icon: ClipboardText, roles: ['DRIVER', 'EMT', 'NURSE'] },
     ],
   },
   {

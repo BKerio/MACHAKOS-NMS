@@ -3,6 +3,7 @@ import { haversineDistance } from '../../shared/utils/haversine.js';
 import { FleetService } from '../fleet/fleet.service.js';
 import { IncidentStatus, Role, TaskStatus } from '../../shared/types/index.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
+import { getChecklistSummary } from '../fleet/checklist.js';
 
 export class DispatchService {
   private fleetService: FleetService;
@@ -203,6 +204,22 @@ export class DispatchService {
   }
 
   /**
+   * Attaches pre-dispatch checklist readiness to each candidate vehicle, so
+   * the dispatcher sees which units are actually assignable before they try -
+   * rather than discovering it via the 400 that createTask now throws for an
+   * incomplete checklist.
+   */
+  private async withChecklistSummary<T extends { id: string }>(vehicles: T[]) {
+    const summaries = await Promise.all(vehicles.map((v) => getChecklistSummary(this.app.prisma, v.id)));
+    return vehicles.map((v, i) => ({
+      ...v,
+      checklistComplete: summaries[i].complete,
+      checklistConfirmed: summaries[i].confirmed,
+      checklistTotal: summaries[i].totalRequired,
+    }));
+  }
+
+  /**
    * Finds the nearest active vehicles to a given incident coordinate.
    */
   async findNearestVehicles(lat: number, lng: number, agencyId?: string, limit: number = 5) {
@@ -245,12 +262,14 @@ export class DispatchService {
       });
       const crewMap = new Map(crewRows.map(r => [r.id, r]));
 
-      return top.map(v => ({
-        ...v,
-        currentDriver: crewMap.get(v.id)?.currentDriver ?? null,
-        currentEmt:    crewMap.get(v.id)?.currentEmt    ?? null,
-        currentNurse:  crewMap.get(v.id)?.currentNurse  ?? null,
-      }));
+      return this.withChecklistSummary(
+        top.map(v => ({
+          ...v,
+          currentDriver: crewMap.get(v.id)?.currentDriver ?? null,
+          currentEmt:    crewMap.get(v.id)?.currentEmt    ?? null,
+          currentNurse:  crewMap.get(v.id)?.currentNurse  ?? null,
+        }))
+      );
     }
 
     // Redis empty - fall back to DB vehicles with crew data
@@ -262,21 +281,23 @@ export class DispatchService {
       include: crewInclude,
     });
 
-    return dbVehicles.map(v => ({
-      id: v.id,
-      registrationNumber: v.registrationNumber,
-      agencyId: v.agencyId,
-      isActive: v.isActive,
-      // Required by the dispatcher UI's `status === 'READY'` filter. Without it
-      // no vehicle is ever offered for dispatch when Redis/GPS is unavailable.
-      status: v.status,
-      lastLat: v.lastLat,
-      lastLng: v.lastLng,
-      lastLocationAt: v.lastLocationAt,
-      distanceKm: null,
-      currentDriver: v.currentDriver,
-      currentEmt:    v.currentEmt,
-      currentNurse:  v.currentNurse,
-    }));
+    return this.withChecklistSummary(
+      dbVehicles.map(v => ({
+        id: v.id,
+        registrationNumber: v.registrationNumber,
+        agencyId: v.agencyId,
+        isActive: v.isActive,
+        // Required by the dispatcher UI's `status === 'READY'` filter. Without it
+        // no vehicle is ever offered for dispatch when Redis/GPS is unavailable.
+        status: v.status,
+        lastLat: v.lastLat,
+        lastLng: v.lastLng,
+        lastLocationAt: v.lastLocationAt,
+        distanceKm: null,
+        currentDriver: v.currentDriver,
+        currentEmt:    v.currentEmt,
+        currentNurse:  v.currentNurse,
+      }))
+    );
   }
 }

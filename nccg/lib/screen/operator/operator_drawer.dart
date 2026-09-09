@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nccg/screen/otp_login.dart';
 import 'package:nccg/screen/operator/operator_shell.dart';
+import 'package:nccg/screen/operator/checklist_screen.dart';
 import 'package:nccg/screen/operator/history_screen.dart';
 import 'package:nccg/screen/operator/inventory_screen.dart';
 import 'package:nccg/screen/operator/profile_screen.dart';
@@ -95,6 +96,7 @@ class OperatorDrawer extends StatelessWidget {
               children: [
                 _DrawerItem(icon: Icons.history_rounded, label: 'History', onTap: () => _push(context, const HistoryScreen())),
                 _DrawerItem(icon: Icons.inventory_2_outlined, label: 'Inventory', onTap: () => _push(context, const InventoryScreen())),
+                _DrawerItem(icon: Icons.fact_check_outlined, label: 'Vehicle Checklist', onTap: () => _push(context, const ChecklistScreen())),
                 _DrawerItem(icon: Icons.person_outline_rounded, label: 'My Profile', onTap: () => _push(context, const ProfileScreen())),
               ],
             ),

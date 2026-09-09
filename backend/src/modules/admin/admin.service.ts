@@ -3,6 +3,7 @@ import { Prisma } from '../../generated/prisma/index.js';
 import { AgencyType, Role } from '../../shared/types/index.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError.js';
 import { hashPassword } from '../../shared/utils/hash.js';
+import { getChecklistSummary } from '../fleet/checklist.js';
 
 export class AdminService {
   constructor(private app: FastifyInstance) {}
@@ -146,7 +147,17 @@ export class AdminService {
       this.app.prisma.vehicle.count({ where }),
     ]);
 
-    return { data: vehicles, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    // Checklist readiness, surfaced here too so Fleet Management can show it
+    // before a dispatcher tries to assign a case (see fleet/checklist.ts).
+    const summaries = await Promise.all(vehicles.map((v) => getChecklistSummary(this.app.prisma, v.id)));
+    const withChecklist = vehicles.map((v, i) => ({
+      ...v,
+      checklistComplete: summaries[i].complete,
+      checklistConfirmed: summaries[i].confirmed,
+      checklistTotal: summaries[i].totalRequired,
+    }));
+
+    return { data: withChecklist, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async createVehicle(data: { registrationNumber: string; imei: string; agencyId: string }) {
@@ -231,18 +242,22 @@ export class AdminService {
   async createInventoryItem(data: {
     name: string;
     category: string;
+    itemType?: string;
     unit?: string;
     quantityStock?: number;
     reorderLevel?: number;
+    requiredForDispatch?: boolean;
     notes?: string;
   }) {
     return this.app.prisma.inventoryItem.create({
       data: {
         name: data.name.trim(),
         category: data.category,
+        itemType: data.itemType ?? 'MEDICAL',
         unit: data.unit?.trim() || 'each',
         quantityStock: data.quantityStock ?? 0,
         reorderLevel: data.reorderLevel ?? 0,
+        requiredForDispatch: data.requiredForDispatch ?? true,
         notes: data.notes?.trim() || undefined,
       },
     });
@@ -253,9 +268,11 @@ export class AdminService {
     data: {
       name?: string;
       category?: string;
+      itemType?: string;
       unit?: string;
       quantityStock?: number;
       reorderLevel?: number;
+      requiredForDispatch?: boolean;
       notes?: string | null;
       isActive?: boolean;
     }

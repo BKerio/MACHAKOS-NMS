@@ -31,7 +31,11 @@ const inputStyle = {
   color: 'var(--ink)',
 };
 
-const EDIT_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'WATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
+// WATCHER intentionally excluded - no longer an assignable role (see the
+// watcher soft-removal pass). The role FILTER dropdown further down keeps
+// its "Watcher" option so any pre-existing watcher-role accounts stay
+// findable/manageable even though the role can no longer be newly assigned.
+const EDIT_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
 const MAX_EDIT_ROLES = 2;
 
 function sameRoles(a: Role[], b: Role[]) {
@@ -45,7 +49,7 @@ function UserManagementPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
   const [editRoleTarget, setEditRoleTarget] = useState<{ id: string; name: string; email: string; phone: string; roles: Role[]; agencyId: string | null } | null>(null);
-  const [editRolesValue, setEditRolesValue] = useState<Role[]>(['WATCHER']);
+  const [editRolesValue, setEditRolesValue] = useState<Role[]>(['DISPATCHER']);
   const [editAgencyValue, setEditAgencyValue] = useState('');
   const [editNameValue, setEditNameValue] = useState('');
   const [editEmailValue, setEditEmailValue] = useState('');

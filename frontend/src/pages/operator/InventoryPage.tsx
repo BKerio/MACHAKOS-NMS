@@ -14,7 +14,7 @@ import {
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getAvailableInventory, checkoutInventory, getMyInventory, returnInventory } from '@/api/inventory';
 import { getMyCheckIn } from '@/api/responder';
-import type { InventoryCategory, InventoryCheckout, InventoryItem } from '@/types/api';
+import type { InventoryCategory, InventoryCheckout, InventoryItem, InventoryItemType } from '@/types/api';
 
 const CATEGORIES: { value: InventoryCategory | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All' },
@@ -36,6 +36,7 @@ function getErrorMessage(err: any, fallback: string): string {
 
 function InventoryPage() {
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<InventoryItemType>('MEDICAL');
   const [categoryFilter, setCategoryFilter] = useState<InventoryCategory | 'ALL'>('ALL');
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -89,7 +90,8 @@ function InventoryPage() {
   });
 
   const filtered = items.filter((item) => {
-    if (categoryFilter !== 'ALL' && item.category !== categoryFilter) return false;
+    if (item.itemType !== typeFilter) return false;
+    if (typeFilter === 'MEDICAL' && categoryFilter !== 'ALL' && item.category !== categoryFilter) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return item.name.toLowerCase().includes(q) || categoryLabel(item.category).toLowerCase().includes(q);
@@ -183,6 +185,25 @@ function InventoryPage() {
         </div>
       )}
 
+      {/* Medical / Vehicle split */}
+      <div className="flex gap-2">
+        {(['MEDICAL', 'VEHICLE'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTypeFilter(t)}
+            className="btn btn-sm flex-1"
+            style={
+              typeFilter === t
+                ? { background: 'var(--nav-bg)', color: '#fff' }
+                : { background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--border)' }
+            }
+          >
+            {t === 'MEDICAL' ? 'Medical' : 'Vehicle'}
+          </button>
+        ))}
+      </div>
+
       {/* Search + category filter */}
       <div className="col" style={{ gap: 10 }}>
         <div className="input-icon">
@@ -194,23 +215,25 @@ function InventoryPage() {
           />
           <SearchIcon />
         </div>
-        <div className="flex gap-2 overflow-x-auto" style={{ paddingBottom: 2 }}>
-          {CATEGORIES.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => setCategoryFilter(c.value)}
-              className="btn btn-sm flex-shrink-0"
-              style={
-                categoryFilter === c.value
-                  ? { background: 'var(--green)', color: '#fff' }
-                  : { background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--border)' }
-              }
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        {typeFilter === 'MEDICAL' && (
+          <div className="flex gap-2 overflow-x-auto" style={{ paddingBottom: 2 }}>
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setCategoryFilter(c.value)}
+                className="btn btn-sm flex-shrink-0"
+                style={
+                  categoryFilter === c.value
+                    ? { background: 'var(--green)', color: '#fff' }
+                    : { background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--border)' }
+                }
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Available stock */}

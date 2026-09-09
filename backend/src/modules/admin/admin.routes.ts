@@ -106,21 +106,27 @@ const INVENTORY_CATEGORIES = [
   'OTHER',
 ] as const;
 
+const INVENTORY_ITEM_TYPES = ['MEDICAL', 'VEHICLE'] as const;
+
 const createInventorySchema = z.object({
   name: z.string().min(2, 'Name required'),
   category: z.enum(INVENTORY_CATEGORIES),
+  itemType: z.enum(INVENTORY_ITEM_TYPES).optional(),
   unit: z.string().min(1).optional(),
   quantityStock: z.number().int().min(0).optional(),
   reorderLevel: z.number().int().min(0).optional(),
+  requiredForDispatch: z.boolean().optional(),
   notes: z.string().optional(),
 });
 
 const updateInventorySchema = z.object({
   name: z.string().min(2).optional(),
   category: z.enum(INVENTORY_CATEGORIES).optional(),
+  itemType: z.enum(INVENTORY_ITEM_TYPES).optional(),
   unit: z.string().min(1).optional(),
   quantityStock: z.number().int().min(0).optional(),
   reorderLevel: z.number().int().min(0).optional(),
+  requiredForDispatch: z.boolean().optional(),
   notes: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
 });

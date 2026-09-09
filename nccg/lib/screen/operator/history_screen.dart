@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nccg/models/task.dart';
 import 'package:nccg/services/nms_api.dart';
+import 'package:nccg/screen/operator/history_detail_screen.dart';
 import 'package:nccg/screen/operator/operator_shell.dart';
 
 /// Full paginated task history, mirroring frontend/src/pages/operator/HistoryPage.tsx.
@@ -87,30 +88,49 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         );
                       }
                       final item = _items[i];
-                      return Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
+                      return Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        child: InkWell(
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFE3E8E5)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => HistoryDetailScreen(item: item)),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFE3E8E5)),
+                            ),
+                            child: Row(
                               children: [
                                 Expanded(
-                                  child: Text('${item.caseNumber} · ${item.registrationNumber}',
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text('${item.caseNumber} · ${item.registrationNumber}',
+                                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                                          ),
+                                          Text(TaskStatus.label(item.status),
+                                              style: const TextStyle(
+                                                  fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(item.chiefComplaint.isEmpty ? item.locationName : item.chiefComplaint,
+                                          style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                    ],
+                                  ),
                                 ),
-                                Text(TaskStatus.label(item.status),
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.black38),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(item.chiefComplaint.isEmpty ? item.locationName : item.chiefComplaint,
-                                style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                          ],
+                          ),
                         ),
                       );
                     },

@@ -12,7 +12,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
-import { InventoryItem, InventoryCategory } from '@/types/api';
+import { InventoryItem, InventoryCategory, InventoryItemType } from '@/types/api';
 
 const CATEGORIES: { value: InventoryCategory; label: string }[] = [
   { value: 'VITALS', label: 'Vitals Equipment' },
@@ -23,7 +23,12 @@ const CATEGORIES: { value: InventoryCategory; label: string }[] = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const UNITS = ['each', 'box', 'pack', 'set', 'litre', 'roll', 'pair'];
+const UNITS = ['each', 'box', 'pack', 'set', 'litre', 'roll', 'pair', 'check'];
+
+const ITEM_TYPES: { value: InventoryItemType; label: string }[] = [
+  { value: 'MEDICAL', label: 'Medical' },
+  { value: 'VEHICLE', label: 'Vehicle' },
+];
 
 /** Suggested starter items for vitals monitoring (admin can edit stock after add). */
 const VITALS_PRESETS: { name: string; unit: string; reorderLevel: number }[] = [
@@ -49,9 +54,11 @@ const labelCls = 'block text-[10px] font-black tracking-widest mb-1.5';
 const emptyForm = {
   name: '',
   category: 'VITALS' as InventoryCategory,
+  itemType: 'MEDICAL' as InventoryItemType,
   unit: 'each',
   quantityStock: 0,
   reorderLevel: 0,
+  requiredForDispatch: true,
   notes: '',
 };
 
@@ -62,6 +69,7 @@ function categoryLabel(value: string) {
 function InventoryPage() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | InventoryItemType>('ALL');
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState<InventoryItem | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -101,9 +109,11 @@ function InventoryPage() {
       api.post('/admin/inventory', {
         name: form.name.trim(),
         category: form.category,
+        itemType: form.itemType,
         unit: form.unit,
         quantityStock: Number(form.quantityStock) || 0,
         reorderLevel: Number(form.reorderLevel) || 0,
+        requiredForDispatch: form.requiredForDispatch,
         notes: form.notes.trim() || undefined,
       }),
     onSuccess: () => {
@@ -125,9 +135,11 @@ function InventoryPage() {
       api.patch(`/admin/inventory/${editTarget!.id}`, {
         name: form.name.trim(),
         category: form.category,
+        itemType: form.itemType,
         unit: form.unit,
         quantityStock: Number(form.quantityStock) || 0,
         reorderLevel: Number(form.reorderLevel) || 0,
+        requiredForDispatch: form.requiredForDispatch,
         notes: form.notes.trim() || null,
       }),
     onSuccess: () => {
@@ -205,9 +217,11 @@ function InventoryPage() {
     setForm({
       name: item.name,
       category: (item.category as InventoryCategory) || 'OTHER',
+      itemType: item.itemType || 'MEDICAL',
       unit: item.unit || 'each',
       quantityStock: item.quantityStock,
       reorderLevel: item.reorderLevel,
+      requiredForDispatch: item.requiredForDispatch ?? true,
       notes: item.notes ?? '',
     });
     setShowModal(true);
@@ -220,6 +234,7 @@ function InventoryPage() {
   }
 
   const filtered = items.filter((item) => {
+    if (typeFilter !== 'ALL' && item.itemType !== typeFilter) return false;
     const q = search.toLowerCase();
     return (
       item.name.toLowerCase().includes(q) ||
@@ -299,6 +314,25 @@ function InventoryPage() {
               {stat.value}
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Medical / Vehicle split */}
+      <div className="flex gap-2">
+        {(['ALL', 'MEDICAL', 'VEHICLE'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTypeFilter(t)}
+            className="btn btn-sm"
+            style={
+              typeFilter === t
+                ? { background: 'var(--green)', color: '#fff' }
+                : { background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--border)' }
+            }
+          >
+            {t === 'ALL' ? 'All Items' : t === 'MEDICAL' ? 'Medical' : 'Vehicle'}
+          </button>
         ))}
       </div>
 
@@ -553,6 +587,25 @@ function InventoryPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls} style={{ color: 'var(--muted)' }}>
+                    Type *
+                  </label>
+                  <select
+                    className={inputCls + ' cursor-pointer'}
+                    style={inputStyle}
+                    value={form.itemType}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, itemType: e.target.value as InventoryItemType }))
+                    }
+                  >
+                    {ITEM_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls} style={{ color: 'var(--muted)' }}>
                     Category *
                   </label>
                   <select
@@ -570,6 +623,9 @@ function InventoryPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls} style={{ color: 'var(--muted)' }}>
                     Unit
@@ -586,6 +642,16 @@ function InventoryPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="flex items-end pb-2.5">
+                  <label className="flex items-center gap-2 text-xs font-bold cursor-pointer" style={{ color: 'var(--ink-2)' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.requiredForDispatch}
+                      onChange={(e) => setForm((f) => ({ ...f, requiredForDispatch: e.target.checked }))}
+                    />
+                    Required for dispatch checklist
+                  </label>
                 </div>
               </div>
 

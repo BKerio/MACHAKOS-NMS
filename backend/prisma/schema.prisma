@@ -125,6 +125,7 @@ model User {
   uploadedPatientCareReports PatientCareReport[] @relation("UserUploadedPatientCareReports")
   checkIns                   CheckIn[]           @relation("UserCheckIns")
   inventoryCheckouts         InventoryCheckout[]
+  checklistChecksMade        VehicleChecklistCheck[] @relation("VehicleChecklistCheckedBy")
 
   @@map("users")
 }
@@ -396,6 +397,12 @@ model Vehicle {
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
+  // Start of the current shift's equipment checklist window - bumped whenever
+  // a driver checks in (see fleet.service.ts checkInToCrew). A
+  // VehicleChecklistCheck only counts toward dispatch-readiness if it happened
+  // at or after this timestamp, so a new shift always starts unconfirmed.
+  checklistResetAt DateTime @default(now()) @map("checklist_reset_at")
+
   agencyId String @map("agency_id")
   agency   Agency @relation(fields: [agencyId], references: [id])
 
@@ -413,6 +420,7 @@ model Vehicle {
   checkIns  CheckIn[]
   standbys  StandbyDeployment[]
   inventoryCheckouts InventoryCheckout[]
+  checklistChecks    VehicleChecklistCheck[]
 
   @@map("vehicles")
 }
@@ -662,21 +670,28 @@ model SmsGateway {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model InventoryItem {
-  id            String   @id @default(uuid())
-  name          String
-  category      String   // VITALS | CONSUMABLES | MEDICATION | AIRWAY | WOUND_CARE | OTHER
-  unit          String   @default("each") // each | box | pack | litre | set
-  quantityStock Int      @default(0) @map("quantity_stock")
-  reorderLevel  Int      @default(0) @map("reorder_level")
-  notes         String?  @db.Text
-  isActive      Boolean  @default(true) @map("is_active")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(uuid())
+  name                String
+  category            String   // VITALS | CONSUMABLES | MEDICATION | AIRWAY | WOUND_CARE | OTHER
+  itemType            String   @default("MEDICAL") @map("item_type") // MEDICAL | VEHICLE
+  unit                String   @default("each") // each | box | pack | litre | set | check
+  quantityStock       Int      @default(0) @map("quantity_stock")
+  reorderLevel        Int      @default(0) @map("reorder_level")
+  // Whether this item must be confirmed present (via VehicleChecklistCheck)
+  // before a dispatcher can assign a vehicle to a case. Admin-toggleable so
+  // the pre-dispatch checklist can be narrowed later without a schema change.
+  requiredForDispatch Boolean  @default(true) @map("required_for_dispatch")
+  notes               String?  @db.Text
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
-  checkouts InventoryCheckout[]
+  checkouts       InventoryCheckout[]
+  checklistChecks VehicleChecklistCheck[]
 
   @@index([category])
   @@index([isActive])
+  @@index([itemType])
   @@map("inventory_items")
 }
 
@@ -709,4 +724,32 @@ model InventoryCheckout {
   @@index([vehicleId])
   @@index([status])
   @@map("inventory_checkouts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VehicleChecklistCheck - latest pass/fail confirmation of one InventoryItem
+// being present/accounted for on one vehicle. One row per (vehicle, item) -
+// re-confirming overwrites the previous state rather than logging history.
+// A check only counts toward dispatch-readiness while checkedAt is at or
+// after the vehicle's current Vehicle.checklistResetAt (see fleet/checklist.ts).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model VehicleChecklistCheck {
+  id        String   @id @default(uuid())
+  status    String   // OK | ISSUE
+  note      String?  @db.Text
+  checkedAt DateTime @default(now()) @map("checked_at")
+
+  vehicleId String        @map("vehicle_id")
+  vehicle   Vehicle       @relation(fields: [vehicleId], references: [id])
+
+  itemId String        @map("item_id")
+  item   InventoryItem @relation(fields: [itemId], references: [id])
+
+  checkedById String @map("checked_by_id")
+  checkedBy   User   @relation("VehicleChecklistCheckedBy", fields: [checkedById], references: [id])
+
+  @@unique([vehicleId, itemId])
+  @@index([vehicleId])
+  @@map("vehicle_checklist_checks")
 }

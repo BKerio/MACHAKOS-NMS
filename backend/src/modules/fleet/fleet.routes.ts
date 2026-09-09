@@ -4,6 +4,7 @@ import { requireRole } from '../../shared/guards/requireRole.js';
 import { Role } from '../../shared/types/index.js';
 import { BadRequestError } from '../../shared/errors/AppError.js';
 import { TrackingService } from '../tracking/tracking.service.js';
+import { getChecklistDetail, assertChecklistAccess, upsertChecklistCheck } from './checklist.js';
 import { createReadStream, existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -287,6 +288,53 @@ export const fleetRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
         request.user.role,
       );
       return reply.send({ ok: true, data: vehicle });
+    }
+  );
+
+  // ── Pre-dispatch equipment checklist ─────────────────────────────────────────
+
+  /**
+   * GET /fleet/:vehicleId/checklist
+   * Every active+required InventoryItem plus its current (this-shift) OK/ISSUE
+   * state. Driver/EMT/nurse must currently be checked in to this vehicle;
+   * dispatcher/admin can view any vehicle read-only, ahead of assigning it.
+   */
+  app.get<{ Params: { vehicleId: string } }>(
+    '/:vehicleId/checklist',
+    { preValidation: [requireRole([Role.DRIVER, Role.EMT, Role.NURSE, Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])] },
+    async (request, reply) => {
+      await assertChecklistAccess(app.prisma, request.params.vehicleId, {
+        userId: request.user.userId,
+        role: request.user.role,
+      });
+      const data = await getChecklistDetail(app.prisma, request.params.vehicleId);
+      return reply.send({ ok: true, data });
+    }
+  );
+
+  /**
+   * POST /fleet/:vehicleId/checklist
+   * Confirm one item as OK or flag it as an ISSUE (with an optional note).
+   * Whoever's currently checked in to the vehicle (driver, EMT, or nurse) may
+   * confirm any item - this is a shared, vehicle-level checklist, not scoped
+   * to a single crew member.
+   * Body: { itemId: string; status: 'OK' | 'ISSUE'; note?: string }
+   */
+  app.post<{ Params: { vehicleId: string }; Body: { itemId: string; status: 'OK' | 'ISSUE'; note?: string } }>(
+    '/:vehicleId/checklist',
+    { preValidation: [requireRole([Role.DRIVER, Role.EMT, Role.NURSE])] },
+    async (request, reply) => {
+      const { itemId, status, note } = request.body ?? ({} as typeof request.body);
+      if (!itemId) throw new BadRequestError('itemId is required');
+      if (status !== 'OK' && status !== 'ISSUE') throw new BadRequestError("status must be 'OK' or 'ISSUE'");
+
+      const check = await upsertChecklistCheck(
+        app.prisma,
+        request.params.vehicleId,
+        { userId: request.user.userId, role: request.user.role },
+        { itemId, status, note },
+      );
+      return reply.send({ ok: true, data: check });
     }
   );
 };

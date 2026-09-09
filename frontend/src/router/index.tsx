@@ -39,6 +39,7 @@ const OperatorHistoryPage = lazy(() => import('@/pages/operator/HistoryPage'));
 const OperatorPatientDataPage = lazy(() => import('@/pages/operator/PatientDataPage'));
 const OperatorPatientCareReportPage = lazy(() => import('@/pages/operator/PatientCareReportPage'));
 const OperatorInventoryPage = lazy(() => import('@/pages/operator/InventoryPage'));
+const OperatorChecklistPage = lazy(() => import('@/pages/operator/ChecklistPage'));
 const ProfilePage = lazy(() => import('@/pages/shared/ProfilePage'));
 // Unauthenticated read-only display for the call-centre TV (token-gated).
 const WallboardDisplayPage = lazy(() => import('@/pages/public/WallboardDisplayPage'));
@@ -324,6 +325,14 @@ export const router = createBrowserRouter([
         element: (
           <RoleGuard allowed={['DRIVER', 'EMT', 'NURSE']}>
             <OperatorInventoryPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'operator/checklist',
+        element: (
+          <RoleGuard allowed={['DRIVER', 'EMT', 'NURSE']}>
+            <OperatorChecklistPage />
           </RoleGuard>
         ),
       },

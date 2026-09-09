@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nccg/config/server.dart';
 import 'package:nccg/method/api.dart';
+import 'package:nccg/models/checklist.dart';
 import 'package:nccg/models/inventory.dart';
 import 'package:nccg/models/task.dart';
 import 'package:nccg/models/vehicle.dart';
@@ -246,6 +247,29 @@ class NmsApi {
     final res = await API().postRequest(
       url: _u('/inventory/checkouts/$checkoutId/return'),
       data: {'quantity': quantity},
+    );
+    _unwrap(res);
+  }
+
+  // ── Pre-dispatch vehicle equipment checklist ─────────────────────────────
+  // Mirrors frontend/src/api/checklist.ts against the same
+  // GET/POST /fleet/:vehicleId/checklist endpoints.
+
+  static Future<VehicleChecklist> getVehicleChecklist(String vehicleId) async {
+    final res = await API().getRequest(url: _u('/fleet/$vehicleId/checklist'));
+    final body = _unwrap(res);
+    return VehicleChecklist.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  static Future<void> submitChecklistItem(
+    String vehicleId, {
+    required String itemId,
+    required String status,
+    String? note,
+  }) async {
+    final res = await API().postRequest(
+      url: _u('/fleet/$vehicleId/checklist'),
+      data: {'itemId': itemId, 'status': status, 'note': ?note},
     );
     _unwrap(res);
   }

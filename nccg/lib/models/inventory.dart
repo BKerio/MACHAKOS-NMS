@@ -24,6 +24,10 @@ class InventoryItem {
   final String id;
   final String name;
   final String category;
+  /// 'MEDICAL' | 'VEHICLE' - the top-level split requested alongside the
+  /// pre-dispatch checklist; the fine-grained [category] chips only apply
+  /// within 'MEDICAL'.
+  final String itemType;
   final String unit;
   final int quantityStock;
 
@@ -31,6 +35,7 @@ class InventoryItem {
     required this.id,
     required this.name,
     required this.category,
+    required this.itemType,
     required this.unit,
     required this.quantityStock,
   });
@@ -39,6 +44,7 @@ class InventoryItem {
     id: json['id'] as String,
     name: json['name'] as String? ?? '',
     category: json['category'] as String? ?? 'OTHER',
+    itemType: json['itemType'] as String? ?? 'MEDICAL',
     unit: json['unit'] as String? ?? 'unit',
     quantityStock: (json['quantityStock'] as num?)?.toInt() ?? 0,
   );

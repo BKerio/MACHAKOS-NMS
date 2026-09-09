@@ -20,10 +20,13 @@ interface AddPersonnelModalProps {
   onClose: () => void;
 }
 
+// WATCHER intentionally excluded - no longer an assignable role for new
+// personnel (see the pre-dispatch checklist / watcher soft-removal pass).
+// ROLE_LABELS below still carries it so any pre-existing watcher-role user
+// elsewhere in this file's data still renders a correct label.
 const ROLES: Role[] = [
   'SUPER_ADMIN',
   'ADMIN',
-  'WATCHER',
   'DISPATCHER',
   'PARTNER',
   'DRIVER',
@@ -42,7 +45,7 @@ const ROLE_LABELS: Record<Role, string> = {
   NURSE: 'Nurse',
 };
 
-const DEFAULT_ROLE: Role = 'WATCHER';
+const DEFAULT_ROLE: Role = 'DISPATCHER';
 
 const fieldCls =
   'w-full border rounded-lg px-3 py-2.5 text-sm font-semibold outline-none transition-colors';

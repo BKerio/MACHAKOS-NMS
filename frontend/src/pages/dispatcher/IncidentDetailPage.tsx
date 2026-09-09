@@ -1139,6 +1139,7 @@ function IncidentDetailPage() {
                           {v.currentDriver ? ` - ${v.currentDriver.name}` : ' - no driver'}
                           {v.currentEmt ? ` / EMT ${v.currentEmt.name}` : ''}
                           {v.currentNurse ? ` / Nurse ${v.currentNurse.name}` : ''}
+                          {v.checklistComplete === false ? ` · ⚠ checklist ${v.checklistConfirmed}/${v.checklistTotal}` : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -1209,6 +1210,12 @@ function IncidentDetailPage() {
                         A driver must be checked in via the mobile app before dispatching.
                       </p>
                     )}
+                    {sv.checklistComplete === false && (
+                      <p className="text-xs text-status-warning font-medium mt-3">
+                        Equipment checklist incomplete ({sv.checklistConfirmed}/{sv.checklistTotal} confirmed) - crew
+                        must confirm the rest before this vehicle can be dispatched.
+                      </p>
+                    )}
                   </div>
                 );
               })()}
@@ -1227,9 +1234,11 @@ function IncidentDetailPage() {
                 disabled={
                   !selectedVehicleId ||
                   // Offline units have no driver account by design - only tracked
-                  // vehicles require a checked-in driver.
+                  // vehicles require a checked-in driver and a complete checklist.
                   (!isOfflineSelected &&
                     !(nearestVehicles || []).find(v => v.id === selectedVehicleId)?.currentDriver) ||
+                  (!isOfflineSelected &&
+                    (nearestVehicles || []).find(v => v.id === selectedVehicleId)?.checklistComplete === false) ||
                   dispatchMutation.isPending ||
                   offlineDispatchMutation.isPending ||
                   step >= 3

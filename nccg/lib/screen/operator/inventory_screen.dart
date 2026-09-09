@@ -23,6 +23,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   bool _loading = true;
 
   final _searchController = TextEditingController();
+  String _itemType = 'MEDICAL';
   String _category = 'ALL';
 
   /// itemId -> quantity. Shared (by reference) with the cart sheet while it's
@@ -76,7 +77,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
   List<InventoryItem> get _filtered {
     final q = _searchController.text.trim().toLowerCase();
     return _items.where((item) {
-      if (_category != 'ALL' && item.category != _category) return false;
+      if (item.itemType != _itemType) return false;
+      if (_itemType == 'MEDICAL' && _category != 'ALL' && item.category != _category) return false;
       if (q.isEmpty) return true;
       return item.name.toLowerCase().contains(q) || inventoryCategoryLabel(item.category).toLowerCase().contains(q);
     }).toList();
@@ -193,29 +195,46 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           const SizedBox(height: 16),
                         ],
 
+                        Row(
+                          children: [
+                            for (final t in const ['MEDICAL', 'VEHICLE']) ...[
+                              Expanded(
+                                child: _TypeTab(
+                                  label: t == 'MEDICAL' ? 'Medical' : 'Vehicle',
+                                  active: _itemType == t,
+                                  onTap: () => setState(() => _itemType = t),
+                                ),
+                              ),
+                              if (t == 'MEDICAL') const SizedBox(width: 8),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
                         TextField(
                           controller: _searchController,
                           style: const TextStyle(fontSize: 14, color: AppColors.ink),
                           decoration: appInputDecoration(hintText: 'Search stock...', prefixIcon: Icons.search_rounded),
                         ),
                         const SizedBox(height: 10),
-                        SizedBox(
-                          height: 34,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            children: [
-                              for (final c in inventoryCategories)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: _CategoryChip(
-                                    label: c.$2,
-                                    active: _category == c.$1,
-                                    onTap: () => setState(() => _category = c.$1),
+                        if (_itemType == 'MEDICAL')
+                          SizedBox(
+                            height: 34,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                for (final c in inventoryCategories)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: _CategoryChip(
+                                      label: c.$2,
+                                      active: _category == c.$1,
+                                      onTap: () => setState(() => _category = c.$1),
+                                    ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 16),
 
                         if (_filtered.isEmpty)
@@ -259,6 +278,33 @@ void applyCartQty(Map<String, int> cart, InventoryItem item, int qty) {
     cart.remove(item.id);
   } else {
     cart[item.id] = clamped;
+  }
+}
+
+class _TypeTab extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _TypeTab({required this.label, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        alignment: Alignment.center,
+        height: 36,
+        decoration: BoxDecoration(
+          color: active ? kOpPrimary : AppColors.surface2,
+          border: Border.all(color: active ? kOpPrimary : AppColors.border),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: active ? Colors.white : AppColors.ink2),
+        ),
+      ),
+    );
   }
 }
 
