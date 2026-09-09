@@ -1,0 +1,61 @@
+name: CI
+
+# Build/typecheck validation on every push and PR. Does not touch the server -
+# see deploy.yml for the workflow that actually ships to production.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [master]
+
+jobs:
+  backend:
+    name: Backend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Placeholder - prisma generate only needs this defined, never connects.
+      DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Skipped: `npm run lint` currently fails repo-wide with a missing
+      # eslint.config.js (pre-existing, unrelated to CI setup). Re-enable
+      # once that's fixed.
+      - name: Build
+        run: npm run build

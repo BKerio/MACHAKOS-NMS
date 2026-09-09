@@ -1,0 +1,78 @@
+name: Deploy
+
+# Ships master to the production server: pulls latest code, installs deps,
+# runs pending Prisma migrations, rebuilds both apps, and restarts the
+# backend via pm2. nginx serves the rebuilt frontend/dist directly, so it
+# only needs a config reload (harmless even when unchanged).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Backend build
+        working-directory: backend
+        env:
+          DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  deploy:
+    name: Deploy to server
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd /var/www/MACHAKOS-NMS
+
+            git fetch origin master
+            git reset --hard origin/master
+
+            # ── Backend ──────────────────────────────────────────────────
+            cd backend
+            npm ci
+            npx prisma migrate deploy
+            npm run build
+            pm2 reload nms-backend --update-env
+            cd ..
+
+            # ── Frontend ─────────────────────────────────────────────────
+            cd frontend
+            npm ci
+            npm run build
+            cd ..
+
+            sudo systemctl reload nginx
+
+            pm2 status nms-backend
