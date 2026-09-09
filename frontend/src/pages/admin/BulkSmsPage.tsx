@@ -3,10 +3,12 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   MessageSquareText as ChatText,
   Send as PaperPlaneRight,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import api from '@/api/client';
 import { Incident } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
+import SmsGatewaySettings from '@/components/admin/SmsGatewaySettings';
 
 // Canned starting points for common alert types. Purely client-side text -
 // there's no backend template store anymore, so these aren't editable/shared.
@@ -53,6 +55,7 @@ const cardStyle = { background: 'var(--surface)', borderColor: 'var(--border)' }
 function BulkSmsPage() {
   const { addNotification } = useNotificationStore();
 
+  const [tab, setTab] = useState<'compose' | 'gateway'>('compose');
   const [message, setMessage] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState('');
   const [numbersText, setNumbersText] = useState('');
@@ -108,6 +111,20 @@ function BulkSmsPage() {
           Bulk SMS
         </h2>
       </div>
+
+      {/* Compose vs Gateway Settings */}
+      <div className="tabs">
+        <button type="button" className={`tab ${tab === 'compose' ? 'on' : ''}`} onClick={() => setTab('compose')}>
+          <ChatText size={15} /> Compose
+        </button>
+        <button type="button" className={`tab ${tab === 'gateway' ? 'on' : ''}`} onClick={() => setTab('gateway')}>
+          <SettingsIcon size={15} /> Gateway Settings
+        </button>
+      </div>
+
+      {tab === 'gateway' && <SmsGatewaySettings />}
+
+      {tab === 'compose' && <>
 
       {/* Compose */}
       <div className={`p-5 ${card}`} style={cardStyle}>
@@ -217,6 +234,8 @@ function BulkSmsPage() {
           </button>
         </div>
       </div>
+
+      </>}
     </div>
   );
 }

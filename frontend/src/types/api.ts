@@ -130,6 +130,28 @@ export interface InventoryCheckout {
   vehicle?: { id: string; registrationNumber: string };
 }
 
+// ── SMS gateway settings (Admin → Bulk SMS → Gateway Settings) ─────────────────
+
+export type SmsProvider = 'ADVANTA' | 'AFRICAS_TALKING' | 'TWILIO';
+
+export interface SmsGatewayField {
+  key: string;
+  label: string;
+  secret: boolean;
+  placeholder?: string;
+}
+
+export interface SmsGatewaySummary {
+  provider: SmsProvider;
+  label: string;
+  implemented: boolean;
+  configured: boolean;
+  isActive: boolean;
+  fields: SmsGatewayField[];
+  values: Record<string, string>;
+  updatedAt: string | null;
+}
+
 export interface PatientVitals {
   temperature?: string;
   pulseRate?: string;

@@ -57,6 +57,12 @@ enum VehicleStatus {
   MAINTENANCE
 }
 
+enum SmsProvider {
+  ADVANTA
+  AFRICAS_TALKING
+  TWILIO
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Agency
 // ─────────────────────────────────────────────────────────────────────────────
@@ -628,6 +634,27 @@ model SmsTemplate {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("sms_templates")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SmsGateway - DB-backed, encrypted credentials per SMS provider, configured
+// from the admin Bulk SMS settings UI. Exactly one row may be isActive at a
+// time (enforced in SmsGatewayService, not the DB) - that's the provider
+// POST /sms/send actually sends through. Only ADVANTA has a real client
+// wired up right now; other providers can be configured/tested ahead of
+// their client shipping. See modules/settings/sms-gateway.service.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SmsGateway {
+  id          String      @id @default(uuid())
+  provider    SmsProvider @unique
+  configEnc   String      @db.Text                      // AES-256-GCM JSON blob of credential fields
+  isActive    Boolean     @default(false) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  updatedById String?     @map("updated_by_id")          // soft link (no FK) to the admin who last saved it
+
+  @@map("sms_gateways")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

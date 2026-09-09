@@ -83,11 +83,21 @@ function assertAdvantaAccepted(data: unknown): void {
   }
 }
 
-export async function sendAdvantaSms(toPhone: string, message: string): Promise<void> {
-  if (!isAdvantaSmsConfigured()) {
-    throw new Error('SMS is not configured. Set ADVANTA_SMS_URL, ADVANTA_API_KEY, ADVANTA_PARTNER_ID, ADVANTA_SHORTCODE');
-  }
+export interface AdvantaCreds {
+  url: string;
+  apiKey: string;
+  partnerId: string;
+  shortcode: string;
+}
 
+/**
+ * The actual Advanta send, parameterized on credentials rather than reading
+ * process.env directly - lets a caller send through whichever credentials
+ * apply (env vars for system notifications, or the DB-backed gateway an
+ * admin configured in Settings for Bulk SMS - see sendAdvantaSms below and
+ * modules/settings/sms-gateway.service.ts).
+ */
+export async function sendAdvantaSmsWithCreds(creds: AdvantaCreds, toPhone: string, message: string): Promise<void> {
   const mobile = normalizeKenyanMobile(toPhone);
   if (!mobile) {
     throw new Error('Invalid mobile number');
@@ -96,14 +106,14 @@ export async function sendAdvantaSms(toPhone: string, message: string): Promise<
   // Advanta docs show JSON, but many gateways accept/expect form encoding.
   // Form encoding is generally the most compatible across deployments.
   const body = new URLSearchParams({
-    apikey: String(ADVANTA_API_KEY),
-    partnerID: String(ADVANTA_PARTNER_ID),
+    apikey: creds.apiKey,
+    partnerID: creds.partnerId,
     message: String(message),
-    shortcode: String(ADVANTA_SHORTCODE),
+    shortcode: creds.shortcode,
     mobile,
   });
 
-  const resp = await axios.post(String(ADVANTA_SMS_URL), body.toString(), {
+  const resp = await axios.post(creds.url, body.toString(), {
     timeout: 15000,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     validateStatus: () => true,
@@ -115,4 +125,23 @@ export async function sendAdvantaSms(toPhone: string, message: string): Promise<
   }
 
   assertAdvantaAccepted(resp.data);
+}
+
+/**
+ * Sends via the ADVANTA_* env vars - unchanged entry point for system
+ * notifications (OTP, driver assignment) that aren't part of the
+ * admin-configurable Bulk SMS gateway. Bulk SMS itself (services/sms.routes.ts)
+ * sends through sendAdvantaSmsWithCreds using whichever gateway Settings has
+ * marked active instead.
+ */
+export async function sendAdvantaSms(toPhone: string, message: string): Promise<void> {
+  if (!isAdvantaSmsConfigured()) {
+    throw new Error('SMS is not configured. Set ADVANTA_SMS_URL, ADVANTA_API_KEY, ADVANTA_PARTNER_ID, ADVANTA_SHORTCODE');
+  }
+
+  return sendAdvantaSmsWithCreds(
+    { url: String(ADVANTA_SMS_URL), apiKey: String(ADVANTA_API_KEY), partnerId: String(ADVANTA_PARTNER_ID), shortcode: String(ADVANTA_SHORTCODE) },
+    toPhone,
+    message,
+  );
 }

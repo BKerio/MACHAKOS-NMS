@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { requireRole } from '../shared/guards/requireRole.js';
 import { Role } from '../shared/types/index.js';
 import { BadRequestError } from '../shared/errors/AppError.js';
-import { sendAdvantaSms } from './sms.js';
+import { SmsGatewayService } from '../modules/settings/sms-gateway.service.js';
+import { sendAdvantaSmsWithCreds, type AdvantaCreds } from './sms.js';
 
 const smsRoles = [Role.ADMIN, Role.SUPER_ADMIN];
 
@@ -12,8 +13,15 @@ const sendSchema = z.object({
   numbers: z.array(z.string()).min(1, 'At least one recipient number is required'),
 });
 
-/** Minimal SMS route: sends a message to a manually-supplied list of numbers via Advanta. */
+/**
+ * Bulk SMS route: sends a message to a manually-supplied list of numbers
+ * through whichever gateway Admin → Bulk SMS → Gateway Settings has marked
+ * active (see modules/settings/sms-gateway.service.ts). Distinct from the
+ * env-based sendAdvantaSms used for system notifications like OTP.
+ */
 export const smsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
+  const smsGateway = new SmsGatewayService(app);
+
   app.addHook('preValidation', app.authenticate);
   app.addHook('preValidation', requireRole(smsRoles));
 
@@ -22,12 +30,17 @@ export const smsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!parsed.success) throw new BadRequestError(parsed.error.issues[0].message);
     const { message, numbers } = parsed.data;
 
+    const active = await smsGateway.getActiveClient();
+    if (!active) {
+      throw new BadRequestError('No SMS gateway is configured. Set one up in Admin → Bulk SMS → Gateway Settings.');
+    }
+
     let sent = 0;
     let failed = 0;
     const errors: { number: string; error: string }[] = [];
     for (const number of numbers) {
       try {
-        await sendAdvantaSms(number, message);
+        await sendAdvantaSmsWithCreds(active.fields as unknown as AdvantaCreds, number, message);
         sent++;
       } catch (err: any) {
         failed++;

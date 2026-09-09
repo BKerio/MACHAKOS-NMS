@@ -25,6 +25,8 @@ import { fuelRoutes } from './modules/fuel/fuel.routes.js';
 import { inventoryRoutes } from './modules/inventory/inventory.routes.js';
 import { TrackingService } from './modules/tracking/tracking.service.js';
 import { smsRoutes } from './services/sms.routes.js';
+import { settingsRoutes } from './modules/settings/settings.routes.js';
+import { SmsGatewayService } from './modules/settings/sms-gateway.service.js';
 
 /**
  * Builds and returns the configured Fastify application instance.
@@ -104,6 +106,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.register(publicRoutes, { prefix: '/public' });
   app.register(fuelRoutes, { prefix: '/fuel' });
   app.register(inventoryRoutes, { prefix: '/inventory' });
+  app.register(settingsRoutes, { prefix: '/settings' });
+
+  // ── SMS Gateway settings ─────────────────────────────────────────────────
+  // One-time: if this deployment has ADVANTA_* env vars set but no gateway
+  // rows yet, seed+activate one from them so Bulk SMS keeps working exactly
+  // as before, now editable from Admin → Bulk SMS → Gateway Settings.
+  app.addHook('onReady', async () => { await new SmsGatewayService(app).ensureSeedFromEnv(); });
 
   // ── GPS Tracking (Uffizio/Kimii) ──────────────────────────────────────────
   const trackingService = new TrackingService(app);
