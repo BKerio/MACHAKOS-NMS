@@ -238,7 +238,7 @@ function LoginPage() {
             </>
           ) : (
             <>
-              <h1 className="login-title">Login console</h1>
+              <h1 className="login-title">Login console.</h1>
               <p className="login-sub">Machakos County emergency dispatch console.</p>
 
               {/* Staff vs field crew tabs */}
