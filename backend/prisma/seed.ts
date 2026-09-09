@@ -102,7 +102,166 @@ async function main() {
     console.log(`✅ Facility: ${facility.name} (KEPH ${facility.kephLevel})`);
   }
 
-  // ── 4. Fleet - real vehicles from Uffizio/Kimii Telematics ─────────────────
+  // ── 4. Ambulance Checklist - ALS Ambulance Monthly Checklist inventory ─────
+  // Source: ambulance_checklist.xlsx. Each row becomes an InventoryItem, with
+  // quantityStock/reorderLevel seeded to the checklist's "Required Qty" (the
+  // minimum that must be on board). Vehicle-section rows are pass/fail
+  // inspection checks rather than stock, so they're seeded with unit "check"
+  // and a note rather than a real reorder threshold. The source sheet lists
+  // "Giving Sets" twice (10 and 5) - only the first is kept here.
+  const checklistItems: {
+    category: string;
+    name: string;
+    quantityStock: number;
+    reorderLevel: number;
+    unit: string;
+    notes?: string;
+  }[] = [
+    { category: 'Drugs', name: 'PCM 1GM', quantityStock: 4, reorderLevel: 4, unit: 'each' },
+    { category: 'Drugs', name: 'Morphine 10MG', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Drugs', name: 'Pethidine 50MG', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Drugs', name: 'Pethidine 100MG', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Drugs', name: 'Diazepam 10MG', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Drugs', name: 'Buscopan 20MG', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Drugs', name: 'Adrenaline 1MG', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Drugs', name: 'Atropine 0.6MG', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'General', name: 'BP Machine', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'General', name: 'Dual Head Stethoscope', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'General', name: 'Surgical Gloves', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'General', name: 'Examination Gloves', quantityStock: 2, reorderLevel: 2, unit: 'pack' },
+    { category: 'General', name: 'Venipuncture Kit', quantityStock: 0, reorderLevel: 0, unit: 'each' },
+    { category: 'General', name: 'Pen Torch', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'General', name: 'Glucometer', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'General', name: 'Glucometer Strips', quantityStock: 1, reorderLevel: 1, unit: 'pack' },
+    { category: 'General', name: 'Trauma Shears', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'General', name: 'Laryngoscope', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'General', name: 'Stylet', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'General', name: 'KY Jelly', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Venipuncture', name: '18G Cannula', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Venipuncture', name: '20G Cannula', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Venipuncture', name: '22G Cannula', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Venipuncture', name: '24G Cannula', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Venipuncture', name: '26G Cannula', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'IV Fluids', name: 'Normal Saline', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'IV Fluids', name: "Ringer's Lactate", quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'IV Fluids', name: 'DNS', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'IV Fluids', name: 'D5%', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'IV Fluids', name: 'D10%', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'IV Fluids', name: 'D50%', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Consumables', name: 'Giving Sets', quantityStock: 10, reorderLevel: 10, unit: 'each' },
+    { category: 'Consumables', name: 'Tape/Strapping', quantityStock: 3, reorderLevel: 3, unit: 'each' },
+    { category: 'Consumables', name: '2cc Syringes', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Consumables', name: '5cc Syringes', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Consumables', name: '10cc Syringes', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Consumables', name: '20cc Syringes', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Consumables', name: '60cc Syringes', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Airway', name: 'OPA Size 2', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Airway', name: 'OPA Size 3', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Airway', name: 'OPA Size 4', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Airway', name: 'ETT 4.0', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Airway', name: 'ETT 4.5', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Airway', name: 'ETT 5.0', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Airway', name: 'ETT 6.5', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Airway', name: 'ETT 7.5', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Airway', name: 'Suction Size 6', quantityStock: 0, reorderLevel: 0, unit: 'each' },
+    { category: 'Airway', name: 'Suction Size 10', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Airway', name: 'Suction Size 12', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Airway', name: 'BVM Adult', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Airway', name: 'BVM Child', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Respiratory', name: 'Oxygen Cylinders', quantityStock: 3, reorderLevel: 3, unit: 'each' },
+    { category: 'Respiratory', name: 'Nasal Cannula Adult', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Respiratory', name: 'Nasal Cannula Child', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Respiratory', name: 'Nasal Cannula Infant', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Respiratory', name: 'Non-Rebreather Mask', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Respiratory', name: 'Non-Rebreather Mask Paediatric', quantityStock: 3, reorderLevel: 3, unit: 'each' },
+    { category: 'Respiratory', name: 'Nebulizer Adult', quantityStock: 3, reorderLevel: 3, unit: 'each' },
+    { category: 'Respiratory', name: 'Nebulizer Paediatric', quantityStock: 3, reorderLevel: 3, unit: 'each' },
+    { category: 'Respiratory', name: 'Ventilator', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Trauma', name: 'SAM Formable Splint', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Trauma', name: 'Stretcher Straps', quantityStock: 1, reorderLevel: 1, unit: 'pair' },
+    { category: 'Trauma', name: 'Rigid Splints', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Trauma', name: 'Scoop Stretcher', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Trauma', name: 'Head Blocks', quantityStock: 1, reorderLevel: 1, unit: 'pair' },
+    { category: 'Trauma', name: 'Blankets', quantityStock: 2, reorderLevel: 2, unit: 'pair' },
+    { category: 'Trauma', name: 'Cervical Collar', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Trauma', name: 'Trauma Bag', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Cord Clamps', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Crepe Bandage 4"', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Crepe Bandage 6"', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Surgical Blades', quantityStock: 5, reorderLevel: 5, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Urine Bags', quantityStock: 2, reorderLevel: 2, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Foley Catheter 18', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Foley Catheter 16', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Foley Catheter 14', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Foley Catheter 12', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Obstetric/Other', name: 'Foley Catheter 8', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'PPE', name: 'Surgical Masks', quantityStock: 1, reorderLevel: 1, unit: 'box' },
+    { category: 'Emergency Equipment', name: 'Cardiac Monitor', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Emergency Equipment', name: 'Manual Defibrillator', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Emergency Equipment', name: 'Drug Box', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Emergency Equipment', name: 'Transport Cooler', quantityStock: 1, reorderLevel: 1, unit: 'each' },
+    { category: 'Vehicle', name: 'Vehicle Exterior', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Tires', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Engine Oil', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Radiator Coolant', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Power Steering Fluid', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'ATF', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Fan Belt', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Radiator & Heater Hoses', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Fluid Leaks', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Brake Fluid Level', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Windshield Washer Fluid', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Oil Level', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Battery', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Fuel Level', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Steering Play', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Heater/AC', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Hydraulic Brake', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Hand Brake', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Vehicle Lights/Indicators', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Emergency Lights', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Fire Extinguisher', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Floor Covering', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Vehicle Cleanliness', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Door Latches & Hinges', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Reflector Set', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Wheel Chocks', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Siren', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Tow Rope', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Spare Wheel', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Wheel Spanner/Jack', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+    { category: 'Vehicle', name: 'Horn', quantityStock: 1, reorderLevel: 1, unit: 'check', notes: 'Vehicle inspection item (pass/fail check on the ALS monthly checklist, not stock-tracked)' },
+  ];
+
+  const slugify = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+  for (const item of checklistItems) {
+    const id = `checklist-${slugify(item.category)}-${slugify(item.name)}`;
+    await prisma.inventoryItem.upsert({
+      where: { id },
+      update: {
+        quantityStock: item.quantityStock,
+        reorderLevel: item.reorderLevel,
+        unit: item.unit,
+        notes: item.notes,
+        isActive: true,
+      },
+      create: {
+        id,
+        name: item.name,
+        category: item.category,
+        unit: item.unit,
+        quantityStock: item.quantityStock,
+        reorderLevel: item.reorderLevel,
+        notes: item.notes,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`✅ Ambulance Checklist: ${checklistItems.length} inventory items across ${new Set(checklistItems.map((i) => i.category)).size} categories`);
+
+  // ── 5. Fleet - real vehicles from Uffizio/Kimii Telematics ─────────────────
   // IMEIs confirmed from live Uffizio API response (getTokenBaseLiveData).
   // The TrackingService matches by imei to write lastLat/lastLng every 30s.
   // ⚠️  GKB 847V: IMEI below is 13 digits - real IMEIs are 15. Verify on Uffizio dashboard and correct here.
@@ -169,7 +328,7 @@ async function main() {
   });
   console.log(`✅ Crew created: Driver, EMT, Nurse`);
 
-  // ── 5. Frontend Developer Account ──────────────────────────────────────────
+  // ── 6. Frontend Developer Account ──────────────────────────────────────────
   const erickyHash = await bcrypt.hash('12345678', 10);
   const ericky = await prisma.user.upsert({
     where: { email: 'ericksonmutai56@gmail.com' },
@@ -185,7 +344,7 @@ async function main() {
   });
   console.log(`✅ Frontend Dev: ${ericky.email}`);
 
-  // ── 6. Joe (AFOSI Admin) ────────────────────────────────────────────────────
+  // ── 7. Joe (AFOSI Admin) ────────────────────────────────────────────────────
   const joeHash = await bcrypt.hash('joeyflow21', 10);
   const joe = await prisma.user.upsert({
     where: { email: 'joe@afosi.org' },

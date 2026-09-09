@@ -80,7 +80,7 @@ function ActivityPage() {
             </div>
             <div className="flex items-center gap-2 mt-2">
               <Clock size={15} style={{ color: 'var(--muted)' }} />
-              <p className="text-sm" style={{ color: 'var(--muted)' }}>Assigned {formatActivityTime(task.receivedAt) ?? '—'}</p>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>Assigned {formatActivityTime(task.receivedAt) ?? '-'}</p>
             </div>
             {task.incident.placeOfReferral && (
               <div className="flex items-center gap-2 mt-2">

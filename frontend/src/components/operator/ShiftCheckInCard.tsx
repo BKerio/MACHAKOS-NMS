@@ -211,7 +211,7 @@ function ShiftCheckInCard() {
                 {(() => {
                   const name = myVehicle.checkInLocationName || myVehicle.lastLocationName;
                   if (name && !/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(name.trim())) return `Logged in at ${name}`;
-                  return 'Logged in — resolving place name…';
+                  return 'Logged in - resolving place name…';
                 })()}
               </p>
               {myVehicle.checkedInAt && (
@@ -229,7 +229,7 @@ function ShiftCheckInCard() {
 
           {showPicker && (
             <div className="mt-3 max-h-80 overflow-y-auto scroll-thin">
-              <p className="label mb-2">With tracker — check-in</p>
+              <p className="label mb-2">With tracker - check-in</p>
               {vehiclesLoading ? (
                 <div className="skel" style={{ height: 56 }} />
               ) : error ? (

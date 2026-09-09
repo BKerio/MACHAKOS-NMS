@@ -61,7 +61,7 @@ function ActivityTimeline({
                     : upcoming
                       ? 'Upcoming'
                       : skipped
-                        ? '—'
+                        ? '-'
                         : 'Pending'}
               </p>
             </div>

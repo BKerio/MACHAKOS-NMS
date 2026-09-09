@@ -82,7 +82,7 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
               <p className={`text-sm ${!currentId ? 'font-bold' : ''}`} style={{ color: !currentId ? 'var(--green)' : 'var(--muted)' }}>
                 {currentId ? 'Remove from this ambulance' : 'Nobody assigned'}
               </p>
-              {currentId && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>They stay on shift — no check-out needed</p>}
+              {currentId && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>They stay on shift - no check-out needed</p>}
             </button>
             {options.map((person) => {
               const active = currentId === person.id;

@@ -16,20 +16,20 @@ export const CLOSURE_REASON_PRESETS = [
 
 export function buildClosureReason(preset: string, extraNote?: string): string {
   const note = extraNote?.trim();
-  return note ? `${preset} — ${note}` : preset;
+  return note ? `${preset} - ${note}` : preset;
 }
 
 /** Preset reasons when a driver hands a live case to another crew. */
 export const HANDOVER_REASON_PRESETS = [
-  'Driver unable to continue — medical / personal',
+  'Driver unable to continue - medical / personal',
   'Vehicle mechanical issue',
   'Crew fatigue / end of shift mid-case',
-  'Escalation — higher-capability unit needed',
+  'Escalation - higher-capability unit needed',
   'Conflict of interest / safety concern',
-  'Other — see notes',
+  'Other - see notes',
 ] as const;
 
 export function buildHandoverReason(preset: string, extraNote?: string): string {
   const note = extraNote?.trim();
-  return note ? `${preset} — ${note}` : preset;
+  return note ? `${preset} - ${note}` : preset;
 }

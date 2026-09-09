@@ -7,7 +7,7 @@ import 'package:nccg/config/server.dart';
 
 class API {
   // Without this, an unreachable server (wrong network, server down, etc.)
-  // hangs on the OS's default TCP timeout — often 60s+ — before any request
+  // hangs on the OS's default TCP timeout - often 60s+ - before any request
   // fails. Every call below is capped so a bad connection fails fast instead
   // of leaving the UI stuck waiting.
   static const Duration _timeout = Duration(seconds: 8);

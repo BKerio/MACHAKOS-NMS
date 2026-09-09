@@ -98,7 +98,7 @@ function AssignmentPage() {
       addNotification({
         type: 'success',
         title: 'Case transferred',
-        message: receiver ? `Passed to ${receiver}. You're checked out — the case stays open for them.` : "Case returned to dispatch. You're checked out.",
+        message: receiver ? `Passed to ${receiver}. You're checked out - the case stays open for them.` : "Case returned to dispatch. You're checked out.",
       });
     },
     onError: (err) => addNotification({ type: 'error', title: 'Couldn’t transfer the case', message: getErrorMessage(err) }),

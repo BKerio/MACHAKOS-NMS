@@ -67,8 +67,8 @@ function HandoverModal({
           <div className="flex gap-2.5 border rounded-xl p-3 mb-4" style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}>
             <ArrowLeftRight size={18} style={{ color: 'var(--green)' }} className="flex-shrink-0 mt-0.5" />
             <p className="text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
-              Pass this live case to a nearby free ambulance that already has a driver. The case stays open — it is
-              not cancelled — and dispatch plus the receiving crew are notified for the log.
+              Pass this live case to a nearby free ambulance that already has a driver. The case stays open - it is
+              not cancelled - and dispatch plus the receiving crew are notified for the log.
             </p>
           </div>
 

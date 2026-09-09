@@ -50,10 +50,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                _Field(label: 'Name', value: _user?['name']?.toString() ?? '—'),
-                _Field(label: 'Phone', value: _user?['phone']?.toString() ?? '—'),
-                _Field(label: 'Role', value: _user?['role']?.toString() ?? '—'),
-                if (_user?['agency'] is Map) _Field(label: 'Agency', value: (_user!['agency']['name'] ?? '—').toString()),
+                _Field(label: 'Name', value: _user?['name']?.toString() ?? '-'),
+                _Field(label: 'Phone', value: _user?['phone']?.toString() ?? '-'),
+                _Field(label: 'Role', value: _user?['role']?.toString() ?? '-'),
+                if (_user?['agency'] is Map) _Field(label: 'Agency', value: (_user!['agency']['name'] ?? '-').toString()),
               ],
             ),
     );
