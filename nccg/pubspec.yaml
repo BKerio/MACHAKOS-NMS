@@ -61,6 +61,23 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+# Config for `dart run flutter_launcher_icons` - regenerates the Android/iOS/web
+# app icon from asset/logo.png. Re-run that command after changing the source
+# image; this block alone doesn't regenerate anything by itself.
+flutter_launcher_icons:
+  image_path: "asset/logo.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "asset/logo.png"
+    background_color: "#ffffff"
+    theme_color: "#0A1B2E"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "asset/logo.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -76,6 +93,7 @@ flutter:
   assets:
     - asset/nccg.jpg
     - asset/malteser.png
+    - asset/logo.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
