@@ -83,6 +83,16 @@ export class TrackingService {
 
   // ── Token management ──────────────────────────────────────────────────────
 
+  // In-flight generateAccessToken promise, shared across concurrent callers.
+  // Without this, the 65s GPS poll and an ad-hoc call (e.g. the admin
+  // opening Fuel Monitoring) can both see a stale/empty authCode at the same
+  // moment and each mint their own token. Uffizio appears to allow only one
+  // active token per account - whichever request's token got superseded by
+  // the other then fails every subsequent call with "Invalid Token" until
+  // something forces a fresh one. Deduping to a single shared request
+  // removes the race entirely.
+  private authCodeInFlight: Promise<string> | null = null;
+
   /** Public so the fuel module can reuse the same auth code - Uffizio rate-limits
    *  aggressively, so we deliberately share one token rather than minting two. */
   async getAuthCode(): Promise<string> {
@@ -90,6 +100,28 @@ export class TrackingService {
       return this.authCode;
     }
 
+    if (this.authCodeInFlight) {
+      return this.authCodeInFlight;
+    }
+
+    this.authCodeInFlight = this.requestNewAuthCode().finally(() => {
+      this.authCodeInFlight = null;
+    });
+    return this.authCodeInFlight;
+  }
+
+  /**
+   * Forces the next getAuthCode() call to mint a fresh token, for a caller
+   * that got an "Invalid Token"-shaped error Uffizio reports as a 200 with
+   * an error body (see FuelService.call) rather than a real HTTP 401 - the
+   * only case fetchAndUpdateLocations itself already resets authCode for.
+   */
+  invalidateAuthCode(): void {
+    this.authCode = null;
+    this.authCodeExpiry = 0;
+  }
+
+  private async requestNewAuthCode(): Promise<string> {
     const url = `${this.baseUrl}/webservice?token=generateAccessToken`;
 
     const res = await fetch(url, {

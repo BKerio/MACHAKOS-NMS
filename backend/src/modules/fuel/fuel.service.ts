@@ -171,7 +171,7 @@ export class FuelService {
     }
   }
 
-  private async call(method: string, body: Record<string, unknown>): Promise<any> {
+  private async call(method: string, body: Record<string, unknown>, retrying = false): Promise<any> {
     if (!this.baseUrl) throw new Error('Uffizio is not configured (UFFIZIO_BASE_URL missing)');
 
     // Reuse the tracking poller's auth code - Uffizio rate-limits per account.
@@ -187,8 +187,21 @@ export class FuelService {
     const json: any = await res.json();
 
     // Uffizio reports rate limiting and other soft errors inside a 200 body.
-    if (json?.root?.error) throw new Error(`Uffizio: ${json.root.error}`);
-    if (json?.result === 0 && json?.message) throw new Error(`Uffizio: ${json.message}`);
+    const softError: string | undefined = json?.root?.error ?? (json?.result === 0 ? json?.message : undefined);
+    if (softError) {
+      // A shared auth code can go stale from a concurrent refresh elsewhere
+      // (see TrackingService.getAuthCode) - Uffizio reports that as this kind
+      // of soft error rather than a real HTTP 401, so fetchAndUpdateLocations'
+      // own 401 handling never sees it. Force one fresh token and retry once
+      // before giving up, rather than surfacing a stale-token error as if it
+      // were a genuine rate limit or missing-sensor case.
+      if (!retrying && /invalid.{0,10}token/i.test(softError)) {
+        this.app.log.warn({ method }, 'Uffizio: stale shared auth code, refreshing and retrying once');
+        this.app.tracking.invalidateAuthCode();
+        return this.call(method, body, true);
+      }
+      throw new Error(`Uffizio: ${softError}`);
+    }
     return json;
   }
 
@@ -305,6 +318,6 @@ export class FuelService {
 
 declare module 'fastify' {
   interface FastifyInstance {
-    tracking: { getAuthCode(): Promise<string> };
+    tracking: { getAuthCode(): Promise<string>; invalidateAuthCode(): void };
   }
 }
