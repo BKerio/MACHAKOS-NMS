@@ -169,11 +169,13 @@ interface GoogleCanvasProps {
   suppressVehiclePopup: boolean;
   flyTarget: [number, number, number] | null;
   onFail: () => void;
+  /** Hides the top-left Traffic toggle - meant for small/compact map embeds where it just clutters. */
+  hideTrafficToggle?: boolean;
 }
 
 function GoogleCanvas({
   center, zoom, markers, vehicleMarkers, layerType, routePath,
-  onLocationSelect, onVehicleMarkerClick, suppressVehiclePopup, flyTarget, onFail,
+  onLocationSelect, onVehicleMarkerClick, suppressVehiclePopup, flyTarget, onFail, hideTrafficToggle,
 }: GoogleCanvasProps) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -371,7 +373,7 @@ function GoogleCanvas({
           <span className="text-xs font-semibold text-slate-400 tracking-wide">Loading map…</span>
         </div>
       )}
-      {ready && (
+      {ready && !hideTrafficToggle && (
         <button
           onClick={() => setTraffic(t => !t)}
           className={`absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest shadow-lg border transition-all ${
@@ -653,6 +655,8 @@ interface MapProps {
   lastUpdatedAt?: Date | null;
   /** External trigger: pass a new [lat, lng] value to smoothly fly the map there */
   focusPosition?: [number, number];
+  /** Hides the top-left Traffic toggle - use for small embeds (drawers, cards) where it just clutters. */
+  hideTrafficToggle?: boolean;
   children?: ReactNode;
 }
 
@@ -671,6 +675,7 @@ function Map({
   showVehicleList = false,
   lastUpdatedAt = null,
   focusPosition,
+  hideTrafficToggle = false,
   children,
 }: MapProps) {
   // [lat, lng, timestamp] - timestamp ensures re-clicking same vehicle re-fires the effect
@@ -713,6 +718,7 @@ function Map({
           suppressVehiclePopup={!!onVehicleClick}
           flyTarget={flyTarget}
           onFail={() => setGoogleFailed(true)}
+          hideTrafficToggle={hideTrafficToggle}
         />
       ) : (
         <LeafletCanvas

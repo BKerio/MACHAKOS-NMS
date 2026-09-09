@@ -10,6 +10,8 @@ import {
   Gauge,
   Hash,
   Navigation as NavigationArrow,
+  User,
+  Radio,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
@@ -348,43 +350,54 @@ function FleetPage() {
             })()}
 
             {(selectedLive?.lat ?? selected.lastLat) && (selectedLive?.lng ?? selected.lastLng) && (
-              <div style={{ height: 176, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
+              <div style={{ height: 160, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
                 <Map
                   center={[selectedLive?.lat ?? selected.lastLat!, selectedLive?.lng ?? selected.lastLng!]}
                   zoom={14}
                   vehicleMarkers={selectedLive ? [selectedLive] : []}
+                  hideTrafficToggle
                 />
               </div>
             )}
 
-            {[
-              { Icon: Hash, label: 'IMEI', value: selected.imei },
-              { Icon: NavigationArrow, label: 'Heading', value: selectedLive?.heading != null ? `${selectedLive.heading}°` : '-' },
-              { Icon: Gauge, label: 'Speed', value: selectedLive?.speed != null ? `${selectedLive.speed} km/h` : '-' },
-              {
-                Icon: MapTrifold, label: 'Location',
-                value: selected.lastLocationName
-                  || ((selectedLive?.lat ?? selected.lastLat)
-                    ? `${(selectedLive?.lat ?? selected.lastLat)!.toFixed(5)}, ${(selectedLive?.lng ?? selected.lastLng)!.toFixed(5)}`
-                    : 'No signal'),
-              },
-              {
-                Icon: MapTrifold, label: 'Coordinates',
-                value: (selectedLive?.lat ?? selected.lastLat)
-                  ? `${(selectedLive?.lat ?? selected.lastLat)!.toFixed(5)}, ${(selectedLive?.lng ?? selected.lastLng)!.toFixed(5)}`
-                  : 'No signal',
-              },
-            ].map(({ Icon, label, value }) => (
-              <div key={label} className="row" style={{ gap: 12, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-3)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                  <Icon size={15} color="var(--muted)" />
+            {/* Quick stats - compact 3-up grid for short values */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {[
+                { Icon: Hash, label: 'IMEI', value: selected.imei },
+                { Icon: NavigationArrow, label: 'Heading', value: selectedLive?.heading != null ? `${selectedLive.heading}°` : '-' },
+                { Icon: Gauge, label: 'Speed', value: selectedLive?.speed != null ? `${selectedLive.speed} km/h` : '-' },
+              ].map(({ Icon, label, value }) => (
+                <div key={label} className="col" style={{ gap: 6, padding: 10, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                  <Icon size={14} color="var(--muted)" />
+                  <div>
+                    <div className="eyebrow" style={{ fontSize: 10, marginBottom: 2 }}>{label}</div>
+                    <div className="mono" style={{ fontSize: 12.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={value}>{value}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="eyebrow" style={{ marginBottom: 2 }}>{label}</div>
-                  <div className="mono" style={{ fontSize: 13, color: 'var(--ink)' }}>{value}</div>
-                </div>
+              ))}
+            </div>
+
+            {/* Location - place name (if known) with raw coordinates underneath; avoids repeating the same lat/lng twice */}
+            <div className="row" style={{ gap: 12, padding: 12, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-3)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                <MapTrifold size={15} color="var(--muted)" />
               </div>
-            ))}
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="eyebrow" style={{ marginBottom: 2 }}>Location</div>
+                {(selectedLive?.lat ?? selected.lastLat) ? (
+                  <>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>
+                      {selected.lastLocationName || 'Unnamed location'}
+                    </div>
+                    <div className="mono muted" style={{ fontSize: 11.5 }}>
+                      {(selectedLive?.lat ?? selected.lastLat)!.toFixed(5)}, {(selectedLive?.lng ?? selected.lastLng)!.toFixed(5)}
+                    </div>
+                  </>
+                ) : (
+                  <div className="muted" style={{ fontSize: 13 }}>No signal</div>
+                )}
+              </div>
+            </div>
 
             <div className="card" style={{ overflow: 'hidden' }}>
               <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
@@ -394,23 +407,33 @@ function FleetPage() {
                 { role: 'Driver', person: selected.currentDriver },
                 { role: 'EMT', person: selected.currentEmt },
                 { role: 'Nurse', person: selected.currentNurse },
-              ].map(({ role, person }) => (
-                <div key={role} className="row" style={{ justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
-                  <div className="muted" style={{ fontSize: 12, fontWeight: 600, width: 50 }}>{role}</div>
-                  {person ? (
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>{person.name}</div>
-                      {person.phone && <div className="muted" style={{ fontSize: 12 }}>{person.phone}</div>}
-                    </div>
-                  ) : (
-                    <div className="muted" style={{ fontSize: 12, fontStyle: 'italic' }}>Not checked in</div>
-                  )}
+              ].map(({ role, person }, i, arr) => (
+                <div
+                  key={role}
+                  className="row"
+                  style={{ gap: 10, padding: '10px 14px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : undefined }}
+                >
+                  <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--surface-3)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                    <User size={13} color="var(--muted)" />
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="muted" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>{role}</div>
+                    {person ? (
+                      <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>{person.name}</span>
+                        {person.phone && <span className="muted mono" style={{ fontSize: 11.5 }}>{person.phone}</span>}
+                      </div>
+                    ) : (
+                      <span className="muted" style={{ fontSize: 12.5, fontStyle: 'italic' }}>Not checked in</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
 
             {(selectedLive?.timestamp ?? selected.lastLocationAt) && (
-              <div className="muted" style={{ textAlign: 'center', fontSize: 12 }}>
+              <div className="row" style={{ gap: 6, justifyContent: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                <Radio size={12} />
                 Last GPS ping {formatDistanceToNow(new Date(selectedLive?.timestamp ?? selected.lastLocationAt!), { addSuffix: true })}
               </div>
             )}
