@@ -357,7 +357,7 @@ function LoginPage() {
                         inputMode="tel"
                         autoComplete="tel"
                         autoFocus
-                        placeholder="07XX XXX XXX"
+                        placeholder="0712345678"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                       />
