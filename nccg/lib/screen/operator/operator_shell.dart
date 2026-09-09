@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nccg/screen/operator/assignment_tab.dart';
 import 'package:nccg/screen/operator/crew_tab.dart';
 import 'package:nccg/screen/operator/activity_tab.dart';
 import 'package:nccg/screen/operator/navigate_tab.dart';
 import 'package:nccg/screen/operator/operator_drawer.dart';
+import 'package:nccg/screen/operator/profile_screen.dart';
 import 'package:nccg/theme/tokens.dart';
 
 /// The app chrome uses the same dark navy as the web console's sidebar
@@ -28,6 +30,11 @@ class _OperatorShellState extends State<OperatorShell> {
   String? _role;
   String _name = '';
   int _tabIndex = 0;
+
+  /// Twitter/X-style behaviour: the bottom tab bar collapses out of the way
+  /// while a tab scrolls down, and comes back on scroll-up or once the tab
+  /// is back at the top - see the NotificationListener in [build].
+  bool _navVisible = true;
 
   @override
   void initState() {
@@ -65,6 +72,31 @@ class _OperatorShellState extends State<OperatorShell> {
     return 'Good evening';
   }
 
+  String get _initials {
+    final trimmed = _name.trim();
+    if (trimmed.isEmpty) return '?';
+    return trimmed.split(RegExp(r'\s+')).map((p) => p[0]).take(2).join().toUpperCase();
+  }
+
+  /// Twitter/X-style scroll handling: hide going down, show going up, and
+  /// always show once a tab is scrolled back to its top.
+  bool _handleScroll(ScrollNotification notification) {
+    if (notification.metrics.pixels <= 0) {
+      if (!_navVisible) setState(() => _navVisible = true);
+      return false;
+    }
+    if (notification is UserScrollNotification) {
+      final goingDown = notification.direction == ScrollDirection.reverse;
+      final goingUp = notification.direction == ScrollDirection.forward;
+      if (goingDown && _navVisible) {
+        setState(() => _navVisible = false);
+      } else if (goingUp && !_navVisible) {
+        setState(() => _navVisible = true);
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_role == null) {
@@ -73,14 +105,18 @@ class _OperatorShellState extends State<OperatorShell> {
 
     final tabs = _tabs;
     final safeIndex = _tabIndex < tabs.length ? _tabIndex : 0;
+    // Includes the device's bottom safe-area inset (home indicator etc.) so
+    // collapsing the bar to 0 and back never clips it on notched phones.
+    final navHeight = kBottomNavigationBarHeight + MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.bg,
-      drawer: OperatorDrawer(role: _role!, name: _name),
+      drawer: OperatorDrawer(role: _role!, name: _name, onReturn: _loadUser),
       appBar: AppBar(
         backgroundColor: kOpPrimary,
-        elevation: 0,
+        elevation: 2,
+        shadowColor: Colors.black45,
         leading: IconButton(
           icon: const Icon(Icons.menu_rounded, color: Colors.white),
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
@@ -94,22 +130,55 @@ class _OperatorShellState extends State<OperatorShell> {
             Text(_role ?? '', style: const TextStyle(fontSize: 11, color: Color(0xFF7E93A8), fontWeight: FontWeight.w600)),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: GestureDetector(
+              onTap: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                await _loadUser();
+              },
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: Colors.white,
+                child: Text(
+                  _initials,
+                  style: const TextStyle(color: kOpPrimary, fontWeight: FontWeight.w800, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      body: IndexedStack(
-        index: safeIndex,
-        children: tabs.map((t) => t.body).toList(),
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _handleScroll,
+        child: IndexedStack(
+          index: safeIndex,
+          children: tabs.map((t) => t.body).toList(),
+        ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: safeIndex,
-        selectedItemColor: kOpPrimary,
-        unselectedItemColor: Colors.black38,
-        selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-        onTap: (i) => setState(() => _tabIndex = i),
-        items: tabs
-            .map((t) => BottomNavigationBarItem(icon: Icon(t.icon), label: t.label))
-            .toList(),
+      bottomNavigationBar: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeInOut,
+        height: _navVisible ? navHeight : 0,
+        clipBehavior: Clip.hardEdge,
+        decoration: const BoxDecoration(),
+        child: OverflowBox(
+          maxHeight: navHeight,
+          alignment: Alignment.bottomCenter,
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: safeIndex,
+            selectedItemColor: kOpPrimary,
+            unselectedItemColor: Colors.black38,
+            selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            onTap: (i) => setState(() => _tabIndex = i),
+            items: tabs
+                .map((t) => BottomNavigationBarItem(icon: Icon(t.icon), label: t.label))
+                .toList(),
+          ),
+        ),
       ),
     );
   }

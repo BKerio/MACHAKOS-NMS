@@ -14,7 +14,12 @@ class OperatorDrawer extends StatelessWidget {
   final String role;
   final String name;
 
-  const OperatorDrawer({super.key, required this.role, required this.name});
+  /// Called after returning from a pushed page (e.g. Profile), so the shell
+  /// picks up a name/role change made there instead of showing stale text
+  /// until some unrelated rebuild happens to touch it.
+  final VoidCallback onReturn;
+
+  const OperatorDrawer({super.key, required this.role, required this.name, required this.onReturn});
 
   Future<void> _signOut(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -42,9 +47,10 @@ class OperatorDrawer extends StatelessWidget {
     );
   }
 
-  void _push(BuildContext context, Widget page) {
+  Future<void> _push(BuildContext context, Widget page) async {
     Navigator.pop(context); // close the drawer first
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    onReturn();
   }
 
   @override

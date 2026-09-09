@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:nccg/config/server.dart';
@@ -98,9 +100,14 @@ class API {
     }
   }
 
+  /// No-body request (nothing here ever sends a DELETE payload) - deliberately
+  /// omits Content-Type. Sending 'application/json' with an empty body makes
+  /// Fastify's JSON body parser reject the request ("Body cannot be empty
+  /// when content-type is set to 'application/json'"), which is what broke
+  /// vehicle checkout (DELETE /fleet/:vehicleId/checkin has no body at all).
   Future<http.Response> deleteRequest({required Uri url}) async {
     try {
-      final headers = await _header();
+      final headers = await _header(withContentType: false);
       return await http.delete(url, headers: headers).timeout(_timeout);
     } catch (e) {
       print(e.toString());
@@ -108,11 +115,11 @@ class API {
     }
   }
 
-  Future<Map<String, String>> _header() async {
+  Future<Map<String, String>> _header({bool withContentType = true}) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     final headers = <String, String>{
-      'Content-type': 'application/json',
+      if (withContentType) 'Content-type': 'application/json',
       'Accept': 'application/json',
     };
     if (token != null && token.isNotEmpty) {
@@ -127,13 +134,14 @@ class API {
     required String fileField,
     required String filePath,
     bool requireAuth = true,
+    Duration? timeout,
   }) async {
     final request = http.MultipartRequest('POST', url);
     request.fields.addAll(fields);
-    
+
     // Add Accept header to ensure JSON response
     request.headers['Accept'] = 'application/json';
-    
+
     if (requireAuth) {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
@@ -141,8 +149,25 @@ class API {
         request.headers['Authorization'] = 'Bearer $token';
       }
     }
-    request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
-    return request.send().timeout(_timeout);
+    request.files.add(await _multipartFileFromPath(fileField, filePath));
+    return request.send().timeout(timeout ?? _timeout);
+  }
+
+  /// `http.MultipartFile.fromPath` defaults to `application/octet-stream`
+  /// when no [MediaType] is given - it does NOT sniff the file extension.
+  /// Left as-is, every upload (check-in selfies, PCR photos) would carry that
+  /// generic content type regardless of what image format it actually is,
+  /// which is what made the backend's `mimetype.startsWith('image/')` check
+  /// reject every check-in. Detecting it via `package:mime` here makes any
+  /// image type (jpg, png, heic, webp, ...) - or any other file type - carry
+  /// its real content type.
+  Future<http.MultipartFile> _multipartFileFromPath(String field, String filePath) async {
+    final mimeType = lookupMimeType(filePath);
+    return http.MultipartFile.fromPath(
+      field,
+      filePath,
+      contentType: mimeType != null ? MediaType.parse(mimeType) : null,
+    );
   }
 
   Future<http.StreamedResponse> uploadMultipartWithFiles({

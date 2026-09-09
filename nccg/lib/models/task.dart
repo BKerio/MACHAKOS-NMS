@@ -74,6 +74,75 @@ class TaskStatus {
   static String? actionLabel(String status) => actionLabels[status];
 }
 
+/// Mirrors the subset of frontend/src/types/api.ts's PatientVitals actually
+/// rendered on the operator app (Assignment card + Clinical Notes screen).
+class PatientVitals {
+  final String? temperature;
+  final String? pulseRate;
+  final String? respirationRate;
+  final String? bp;
+  final String? spo2;
+  final String? fh;
+
+  PatientVitals({this.temperature, this.pulseRate, this.respirationRate, this.bp, this.spo2, this.fh});
+
+  factory PatientVitals.fromJson(Map<String, dynamic> json) => PatientVitals(
+    temperature: json['temperature'] as String?,
+    pulseRate: json['pulseRate'] as String?,
+    respirationRate: json['respirationRate'] as String?,
+    bp: json['bp'] as String?,
+    spo2: json['spo2'] as String?,
+    fh: json['fh'] as String?,
+  );
+
+  bool get hasAny => [temperature, pulseRate, respirationRate, bp, spo2, fh].any((v) => (v ?? '').trim().isNotEmpty);
+}
+
+/// Mirrors the subset of frontend/src/types/api.ts's MaternityVitals actually
+/// rendered on the operator app.
+class MaternityVitals {
+  final String? parity;
+  final String? gravid;
+  final String? fetalHeartRate;
+  final String? cervicalDilatation;
+  final String? bp;
+  final String? pulse;
+  final String? temperature;
+  final String? spo2;
+  final String? modeOfDelivery;
+  final String? conditionOfBaby;
+
+  MaternityVitals({
+    this.parity,
+    this.gravid,
+    this.fetalHeartRate,
+    this.cervicalDilatation,
+    this.bp,
+    this.pulse,
+    this.temperature,
+    this.spo2,
+    this.modeOfDelivery,
+    this.conditionOfBaby,
+  });
+
+  factory MaternityVitals.fromJson(Map<String, dynamic> json) => MaternityVitals(
+    parity: json['parity'] as String?,
+    gravid: json['gravid'] as String?,
+    fetalHeartRate: json['fetalHeartRate'] as String?,
+    cervicalDilatation: json['cervicalDilatation'] as String?,
+    bp: json['bp'] as String?,
+    pulse: json['pulse'] as String?,
+    temperature: json['temperature'] as String?,
+    spo2: json['spo2'] as String?,
+    modeOfDelivery: json['modeOfDelivery'] as String?,
+    conditionOfBaby: json['conditionOfBaby'] as String?,
+  );
+
+  bool get hasAny => [
+    parity, gravid, fetalHeartRate, cervicalDilatation, bp, pulse, temperature, spo2, modeOfDelivery, conditionOfBaby,
+  ].any((v) => (v ?? '').trim().isNotEmpty);
+}
+
 class Incident {
   final String id;
   final String caseNumber;
@@ -87,6 +156,20 @@ class Incident {
   final String? patientGender;
   final bool massCasualty;
 
+  final bool isGbvCase;
+  final int? massCasualtyCount;
+  final String? alertNature;
+  final String? alertNatureDetail;
+  final String? placeOfReferral;
+  final String? patientContact;
+  final String? nextOfKin;
+  final String? nextOfKinPhone;
+  final String? dispatcherComments;
+  final String? dispatcherChallenges;
+  final String? preHospitalManagement;
+  final PatientVitals? vitals;
+  final MaternityVitals? maternityVitals;
+
   Incident({
     required this.id,
     required this.caseNumber,
@@ -99,6 +182,19 @@ class Incident {
     this.patientAge,
     this.patientGender,
     this.massCasualty = false,
+    this.isGbvCase = false,
+    this.massCasualtyCount,
+    this.alertNature,
+    this.alertNatureDetail,
+    this.placeOfReferral,
+    this.patientContact,
+    this.nextOfKin,
+    this.nextOfKinPhone,
+    this.dispatcherComments,
+    this.dispatcherChallenges,
+    this.preHospitalManagement,
+    this.vitals,
+    this.maternityVitals,
   });
 
   factory Incident.fromJson(Map<String, dynamic> json) => Incident(
@@ -113,6 +209,21 @@ class Incident {
     patientAge: json['patientAge'] as String?,
     patientGender: json['patientGender'] as String?,
     massCasualty: json['massCasualty'] as bool? ?? false,
+    isGbvCase: json['isGbvCase'] as bool? ?? false,
+    massCasualtyCount: (json['massCasualtyCount'] as num?)?.toInt(),
+    alertNature: json['alertNature'] as String?,
+    alertNatureDetail: json['alertNatureDetail'] as String?,
+    placeOfReferral: json['placeOfReferral'] as String?,
+    patientContact: json['patientContact'] as String?,
+    nextOfKin: json['nextOfKin'] as String?,
+    nextOfKinPhone: json['nextOfKinPhone'] as String?,
+    dispatcherComments: json['dispatcherComments'] as String?,
+    dispatcherChallenges: json['dispatcherChallenges'] as String?,
+    preHospitalManagement: json['preHospitalManagement'] as String?,
+    vitals: json['vitals'] != null ? PatientVitals.fromJson(json['vitals'] as Map<String, dynamic>) : null,
+    maternityVitals: json['maternityVitals'] != null
+        ? MaternityVitals.fromJson(json['maternityVitals'] as Map<String, dynamic>)
+        : null,
   );
 }
 

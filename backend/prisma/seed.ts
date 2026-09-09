@@ -236,11 +236,40 @@ async function main() {
   const slugify = (s: string) =>
     s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
+  // The checklist source sheet's categories (above) are free-text labels from
+  // ambulance_checklist.xlsx, not the app's actual InventoryCategory enum
+  // (VITALS | CONSUMABLES | MEDICATION | AIRWAY | WOUND_CARE | OTHER - see
+  // INVENTORY_CATEGORIES in admin.routes.ts, which the admin create/edit API
+  // enforces via zod). Writing the free-text label straight into `category`
+  // meant every one of these ~230 items had a category the operator/admin
+  // category filter chips could never match, so every filter except "All"
+  // silently returned nothing. Mapped here instead of renaming the sheet
+  // labels above so `id` (derived from the ORIGINAL label) stays stable -
+  // changing it would orphan already-seeded rows instead of updating them,
+  // and risks breaking InventoryCheckout.itemId for stock crews already
+  // checked out.
+  const CHECKLIST_CATEGORY_MAP: Record<string, string> = {
+    Drugs: 'MEDICATION',
+    General: 'OTHER',
+    Venipuncture: 'CONSUMABLES',
+    'IV Fluids': 'CONSUMABLES',
+    Consumables: 'CONSUMABLES',
+    Airway: 'AIRWAY',
+    Respiratory: 'AIRWAY',
+    Trauma: 'WOUND_CARE',
+    'Obstetric/Other': 'OTHER',
+    PPE: 'OTHER',
+    'Emergency Equipment': 'OTHER',
+    Vehicle: 'OTHER',
+  };
+
   for (const item of checklistItems) {
     const id = `checklist-${slugify(item.category)}-${slugify(item.name)}`;
+    const category = CHECKLIST_CATEGORY_MAP[item.category] ?? 'OTHER';
     await prisma.inventoryItem.upsert({
       where: { id },
       update: {
+        category,
         quantityStock: item.quantityStock,
         reorderLevel: item.reorderLevel,
         unit: item.unit,
@@ -250,7 +279,7 @@ async function main() {
       create: {
         id,
         name: item.name,
-        category: item.category,
+        category,
         unit: item.unit,
         quantityStock: item.quantityStock,
         reorderLevel: item.reorderLevel,
@@ -259,7 +288,7 @@ async function main() {
       },
     });
   }
-  console.log(`✅ Ambulance Checklist: ${checklistItems.length} inventory items across ${new Set(checklistItems.map((i) => i.category)).size} categories`);
+  console.log(`✅ Ambulance Checklist: ${checklistItems.length} inventory items across ${new Set(checklistItems.map((i) => CHECKLIST_CATEGORY_MAP[i.category] ?? 'OTHER')).size} categories`);
 
   // ── 5. Fleet - real vehicles from Uffizio/Kimii Telematics ─────────────────
   // IMEIs confirmed from live Uffizio API response (getTokenBaseLiveData).

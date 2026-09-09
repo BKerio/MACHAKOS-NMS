@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nccg/config/server.dart';
 import 'package:nccg/method/api.dart';
+import 'package:nccg/models/inventory.dart';
 import 'package:nccg/models/task.dart';
 import 'package:nccg/models/vehicle.dart';
 
@@ -90,6 +91,29 @@ class NmsApi {
     return body['data'] as Map<String, dynamic>;
   }
 
+  /// Updates the signed-in user's own name/phone, or changes their password
+  /// (pass currentPassword + newPassword instead). Every signed-in role may
+  /// call this - it's not gated to a subset like DRIVER/EMT/NURSE server-side.
+  /// Mirrors updateMyProfile() in frontend/src/api/responder.ts.
+  static Future<Map<String, dynamic>> updateMyProfile({
+    String? name,
+    String? phone,
+    String? currentPassword,
+    String? newPassword,
+  }) async {
+    final res = await API().patchRequest(
+      url: _u('/auth/me'),
+      data: {
+        'name': ?name,
+        'phone': ?phone,
+        'currentPassword': ?currentPassword,
+        'newPassword': ?newPassword,
+      },
+    );
+    final body = _unwrap(res);
+    return body['data'] as Map<String, dynamic>;
+  }
+
   static Future<void> saveSession(Map<String, dynamic> session) async {
     final prefs = await SharedPreferences.getInstance();
     final user = session['user'] as Map<String, dynamic>;
@@ -139,6 +163,42 @@ class NmsApi {
     _unwrap(res);
   }
 
+  /// Saves the crew's clinical notes for the active task's incident. Mirrors
+  /// submitPatientData() in frontend/src/api/responder.ts.
+  static Future<void> submitPatientData(
+    String taskId, {
+    required String preHospitalManagement,
+    String? dispatcherChallenges,
+  }) async {
+    final res = await API().postRequest(
+      url: _u('/tasks/$taskId/patient-data'),
+      data: {
+        'preHospitalManagement': preHospitalManagement,
+        'dispatcherChallenges': ?dispatcherChallenges,
+      },
+    );
+    _unwrap(res);
+  }
+
+  /// Uploads the Patient Care Report photo/document for a task, with an
+  /// optional note. Mirrors uploadPatientCareReport() in
+  /// frontend/src/api/responder.ts - a bigger timeout than the rest of the
+  /// API since it's a file upload, not a small JSON payload.
+  static Future<void> uploadPatientCareReport(
+    String taskId, {
+    String? note,
+    required String filePath,
+  }) async {
+    final streamed = await API().uploadMultipart(
+      url: _u('/tasks/$taskId/patient-care-report'),
+      fields: {'note': ?note},
+      fileField: 'file',
+      filePath: filePath,
+      timeout: const Duration(seconds: 60),
+    );
+    _unwrap(await http.Response.fromStream(streamed));
+  }
+
   /// Passes a live case to another crew. The case stays open; [autoAssign] lets
   /// the backend pick the nearest free unit instead of [newVehicleId].
   static Future<void> handoverTask(
@@ -154,6 +214,38 @@ class NmsApi {
         'autoAssign': autoAssign,
         'newVehicleId': ?newVehicleId,
       },
+    );
+    _unwrap(res);
+  }
+
+  // ── Inventory (crew stock cart) ──────────────────────────────────────────
+  // Mirrors frontend/src/api/inventory.ts.
+
+  static Future<List<InventoryItem>> getAvailableInventory() async {
+    final res = await API().getRequest(url: _u('/inventory'));
+    final body = _unwrap(res);
+    final data = body['data'] as List<dynamic>? ?? [];
+    return data.map((e) => InventoryItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Checks the given [items] (itemId -> quantity) out onto the crew's
+  /// currently-checked-in vehicle.
+  static Future<void> checkoutInventory(List<Map<String, dynamic>> items) async {
+    final res = await API().postRequest(url: _u('/inventory/checkout'), data: {'items': items});
+    _unwrap(res);
+  }
+
+  static Future<List<InventoryCheckout>> getMyInventory() async {
+    final res = await API().getRequest(url: _u('/inventory/my'));
+    final body = _unwrap(res);
+    final data = body['data'] as List<dynamic>? ?? [];
+    return data.map((e) => InventoryCheckout.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  static Future<void> returnInventory(String checkoutId, int quantity) async {
+    final res = await API().postRequest(
+      url: _u('/inventory/checkouts/$checkoutId/return'),
+      data: {'quantity': quantity},
     );
     _unwrap(res);
   }
