@@ -330,6 +330,7 @@ class TaskHistoryItem with TaskStageTimes {
 
   final String? cancelReason;
   final String? handoverReason;
+  final int pcrCount;
 
   TaskHistoryItem({
     required this.id,
@@ -348,6 +349,7 @@ class TaskHistoryItem with TaskStageTimes {
     this.handedOverAt,
     this.cancelReason,
     this.handoverReason,
+    this.pcrCount = 0,
   });
 
   factory TaskHistoryItem.fromJson(Map<String, dynamic> json) {
@@ -370,6 +372,7 @@ class TaskHistoryItem with TaskStageTimes {
       handedOverAt: json['handedOverAt'] as String?,
       cancelReason: json['cancelReason'] as String?,
       handoverReason: json['handoverReason'] as String?,
+      pcrCount: (json['pcrCount'] as num?)?.toInt() ?? 0,
     );
   }
 }

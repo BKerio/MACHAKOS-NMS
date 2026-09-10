@@ -70,6 +70,24 @@ class API {
     }
   }
 
+  /// Downloads a raw file (e.g. a PCR report attachment) with the Bearer
+  /// token attached but no Accept/Content-Type override, since the response
+  /// isn't JSON. Longer default timeout than [getRequest] - a file download
+  /// is bigger than a small JSON payload.
+  Future<http.Response> getFileRequest({required Uri url, Duration? timeout}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final headers = <String, String>{
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+      return await http.get(url, headers: headers).timeout(timeout ?? const Duration(seconds: 30));
+    } catch (e) {
+      print(e.toString());
+      rethrow;
+    }
+  }
+
   Future<http.Response> putRequest({
     required Uri url,
     required Map<String, dynamic> data,

@@ -8,6 +8,7 @@ import 'package:nccg/config/server.dart';
 import 'package:nccg/method/api.dart';
 import 'package:nccg/models/checklist.dart';
 import 'package:nccg/models/inventory.dart';
+import 'package:nccg/models/patient_care_report.dart';
 import 'package:nccg/models/task.dart';
 import 'package:nccg/models/vehicle.dart';
 
@@ -198,6 +199,36 @@ class NmsApi {
       timeout: const Duration(seconds: 60),
     );
     _unwrap(await http.Response.fromStream(streamed));
+  }
+
+  /// Lists previously uploaded PCR reports (metadata only) for a task.
+  /// Mirrors getPatientCareReports() in frontend/src/api/responder.ts.
+  static Future<List<PatientCareReport>> getPatientCareReports(String taskId) async {
+    final res = await API().getRequest(url: _u('/tasks/$taskId/patient-care-reports'));
+    final body = _unwrap(res);
+    final data = body['data'] as List<dynamic>? ?? [];
+    return data.map((e) => PatientCareReport.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Downloads a PCR report's raw file bytes for viewing. Mirrors
+  /// getPatientCareReportFileUrl() in frontend/src/api/responder.ts, but
+  /// returns the bytes directly since the app has no browser to hand a blob
+  /// URL to.
+  static Future<PcrFile> getPatientCareReportFile(String taskId, String reportId) async {
+    final res = await API().getFileRequest(
+      url: _u('/tasks/$taskId/patient-care-reports/$reportId/file'),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      Map<String, dynamic>? body;
+      try {
+        body = jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {
+        body = null;
+      }
+      throw NmsApiException(body?['message'] as String? ?? 'Could not download the report file.', res.statusCode);
+    }
+    final contentType = res.headers['content-type'] ?? 'application/octet-stream';
+    return PcrFile(bytes: res.bodyBytes, mimeType: contentType);
   }
 
   /// Passes a live case to another crew. The case stays open; [autoAssign] lets

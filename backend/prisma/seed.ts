@@ -8,37 +8,37 @@ const prisma = createPrismaClient();
 async function main() {
   console.log('🌱 Starting seed...');
 
-  // ── 1. NMS Internal Agency ──────────────────────────────────────────────────
-  const nmsAgency = await prisma.agency.upsert({
-    where: { id: 'nms-internal-agency' },
+  // ── 1. MDC Internal Agency ──────────────────────────────────────────────────
+  const mdcAgency = await prisma.agency.upsert({
+    where: { id: 'mdc-internal-agency' },
     update: {},
     create: {
-      id: 'nms-internal-agency',
-      name: 'NMS Emergency Operations Centre',
+      id: 'mdc-internal-agency',
+      name: 'Machakos Dispatch Center',
       type: AgencyType.INTERNAL,
       location: 'Nairobi, Kenya',
       contactInfo: {
         phone: '+254700000000',
-        email: 'eoc@nms.go.ke',
+        email: 'eoc@mdc.go.ke',
       },
       isActive: true,
     },
   });
-  console.log(`✅ Agency: ${nmsAgency.name}`);
+  console.log(`✅ Agency: ${mdcAgency.name}`);
 
   // ── 2. Super Admin User ─────────────────────────────────────────────────────
   const passwordHash = await bcrypt.hash('Admin@123!', 10);
 
   const superAdmin = await prisma.user.upsert({
-    where: { email: 'admin@brighton.go.ke' },
+    where: { email: 'admin@brighton.co.ke' },
     update: {},
     create: {
-      email: 'admin@brighton.go.ke',
+      email: 'admin@brighton.co.ke',
       passwordHash,
       name: 'System Administrator',
       phone: '+254700000001',
       role: Role.SUPER_ADMIN,
-      agencyId: nmsAgency.id,
+      agencyId: mdcAgency.id,
       isActive: true,
     },
   });
@@ -320,7 +320,7 @@ async function main() {
     const created = await prisma.vehicle.upsert({
       where: { registrationNumber: v.registrationNumber },
       update: { imei: v.imei, isActive: true },
-      create: { registrationNumber: v.registrationNumber, imei: v.imei, agencyId: nmsAgency.id, isActive: true },
+      create: { registrationNumber: v.registrationNumber, imei: v.imei, agencyId: mdcAgency.id, isActive: true },
     });
     console.log(`✅ Vehicle: ${created.registrationNumber} (IMEI ${created.imei})`);
   }
@@ -332,11 +332,11 @@ async function main() {
     update: {},
     create: {
       id: 'driver-001',
-      email: 'driver1@nms.go.ke',
+      email: 'driver1@mdc.go.ke',
       passwordHash,
       name: 'John Driver',
       role: Role.DRIVER,
-      agencyId: nmsAgency.id,
+      agencyId: mdcAgency.id,
       isActive: true,
     },
   });
@@ -346,11 +346,11 @@ async function main() {
     update: {},
     create: {
       id: 'emt-001',
-      email: 'emt1@nms.go.ke',
+      email: 'emt1@mdc.go.ke',
       passwordHash,
       name: 'Sarah EMT',
       role: Role.EMT,
-      agencyId: nmsAgency.id,
+      agencyId: mdcAgency.id,
       isActive: true,
     },
   });
@@ -360,11 +360,11 @@ async function main() {
     update: {},
     create: {
       id: 'nurse-001',
-      email: 'nurse1@nms.go.ke',
+      email: 'nurse1@mdc.go.ke',
       passwordHash,
       name: 'Mike Nurse',
       role: Role.NURSE,
-      agencyId: nmsAgency.id,
+      agencyId: mdcAgency.id,
       isActive: true,
     },
   });
@@ -380,7 +380,7 @@ async function main() {
       passwordHash: erickyHash,
       name: 'Erickson Mutai',
       role: Role.SUPER_ADMIN,
-      agencyId: nmsAgency.id,
+      agencyId: mdcAgency.id,
       isActive: true,
     },
   });
@@ -396,7 +396,7 @@ async function main() {
       passwordHash: joeHash,
       name: 'Joe',
       role: Role.ADMIN,
-      agencyId: nmsAgency.id,
+      agencyId: mdcAgency.id,
       isActive: true,
     },
   });
@@ -405,7 +405,7 @@ async function main() {
   console.log('\n🎉 Seed complete!');
   console.log('─────────────────────────────────────');
   console.log('Super Admin credentials:');
-  console.log('  Email:    admin@nms.go.ke');
+  console.log('  Email:    admin@mdc.go.ke');
   console.log('  Password: Admin@123!');
   console.log('─────────────────────────────────────');
 }

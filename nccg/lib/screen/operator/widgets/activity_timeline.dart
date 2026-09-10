@@ -69,66 +69,74 @@ class _TimelineRow extends StatelessWidget {
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 52),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 24,
-            child: Column(
-              children: [
-                Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-                  child: done
-                      ? const Icon(Icons.check_rounded, size: 12, color: Colors.white)
-                      : active
-                          ? Center(
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                              ),
-                            )
-                          : null,
-                ),
-                if (!isLast)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      margin: const EdgeInsets.only(top: 2),
-                      constraints: const BoxConstraints(minHeight: 24),
-                      color: reached ? AppColors.green : AppColors.border,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 1, bottom: 14),
+      // The connector line below the dot is an Expanded inside a Column, which
+      // needs a bounded height to divide up - IntrinsicHeight gives the Row
+      // (and its dot Column) a real height instead of the unbounded one it
+      // gets by default inside a ListView/scroll view, which otherwise throws
+      // "RenderFlex children have non-zero flex but incoming height
+      // constraints are unbounded" and leaves the whole row blank.
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 24,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
-                      color: labelColor,
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                    child: done
+                        ? const Icon(Icons.check_rounded, size: 12, color: Colors.white)
+                        : active
+                            ? Center(
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                ),
+                              )
+                            : null,
+                  ),
+                  if (!isLast)
+                    Expanded(
+                      child: Container(
+                        width: 2,
+                        margin: const EdgeInsets.only(top: 2),
+                        constraints: const BoxConstraints(minHeight: 24),
+                        color: reached ? AppColors.green : AppColors.border,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
                 ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 1, bottom: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
+                        color: labelColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
