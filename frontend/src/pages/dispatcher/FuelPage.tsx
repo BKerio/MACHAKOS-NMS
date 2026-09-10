@@ -10,8 +10,11 @@ import {
   TrendingUp as TrendUp,
   MapPin,
   X,
+  Radio,
 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
+import type { Vehicle } from '@/types/api';
 
 interface FuelSummaryRow {
   imei: string;
@@ -113,6 +116,23 @@ function FuelPage() {
     staleTime: 15 * 60_000,
   });
 
+  // Live instantaneous fuel level per vehicle, from the GPS poller (see
+  // TrackingService.extractFuelLevel) - distinct from the historical
+  // Fill/Drain report above, and not subject to Uffizio's ~15min throttle
+  // on that endpoint. Shares its query key with FleetPage's vehicle list so
+  // the two pages reuse one cache instead of double-fetching.
+  const { data: liveVehicles = [], isLoading: liveLoading } = useQuery({
+    queryKey: ['admin', 'vehicles'],
+    queryFn: async () => {
+      const res = await api.get('/dispatch/vehicles');
+      return res.data.data as Vehicle[];
+    },
+    refetchInterval: 65_000,
+  });
+  const liveFuel = liveVehicles
+    .filter(v => v.lastFuelLevelL != null)
+    .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
+
   const withSensor = rows.filter(r => r.hasSensor);
   const totals = withSensor.reduce(
     (a, r) => ({
@@ -146,6 +166,43 @@ function FuelPage() {
           <ArrowsClockwise size={15} />
           {isFetching ? 'Refreshing…' : coolingDown ? `Refresh in ${countdown}` : 'Refresh'}
         </button>
+      </div>
+
+      {/* Live fuel levels - instantaneous snapshot from the GPS poller, refreshed
+          every ~65s. Independent of the date range / historical report below. */}
+      <div className="card card-pad">
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+          <span className="row" style={{ gap: 8, fontWeight: 700, fontSize: 14 }}>
+            <Radio size={15} className="text-brand-green" /> Live Fuel Levels
+          </span>
+          <span className="live-badge"><span className="dot live-dot" /> Live</span>
+        </div>
+        {liveLoading ? (
+          <p className="muted" style={{ fontSize: 13 }}>Loading…</p>
+        ) : liveFuel.length === 0 ? (
+          <p className="muted" style={{ fontSize: 13 }}>
+            No vehicles are currently reporting a live fuel sensor reading - this needs a fuel probe wired to the tracker, not just a plain GPS unit.
+          </p>
+        ) : (
+          <div className="wrap-gap">
+            {liveFuel.map(v => (
+              <div key={v.id} className="card card-pad" style={{ flex: '1 1 160px', background: 'var(--surface-2)' }}>
+                <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{v.registrationNumber}</span>
+                  <GasPump size={14} className="muted" />
+                </div>
+                <div className="mono tnum" style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
+                  {v.lastFuelLevelL!.toFixed(0)} L
+                </div>
+                {v.lastFuelLevelAt && (
+                  <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                    {formatDistanceToNow(new Date(v.lastFuelLevelAt), { addSuffix: true })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Date range */}
