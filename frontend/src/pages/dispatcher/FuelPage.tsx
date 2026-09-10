@@ -129,9 +129,13 @@ function FuelPage() {
     },
     refetchInterval: 65_000,
   });
-  const liveFuel = liveVehicles
-    .filter(v => v.lastFuelLevelL != null)
+  // One card per active ambulance, not just the ones with a sensor - the
+  // "no sensor" units still need to be visible so it reads as "9 of 9
+  // ambulances, 3 reporting" rather than looking like 6 are missing.
+  const liveFuel = [...liveVehicles]
+    .filter(v => v.isActive)
     .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
+  const liveFuelReportingCount = liveFuel.filter(v => v.lastFuelLevelL != null).length;
 
   const withSensor = rows.filter(r => r.hasSensor);
   const totals = withSensor.reduce(
@@ -171,36 +175,52 @@ function FuelPage() {
       {/* Live fuel levels - instantaneous snapshot from the GPS poller, refreshed
           every ~65s. Independent of the date range / historical report below. */}
       <div className="card card-pad">
-        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <span className="row" style={{ gap: 8, fontWeight: 700, fontSize: 14 }}>
             <Radio size={15} className="text-brand-green" /> Live Fuel Levels
           </span>
-          <span className="live-badge"><span className="dot live-dot" /> Live</span>
+          <div className="row" style={{ gap: 10 }}>
+            {!liveLoading && liveFuel.length > 0 && (
+              <span className="muted" style={{ fontSize: 12 }}>{liveFuelReportingCount} of {liveFuel.length} reporting</span>
+            )}
+            <span className="live-badge"><span className="dot live-dot" /> Live</span>
+          </div>
         </div>
         {liveLoading ? (
           <p className="muted" style={{ fontSize: 13 }}>Loading…</p>
         ) : liveFuel.length === 0 ? (
-          <p className="muted" style={{ fontSize: 13 }}>
-            No vehicles are currently reporting a live fuel sensor reading - this needs a fuel probe wired to the tracker, not just a plain GPS unit.
-          </p>
+          <p className="muted" style={{ fontSize: 13 }}>No active ambulances on the fleet.</p>
         ) : (
           <div className="wrap-gap">
-            {liveFuel.map(v => (
-              <div key={v.id} className="card card-pad" style={{ flex: '1 1 160px', background: 'var(--surface-2)' }}>
-                <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{v.registrationNumber}</span>
-                  <GasPump size={14} className="muted" />
-                </div>
-                <div className="mono tnum" style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
-                  {v.lastFuelLevelL!.toFixed(0)} L
-                </div>
-                {v.lastFuelLevelAt && (
-                  <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                    {formatDistanceToNow(new Date(v.lastFuelLevelAt), { addSuffix: true })}
+            {liveFuel.map(v => {
+              const hasReading = v.lastFuelLevelL != null;
+              return (
+                <div
+                  key={v.id}
+                  className="card card-pad"
+                  style={{ flex: '1 1 160px', background: 'var(--surface-2)', opacity: hasReading ? 1 : 0.7 }}
+                >
+                  <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{v.registrationNumber}</span>
+                    <GasPump size={14} className="muted" />
                   </div>
-                )}
-              </div>
-            ))}
+                  {hasReading ? (
+                    <>
+                      <div className="mono tnum" style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
+                        {v.lastFuelLevelL!.toFixed(0)} L
+                      </div>
+                      {v.lastFuelLevelAt && (
+                        <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                          {formatDistanceToNow(new Date(v.lastFuelLevelAt), { addSuffix: true })}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>No sensor fitted</div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
