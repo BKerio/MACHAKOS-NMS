@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nccg/screen/operator/operator_shell.dart';
 import 'package:nccg/services/nms_api.dart';
+import 'package:nccg/services/notification_service.dart';
 import 'package:nccg/theme/tokens.dart';
 
 /// Flutter counterpart of frontend/src/pages/auth/LoginPage.tsx - same
@@ -139,6 +140,7 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
       }
 
       await NmsApi.saveSession(session);
+      unawaited(NotificationService().uploadToken());
       _goToShell();
     } on NmsApiException catch (e) {
       if (mounted) {
@@ -165,6 +167,7 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
     try {
       final session = await NmsApi.selectRole(pending.pendingToken, role);
       await NmsApi.saveSession(session);
+      unawaited(NotificationService().uploadToken());
       _goToShell();
     } on NmsApiException catch (e) {
       if (mounted) {

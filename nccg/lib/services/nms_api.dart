@@ -124,11 +124,12 @@ class NmsApi {
     await prefs.setString('user_id', user['id'] as String? ?? '');
     await prefs.setString('role', (user['activeRole'] ?? user['role']) as String? ?? '');
     await prefs.setString('phone', user['phone'] as String? ?? '');
+    await prefs.setString('email', user['email'] as String? ?? '');
   }
 
   static Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
-    for (final key in ['token', 'name', 'user_id', 'role', 'phone']) {
+    for (final key in ['token', 'name', 'user_id', 'role', 'phone', 'email']) {
       await prefs.remove(key);
     }
   }
@@ -148,6 +149,16 @@ class NmsApi {
     final body = _unwrap(res);
     final data = body['data'] as List<dynamic>? ?? [];
     return data.map((e) => TaskHistoryItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Total completed/cancelled case count for the signed-in crew member, for
+  /// the History quick-access tile's badge on Home. Asks for a single row
+  /// (`limit=1`) since only the response's `meta.total` is needed, not the data.
+  static Future<int> getTaskHistoryCount() async {
+    final res = await API().getRequest(url: _u('/tasks/history?page=1&limit=1'));
+    final body = _unwrap(res);
+    final meta = body['meta'] as Map<String, dynamic>?;
+    return (meta?['total'] as num?)?.toInt() ?? 0;
   }
 
   static Future<void> updateTaskStatus(String taskId, String status, {String? reason}) async {
@@ -229,6 +240,20 @@ class NmsApi {
     }
     final contentType = res.headers['content-type'] ?? 'application/octet-stream';
     return PcrFile(bytes: res.bodyBytes, mimeType: contentType);
+  }
+
+  /// Registers (or replaces) this device's FCM token for push notifications.
+  /// Mirrors POST /notifications/token in backend/src/modules/notifications/notifications.routes.ts.
+  static Future<void> registerPushToken(String fcmToken) async {
+    final res = await API().postRequest(url: _u('/notifications/token'), data: {'fcmToken': fcmToken});
+    _unwrap(res);
+  }
+
+  /// Clears this device's token on sign-out, so a reissued/shared device
+  /// doesn't keep receiving another crew member's push alerts.
+  static Future<void> unregisterPushToken() async {
+    final res = await API().deleteRequest(url: _u('/notifications/token'));
+    _unwrap(res);
   }
 
   /// Passes a live case to another crew. The case stays open; [autoAssign] lets

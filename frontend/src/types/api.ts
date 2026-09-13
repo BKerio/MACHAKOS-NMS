@@ -190,6 +190,19 @@ export interface SmsGatewaySummary {
   updatedAt: string | null;
 }
 
+/** GET/PUT /settings/push-gateway - the Firebase gateway new-case mobile alerts send through. */
+export interface PushGatewaySummary {
+  configured: boolean;
+  isActive: boolean;
+  projectId: string | null;
+  updatedAt: string | null;
+}
+
+export interface PushTestResult {
+  ok: boolean;
+  message: string;
+}
+
 export interface PatientVitals {
   temperature?: string;
   pulseRate?: string;

@@ -15,7 +15,9 @@ import {
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/api/client';
+import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import PushGatewaySettings from '@/components/admin/PushGatewaySettings';
 
 interface SystemHealth {
   db: 'online' | 'offline';
@@ -160,6 +162,7 @@ function NatureOptionsManager() {
 function SystemSettingsPage() {
   const queryClient = useQueryClient();
   const { addNotification } = useNotificationStore();
+  const user = useAuthStore((s) => s.user);
 
   const { data: health, isLoading, refetch } = useQuery<SystemHealth>({
     queryKey: ['admin', 'system-health'],
@@ -262,6 +265,9 @@ function SystemSettingsPage() {
             </div>
           </div>
           <NatureOptionsManager />
+
+          {/* Live API credentials - kept behind the top role tier, same as the backend guard. */}
+          {user?.role === 'SUPER_ADMIN' && <PushGatewaySettings />}
 
           {/* External Integrations */}
           

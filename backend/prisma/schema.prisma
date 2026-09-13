@@ -673,6 +673,25 @@ model SmsGateway {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PushGateway - DB-backed, encrypted Firebase service-account credentials for
+// sending mobile push (new-case alerts to a crew's fcmToken). Only one
+// provider exists (Firebase), so at most one row ever exists - unlike
+// SmsGateway there's no `provider` key. Configured from the admin Push
+// Notifications settings UI. See modules/settings/push-gateway.service.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PushGateway {
+  id          String   @id @default(uuid())
+  configEnc   String   @db.Text                        // AES-256-GCM JSON blob of { serviceAccountJson }
+  isActive    Boolean  @default(false) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by_id")            // soft link (no FK) to the admin who last saved it
+
+  @@map("push_gateways")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // InventoryItem - ambulance / EOC stock (vitals equipment, consumables, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
 

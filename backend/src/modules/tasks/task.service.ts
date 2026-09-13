@@ -5,6 +5,7 @@ import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { sendAdvantaSms } from '../../services/sms.js';
 import { getChecklistSummary, checklistIncompleteMessage } from '../fleet/checklist.js';
+import { PushSenderService } from '../notifications/push-sender.service.js';
 
 type AssignmentIncident = {
   caseNumber: string;
@@ -18,7 +19,11 @@ type AssignmentIncident = {
 };
 
 export class TaskService {
-  constructor(private app: FastifyInstance) {}
+  private pushSender: PushSenderService;
+
+  constructor(private app: FastifyInstance) {
+    this.pushSender = new PushSenderService(app);
+  }
 
   /** Build the crew SMS text for a new dispatch/reassignment. */
   private buildAssignmentSms(incident: AssignmentIncident, registrationNumber: string): string {
@@ -44,6 +49,27 @@ export class TaskService {
         this.app.log.warn({ err, phone: member.phone }, 'crew assignment SMS failed');
       });
     }
+  }
+
+  /**
+   * Fire-and-forget mobile push to the driver/EMT/nurse just assigned to a
+   * task - a no-op if push isn't configured/active or a crew member's app
+   * never registered an fcmToken. Never throws into the dispatch flow.
+   */
+  private notifyCrewOfPushAssignment(
+    crewIds: (string | null | undefined)[],
+    incident: AssignmentIncident,
+    registrationNumber: string,
+  ): void {
+    const nature = [incident.alertNature, incident.alertNatureDetail].filter(Boolean).join(' – ') || incident.chiefComplaint;
+    this.pushSender
+      .sendToUsers(
+        crewIds,
+        `New case: ${incident.caseNumber}`,
+        `${registrationNumber} · ${nature} · ${incident.locationName}`,
+        { type: 'TASK_ASSIGNED', caseNumber: incident.caseNumber }
+      )
+      .catch((err) => this.app.log.warn({ err }, 'crew assignment push failed'));
   }
 
   private uploadsDir() {
@@ -195,9 +221,14 @@ export class TaskService {
     if (vehicle.currentNurseId) room = room.to(`user:${vehicle.currentNurseId}`);
     room.emit('task:assigned', task);
 
-    // Notify crew via SMS (fire-and-forget - never blocks dispatch)
+    // Notify crew via SMS + push (fire-and-forget - never blocks dispatch)
     this.notifyCrewOfAssignment(
       [vehicle.currentDriver, vehicle.currentEmt, vehicle.currentNurse],
+      incident,
+      vehicle.registrationNumber,
+    );
+    this.notifyCrewOfPushAssignment(
+      [vehicle.currentDriverId, vehicle.currentEmtId, vehicle.currentNurseId],
       incident,
       vehicle.registrationNumber,
     );
@@ -350,9 +381,14 @@ export class TaskService {
     if (newVehicle.currentNurseId) newRoom = newRoom.to(`user:${newVehicle.currentNurseId}`);
     newRoom.emit('task:assigned', newTask);
 
-    // Notify the replacement crew via SMS (fire-and-forget)
+    // Notify the replacement crew via SMS + push (fire-and-forget)
     this.notifyCrewOfAssignment(
       [newTask.driver, newTask.emt, newTask.nurse],
+      newTask.incident,
+      newVehicle.registrationNumber,
+    );
+    this.notifyCrewOfPushAssignment(
+      [newVehicle.currentDriverId, newVehicle.currentEmtId, newVehicle.currentNurseId],
       newTask.incident,
       newVehicle.registrationNumber,
     );

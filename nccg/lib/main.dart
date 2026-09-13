@@ -1,15 +1,32 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:nccg/components/splash_screen.dart';
+import 'package:nccg/navigation.dart';
+import 'package:nccg/services/notification_service.dart';
 import 'package:nccg/theme/theme_controller.dart';
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-// await Firebase.initializeApp();
-  // await NotificationService().initialize();
+  await _initPushNotifications();
   await ThemeController.instance.load();
   runApp(const MyApp());
+}
+
+/// Firebase isn't provisioned for every build of this app yet (no
+/// google-services.json / firebase_options.dart until a real Firebase
+/// project is wired up - see android/app/build.gradle.kts) - guarded so a
+/// missing/misconfigured project just disables push instead of crashing
+/// launch. Once that's in place this lights up with no further code changes.
+Future<void> _initPushNotifications() async {
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint('Push notifications unavailable (Firebase not configured?): $e');
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -39,6 +56,7 @@ class _MyAppState extends State<MyApp> {
     final themeController = ThemeController.instance;
 
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'NMS Field Crew',
       debugShowCheckedModeBanner: false,
       theme: themeController.getAdaptiveTheme(),

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nccg/screen/operator/assignment_tab.dart';
 import 'package:nccg/screen/operator/crew_tab.dart';
 import 'package:nccg/screen/operator/activity_tab.dart';
+import 'package:nccg/screen/operator/home_tab.dart';
 import 'package:nccg/screen/operator/navigate_tab.dart';
 import 'package:nccg/screen/operator/operator_drawer.dart';
 import 'package:nccg/screen/operator/profile_screen.dart';
@@ -19,7 +20,12 @@ const Color kOpPrimary = AppColors.navBg;
 /// Mirrors frontend/src/pages/operator/* and the Drawer/BottomNav split built
 /// for the web app's Field Crew Login.
 class OperatorShell extends StatefulWidget {
-  const OperatorShell({super.key});
+  /// Selects this bottom tab by label once the crew's role has loaded -
+  /// e.g. tapping a new-case push notification lands straight on
+  /// "Assignment" instead of the default Home tab. See NotificationService.
+  final String? initialTabLabel;
+
+  const OperatorShell({super.key, this.initialTabLabel});
 
   @override
   State<OperatorShell> createState() => _OperatorShellState();
@@ -29,6 +35,7 @@ class _OperatorShellState extends State<OperatorShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   String? _role;
   String _name = '';
+  String _email = '';
   int _tabIndex = 0;
 
   /// Twitter/X-style behaviour: the bottom tab bar collapses out of the way
@@ -47,19 +54,32 @@ class _OperatorShellState extends State<OperatorShell> {
     setState(() {
       _role = prefs.getString('role');
       _name = prefs.getString('name') ?? '';
+      _email = prefs.getString('email') ?? '';
     });
+    if (widget.initialTabLabel != null) _selectTabByLabel(widget.initialTabLabel!);
+  }
+
+  /// Lets the drawer jump straight to one of the bottom tabs by label instead
+  /// of duplicating Assignment/Crew/Activity as separate pushed screens - they
+  /// already live in the IndexedStack below, so switching to them here keeps
+  /// their state (and the bottom nav's selected item) in sync.
+  void _selectTabByLabel(String label) {
+    final index = _tabs.indexWhere((t) => t.label == label);
+    if (index >= 0) setState(() => _tabIndex = index);
   }
 
   /// DRIVER gets a 4th "Navigate" tab; EMT/NURSE don't drive so they don't need it.
   List<_TabDef> get _tabs {
     final isDriver = _role == 'DRIVER';
     final base = <_TabDef>[
+      _TabDef('Home', Icons.home_rounded, HomeTab(onSelectTab: _selectTabByLabel)),
       _TabDef(
         'Assignment',
         Icons.local_hospital_rounded,
-        // The Assignment card's own "Navigate" shortcut jumps here too - it
-        // always lands at index 1 since Navigate is only ever inserted next.
-        AssignmentTab(onNavigateToMap: isDriver ? () => setState(() => _tabIndex = 1) : null),
+        // The Assignment card's own "Navigate" shortcut jumps here too - by
+        // label rather than a hardcoded index, so it stays correct regardless
+        // of where Navigate ends up in this list.
+        AssignmentTab(onNavigateToMap: isDriver ? () => _selectTabByLabel('Navigate') : null),
       ),
     ];
     if (isDriver) {
@@ -119,7 +139,13 @@ class _OperatorShellState extends State<OperatorShell> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.bg,
-      drawer: OperatorDrawer(role: _role!, name: _name, onReturn: _loadUser),
+      drawer: OperatorDrawer(
+        role: _role!,
+        name: _name,
+        email: _email,
+        onReturn: _loadUser,
+        onSelectTab: _selectTabByLabel,
+      ),
       appBar: AppBar(
         backgroundColor: kOpPrimary,
         elevation: 2,

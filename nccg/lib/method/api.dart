@@ -5,7 +5,6 @@ import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
-import 'package:nccg/config/server.dart';
 
 class API {
   // Without this, an unreachable server (wrong network, server down, etc.)
@@ -212,14 +211,5 @@ class API {
     request.files.addAll(files);
 
     return request.send().timeout(_timeout);
-  }
-  Future<http.Response> updateDeviceToken(String token, {bool welcome = false}) async {
-    return await postRequest(
-      url: Uri.parse('${Config.baseUrl}/update-device-token'),
-      data: {
-        'token': token,
-        'welcome': welcome,
-      },
-    );
   }
 }
