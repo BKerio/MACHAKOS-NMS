@@ -7,6 +7,18 @@ import { sendAdvantaSms } from '../../services/sms.js';
 import { getChecklistSummary, checklistIncompleteMessage } from '../fleet/checklist.js';
 import { PushSenderService } from '../notifications/push-sender.service.js';
 
+/** Mirrors TaskStatus.labels in frontend/src/utils/taskStatus.ts and nccg/lib/models/task.dart. */
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pending',
+  ACCEPTED: 'Accepted',
+  EN_ROUTE: 'En Route',
+  AT_SCENE: 'At Scene',
+  PATIENT_PICKED: 'Patient Picked Up',
+  AT_HOSPITAL: 'At Hospital',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+};
+
 type AssignmentIncident = {
   caseNumber: string;
   locationName: string;
@@ -70,6 +82,30 @@ export class TaskService {
         { type: 'TASK_ASSIGNED', caseNumber: incident.caseNumber }
       )
       .catch((err) => this.app.log.warn({ err }, 'crew assignment push failed'));
+  }
+
+  /**
+   * Fire-and-forget mobile push telling the crew a task's stage changed -
+   * e.g. dispatch cancelling a case the crew is en route to. Excludes
+   * whoever just made the change themselves (they don't need telling), so
+   * only the other one or two crew members on the task get it.
+   */
+  private notifyCrewOfStatusPush(
+    crewIds: (string | null | undefined)[],
+    actorUserId: string,
+    caseNumber: string,
+    newStatus: TaskStatus,
+  ): void {
+    const recipients = crewIds.filter((id) => id !== actorUserId);
+    const label = STATUS_LABELS[newStatus] ?? newStatus;
+    this.pushSender
+      .sendToUsers(
+        recipients,
+        `${caseNumber}: ${label}`,
+        newStatus === TaskStatus.CANCELLED ? 'This case was cancelled.' : `Status updated to ${label}.`,
+        { type: 'TASK_STATUS_CHANGED', caseNumber, status: newStatus }
+      )
+      .catch((err) => this.app.log.warn({ err }, 'crew status push failed'));
   }
 
   private uploadsDir() {
@@ -334,6 +370,12 @@ export class TaskService {
     if (task.emtId) oldRoom = oldRoom.to(`user:${task.emtId}`);
     if (task.nurseId) oldRoom = oldRoom.to(`user:${task.nurseId}`);
     oldRoom.emit('task:updated', cancelled);
+    this.notifyCrewOfStatusPush(
+      [task.driverId, task.emtId, task.nurseId],
+      user.userId,
+      task.incident.caseNumber,
+      TaskStatus.CANCELLED,
+    );
     this.app.io
       .to(`role:${Role.DISPATCHER}`)
       .to(`role:${Role.ADMIN}`)
@@ -442,7 +484,10 @@ export class TaskService {
     newStatus: TaskStatus,
     reason?: string
   ) {
-    const task = await this.app.prisma.task.findUnique({ where: { id: taskId } });
+    const task = await this.app.prisma.task.findUnique({
+      where: { id: taskId },
+      include: { incident: { select: { caseNumber: true } } },
+    });
     if (!task) throw new NotFoundError('Task not found');
 
     // Basic authorization: user must be part of the task or be dispatcher/admin
@@ -512,6 +557,15 @@ export class TaskService {
     if (task.emtId) updateRoom = updateRoom.to(`user:${task.emtId}`);
     if (task.nurseId) updateRoom = updateRoom.to(`user:${task.nurseId}`);
     updateRoom.emit('task:updated', updatedTask);
+
+    // Push the other crew on this task (fire-and-forget) - e.g. the EMT/nurse
+    // find out the driver marked them en route without needing the app open.
+    this.notifyCrewOfStatusPush(
+      [task.driverId, task.emtId, task.nurseId],
+      user.userId,
+      task.incident.caseNumber,
+      newStatus,
+    );
 
     return updatedTask;
   }
