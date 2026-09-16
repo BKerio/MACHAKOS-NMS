@@ -28,6 +28,7 @@ import {
   History as HistoryIcon,
   Package,
   FileBarChart2 as FileBarChart,
+  Bell,
 } from 'lucide-react';
 import { useActiveCalls } from '@/hooks/useActiveCalls';
 import { useIncidentQueueCount } from '@/hooks/useIncidentQueueCount';
@@ -73,6 +74,7 @@ const menuSections: { title?: string; items: NavItem[] }[] = [
       { label: 'Nature Options', path: '/admin/nature-options', Icon: Tag, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Inventory', path: '/admin/inventory', Icon: Package, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Bulk SMS', path: '/admin/sms', Icon: ChatText, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Notifications', path: '/admin/notifications', Icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ],
   },
   {
