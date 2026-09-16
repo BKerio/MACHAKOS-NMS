@@ -18,7 +18,7 @@
          (see lib/config/server.dart). Drop it once a real certificate is
          issued for the domain. -->
     <application
-        android:label="Machakos Operator App"
+        android:label="EOC-MCG"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
