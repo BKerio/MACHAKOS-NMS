@@ -3,7 +3,6 @@ import {
   MessageSquareText as ChatText,
   Bell,
 } from 'lucide-react';
-import { useAuthStore } from '@/stores/authStore';
 import SmsGatewaySettings from '@/components/admin/SmsGatewaySettings';
 import PushGatewaySettings from '@/components/admin/PushGatewaySettings';
 
@@ -14,9 +13,6 @@ const cardStyle = { background: 'var(--surface)', borderColor: 'var(--border)' }
  *  Bulk SMS and case alerts) and Firebase push config (crew mobile alerts), each on its
  *  own tab. Split out of Bulk SMS / System Settings so both live in one predictable place. */
 function NotificationsPage() {
-  const user = useAuthStore((s) => s.user);
-  const canSeePush = user?.role === 'SUPER_ADMIN';
-
   const [tab, setTab] = useState<'sms' | 'push'>('sms');
 
   return (
@@ -38,15 +34,13 @@ function NotificationsPage() {
         <button type="button" className={`tab ${tab === 'sms' ? 'on' : ''}`} onClick={() => setTab('sms')}>
           <ChatText size={15} /> SMS Gateway
         </button>
-        {canSeePush && (
-          <button type="button" className={`tab ${tab === 'push' ? 'on' : ''}`} onClick={() => setTab('push')}>
-            <Bell size={15} /> Push Notifications
-          </button>
-        )}
+        <button type="button" className={`tab ${tab === 'push' ? 'on' : ''}`} onClick={() => setTab('push')}>
+          <Bell size={15} /> Push Notifications
+        </button>
       </div>
 
       {tab === 'sms' && <SmsGatewaySettings />}
-      {tab === 'push' && canSeePush && <PushGatewaySettings />}
+      {tab === 'push' && <PushGatewaySettings />}
     </div>
   );
 }

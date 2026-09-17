@@ -6,6 +6,8 @@ import { socket } from '@/lib/socket';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
 
+const FIELD_CREW_ROLES = ['DRIVER', 'EMT', 'NURSE'];
+
 function AppShell() {
   const { addNotification } = useNotificationStore();
   const token = useAuthStore((s) => s.token);
@@ -93,6 +95,32 @@ function AppShell() {
     const t = setTimeout(() => setReconnectedFlash(false), 3000);
     return () => clearTimeout(t);
   }, [reconnectedFlash]);
+
+  // Field crew get the same new-case push alerts on the web dashboard as on
+  // the mobile app - dispatchers/admins already see everything live via the
+  // socket handlers above, so it's scoped to the roles push actually targets.
+  // Lazy-imported so the Firebase SDK isn't in every role's bundle.
+  useEffect(() => {
+    if (!token || !user || !FIELD_CREW_ROLES.includes(user.role)) return;
+    let cancelled = false;
+
+    import('@/lib/firebasePush').then(({ registerWebPush, onForegroundMessage }) => {
+      if (cancelled) return;
+      registerWebPush();
+      onForegroundMessage(({ title, body }) => {
+        addNotification({
+          type: 'info',
+          title: title || 'New notification',
+          message: body || '',
+        });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      import('@/lib/firebasePush').then(({ unregisterWebPush }) => unregisterWebPush());
+    };
+  }, [addNotification, token, user]);
 
   if (!token) return <Navigate to="/login" replace />;
 

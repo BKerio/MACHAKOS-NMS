@@ -5,7 +5,7 @@ import { activatePushGateway, deactivatePushGateway, getPushGateway, testPushGat
 import { useNotificationStore } from '@/stores/notificationStore';
 
 /**
- * SUPER_ADMIN-only card: paste a Firebase service-account JSON to enable
+ * Admin/Super Admin card: paste a Firebase service-account JSON to enable
  * mobile push (new-case alerts to a crew's phone), test the credentials,
  * then activate. Mirrors SmsGatewaySettings.tsx's save/test/activate flow,
  * styled to match this page's cards rather than the Bulk SMS ones.

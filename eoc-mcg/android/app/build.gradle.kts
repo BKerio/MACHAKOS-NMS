@@ -4,13 +4,9 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Firebase (push notifications) isn't provisioned for this app yet - no
-// google-services.json has been added below. The google-services plugin
-// fails the build outright if applied without that file present, so it's
-// applied conditionally: drop a real google-services.json in this directory
-// (from Firebase Console -> Project settings -> your Android app) and it
-// activates on the next build, no other changes needed. See
-// lib/main.dart's _initPushNotifications() for the Dart-side counterpart.
+// google-services.json (from the `eoc-mcg` Firebase project) lives in this
+// directory. The plugin fails the build outright if applied without that
+// file present, so it's still applied conditionally rather than unconditionally.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }

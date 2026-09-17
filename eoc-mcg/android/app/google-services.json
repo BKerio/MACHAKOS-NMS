@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "251135999716",
-    "project_id": "nccg-machakos",
-    "storage_bucket": "nccg-machakos.firebasestorage.app"
+    "project_number": "1072219330481",
+    "project_id": "eoc-mcg",
+    "storage_bucket": "eoc-mcg.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:251135999716:android:0bc10298238f3871a5b6f1",
+        "mobilesdk_app_id": "1:1072219330481:android:1addef0a222aa8a003cf90",
         "android_client_info": {
           "package_name": "com.example.eocmcg"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCixheKW3O75Mg-W9uqlCBdrs3JDdX9TD0"
+          "current_key": "AIzaSyDnRkRQJ4nL1f-efrdP4LDe5jTIVwD0Gic"
         }
       ],
       "services": {

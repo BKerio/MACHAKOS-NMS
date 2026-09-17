@@ -7,8 +7,7 @@ import { SmsGatewayService } from './sms-gateway.service.js';
 import { PushGatewayService } from './push-gateway.service.js';
 
 const settingsRoles = [Role.ADMIN, Role.SUPER_ADMIN];
-// Live API credentials, unlike the rest of /settings - kept behind the top role tier.
-const pushSettingsRoles = [Role.SUPER_ADMIN];
+const pushSettingsRoles = [Role.ADMIN, Role.SUPER_ADMIN];
 
 const providerParamSchema = z.object({ provider: z.nativeEnum(SmsProvider) });
 // Credential fields are provider-specific free-form strings (see

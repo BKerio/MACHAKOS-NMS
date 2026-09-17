@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:eoc_mcg/components/splash_screen.dart';
+import 'package:eoc_mcg/firebase_options.dart';
 import 'package:eoc_mcg/navigation.dart';
 import 'package:eoc_mcg/services/notification_service.dart';
 import 'package:eoc_mcg/theme/theme_controller.dart';
@@ -14,14 +15,12 @@ void main() async {
   runApp(const MyApp());
 }
 
-/// Firebase isn't provisioned for every build of this app yet (no
-/// google-services.json / firebase_options.dart until a real Firebase
-/// project is wired up - see android/app/build.gradle.kts) - guarded so a
-/// missing/misconfigured project just disables push instead of crashing
-/// launch. Once that's in place this lights up with no further code changes.
+/// Wired up to the `eoc-mcg` Firebase project (see lib/firebase_options.dart,
+/// generated via `flutterfire configure`) - guarded so a misconfigured/
+/// unreachable project just disables push instead of crashing launch.
 Future<void> _initPushNotifications() async {
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     await NotificationService().initialize();
   } catch (e) {
