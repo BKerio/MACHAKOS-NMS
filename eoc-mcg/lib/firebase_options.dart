@@ -69,6 +69,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1072219330481',
     projectId: 'eoc-mcg',
     storageBucket: 'eoc-mcg.firebasestorage.app',
-    iosBundleId: 'com.example.eocmcg',
+    iosBundleId: 'com.example.eoc',
   );
 }
