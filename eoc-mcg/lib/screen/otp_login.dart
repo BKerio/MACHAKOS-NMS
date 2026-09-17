@@ -8,12 +8,12 @@ import 'package:eoc_mcg/services/notification_service.dart';
 import 'package:eoc_mcg/theme/tokens.dart';
 
 /// Flutter counterpart of frontend/src/pages/auth/LoginPage.tsx - same
-/// co-branded card, Staff/Field Crew tabs, phone -> code steps, multi-role
-/// picker and footer, so crews see one consistent sign-in across web and phone.
+/// co-branded card, phone -> code steps, multi-role picker and footer, so
+/// crews see one consistent sign-in across web and phone.
 ///
-/// Only the Field Crew tab signs in here: the backend rejects password login
-/// for Drivers/EMTs/Nurses, and this app has no dispatcher or admin screens to
-/// land a staff account on.
+/// Goes straight to phone entry: the backend rejects password login for
+/// Drivers/EMTs/Nurses, and this app has no dispatcher or admin screens to
+/// land a staff account on, so there's no staff-login tab to choose here.
 class OtpLoginScreen extends StatefulWidget {
   const OtpLoginScreen({super.key});
 
@@ -21,9 +21,15 @@ class OtpLoginScreen extends StatefulWidget {
   State<OtpLoginScreen> createState() => _OtpLoginScreenState();
 }
 
-enum _LoginMode { staff, field }
-
 enum _OtpStep { phone, code }
+
+/// Masks a phone number for display once a code has been sent, e.g.
+/// "0712345678" -> "0712*****78" - keeps enough on each end to confirm it's
+/// the right number without showing the whole thing on screen.
+String maskPhone(String phone) {
+  if (phone.length <= 6) return phone;
+  return '${phone.substring(0, 4)}*****${phone.substring(phone.length - 2)}';
+}
 
 const Map<String, String> _roleLabels = {
   'SUPER_ADMIN': 'Super Admin',
@@ -52,7 +58,6 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
   final _codeController = TextEditingController();
   final _codeFocus = FocusNode();
 
-  _LoginMode _mode = _LoginMode.field;
   _OtpStep _otpStep = _OtpStep.phone;
 
   bool _submitting = false;
@@ -194,18 +199,6 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
       context,
       MaterialPageRoute(builder: (_) => const OperatorShell()),
     );
-  }
-
-  void _switchMode(_LoginMode next) {
-    _resendTimer?.cancel();
-    setState(() {
-      _mode = next;
-      _serverError = '';
-      _pendingSelection = null;
-      _otpStep = _OtpStep.phone;
-      _codeController.clear();
-      _resendIn = 0;
-    });
   }
 
   @override
@@ -367,105 +360,13 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
         const _Title('Login console'),
         const SizedBox(height: 5),
         const _Subtitle('Machakos County emergency dispatch console.'),
-        const SizedBox(height: 14),
-        _buildModeTabs(),
         if (_serverError.isNotEmpty) ...[
           const SizedBox(height: 16),
           AlertError(_serverError),
         ],
         const SizedBox(height: 16),
-        if (_mode == _LoginMode.staff)
-          _buildStaffNotice()
-        else if (_otpStep == _OtpStep.phone)
-          _buildPhoneStep()
-        else
-          _buildCodeStep(),
+        if (_otpStep == _OtpStep.phone) _buildPhoneStep() else _buildCodeStep(),
       ],
-    );
-  }
-
-  Widget _buildModeTabs() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          for (final mode in _LoginMode.values)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => _switchMode(mode),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  decoration: BoxDecoration(
-                    color: _mode == mode ? AppColors.surface : Colors.transparent,
-                    border: Border.all(
-                      color: _mode == mode ? AppColors.border : Colors.transparent,
-                    ),
-                    borderRadius: BorderRadius.circular(AppRadius.xs),
-                  ),
-                  child: Text(
-                    mode == _LoginMode.staff ? 'Staff Login' : 'Field Crew Login',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: _mode == mode ? FontWeight.w700 : FontWeight.w600,
-                      color: _mode == mode ? AppColors.ink : AppColors.muted,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// Staff (admin, dispatcher, watcher, partner) accounts have no screens in
-  /// this app, so the tab points them at the web console instead of offering a
-  /// sign-in that would dead-end.
-  Widget _buildStaffNotice() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(AppRadius.base),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.desktop_windows_outlined, size: 18, color: AppColors.green),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Staff sign in on the web console',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Admins, dispatchers, watchers and partners use the browser console. '
-                  'This app carries the field crew workflow only.',
-                  style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.45),
-                ),
-                const SizedBox(height: 10),
-                AppButton(
-                  label: 'Use Field Crew Login',
-                  icon: Icons.arrow_forward_rounded,
-                  size: AppButtonSize.sm,
-                  onPressed: () => _switchMode(_LoginMode.field),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -527,7 +428,7 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
           },
         ),
         const SizedBox(height: 16),
-        _FieldLabel('Enter the 6-digit code sent to $phone'),
+        _FieldLabel('Enter the 6-digit code sent to ${maskPhone(phone)}'),
         const SizedBox(height: 6),
         TextField(
           controller: _codeController,
