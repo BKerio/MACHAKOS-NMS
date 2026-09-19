@@ -95,6 +95,9 @@ const updateFacilitySchema = z.object({
   type: z.string().optional(),
   kephLevel: z.number().int().min(1).max(6).optional(),
   isActive: z.boolean().optional(),
+  subCounty: z.string().min(2).optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
 });
 
 const INVENTORY_CATEGORIES = [
@@ -253,6 +256,11 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     const data = parse(updateFacilitySchema, request.body);
     const facility = await adminService.updateFacility(request.params.id, data);
     return reply.send({ ok: true, data: facility });
+  });
+
+  app.delete<{ Params: { id: string } }>('/facilities/:id', async (request, reply) => {
+    await adminService.deleteFacility(request.params.id);
+    return reply.send({ ok: true });
   });
 
   // ── Nature Options (admin CRUD) ────────────────────────────────────────────

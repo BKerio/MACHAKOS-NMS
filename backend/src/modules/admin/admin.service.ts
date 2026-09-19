@@ -216,10 +216,31 @@ export class AdminService {
     return this.app.prisma.facility.create({ data });
   }
 
-  async updateFacility(id: string, data: { name?: string; type?: string; kephLevel?: number; isActive?: boolean }) {
+  async updateFacility(id: string, data: {
+    name?: string; type?: string; kephLevel?: number; isActive?: boolean;
+    subCounty?: string; lat?: number; lng?: number;
+  }) {
     const facility = await this.app.prisma.facility.findUnique({ where: { id } });
     if (!facility) throw new NotFoundError('Facility');
     return this.app.prisma.facility.update({ where: { id }, data });
+  }
+
+  async deleteFacility(id: string) {
+    const facility = await this.app.prisma.facility.findUnique({ where: { id } });
+    if (!facility) throw new NotFoundError('Facility');
+
+    try {
+      await this.app.prisma.facility.delete({ where: { id } });
+    } catch (err) {
+      // P2003 = foreign key constraint failed: incidents reference this facility
+      // as a transport target, so permanent deletion would orphan that history.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+        throw new ConflictError(
+          'This facility is referenced by existing incidents and cannot be permanently deleted. Deactivate it instead.'
+        );
+      }
+      throw err;
+    }
   }
 
   // ── Inventory ──────────────────────────────────────────────────────────────

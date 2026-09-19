@@ -1,16 +1,23 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import {
   Plus,
   Search as MagnifyingGlass,
   EllipsisVertical as DotsThreeVertical,
   Hospital,
+  Stethoscope,
+  Cross,
+  Syringe,
+  BedDouble,
+  Baby,
   Pencil as PencilSimple,
+  Trash2,
   Check,
   X as XIcon,
   MapPin,
   Map as MapTrifold,
   LoaderCircle as Spinner,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
@@ -37,6 +44,15 @@ const kephBadge: Record<number, { bg: string; color: string }> = {
   6: { bg: '#F5F3FF', color: '#7C3AED' },
 };
 
+const TYPE_ICONS: Record<string, LucideIcon> = {
+  'Hospital': Hospital,
+  'Health Centre': Stethoscope,
+  'Clinic': Cross,
+  'Dispensary': Syringe,
+  'Nursing Home': BedDouble,
+  'Maternity': Baby,
+};
+
 const emptyForm = { name: '', type: 'Hospital', kephLevel: 3, subCounty: '' };
 
 // ── input style helper (dark-mode safe) ──────────────────────────────────────
@@ -52,8 +68,9 @@ function FacilitiesPage() {
   const [search, setSearch] = useState('');
   const [subCountyFilter, setSubCountyFilter] = useState('ALL');
   const [kephFilter, setKephFilter] = useState('ALL');
-  const [showModal, setShowModal] = useState(false);
-  const [editTarget, setEditTarget] = useState<Facility | null>(null);
+  const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Facility | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
@@ -89,7 +106,7 @@ function FacilitiesPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'facilities'] });
-      setShowModal(false);
+      setModalMode(null);
       setForm(emptyForm);
       setPin(null);
       addNotification({ type: 'success', title: 'Facility Added', message: 'New facility registered.' });
@@ -104,12 +121,25 @@ function FacilitiesPage() {
       api.patch(`/admin/facilities/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'facilities'] });
-      setEditTarget(null);
+      setModalMode(null);
+      setEditingId(null);
       setActionId(null);
       addNotification({ type: 'success', title: 'Updated', message: 'Facility updated.' });
     },
     onError: (err: any) => {
       addNotification({ type: 'error', title: 'Failed', message: err?.response?.data?.message || 'Could not update facility.' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/facilities/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'facilities'] });
+      setDeleteTarget(null);
+      addNotification({ type: 'success', title: 'Facility Deleted', message: 'The facility has been permanently removed.' });
+    },
+    onError: (err: any) => {
+      addNotification({ type: 'error', title: 'Deletion Failed', message: err?.response?.data?.message || 'Could not delete facility.' });
     },
   });
 
@@ -177,13 +207,49 @@ function FacilitiesPage() {
     setPin(null);
     setLocationQuery('');
     setSuggestions([]);
-    setShowModal(true);
+    setEditingId(null);
+    setModalMode('add');
+  }
+
+  function openEdit(f: Facility) {
+    setForm({ name: f.name, type: f.type, kephLevel: f.kephLevel, subCounty: f.subCounty });
+    setPin({ lat: f.lat, lng: f.lng });
+    setLocationQuery('');
+    setSuggestions([]);
+    setEditingId(f.id);
+    setModalMode('edit');
+    setActionId(null);
+  }
+
+  function closeModal() {
+    setModalMode(null);
+    setEditingId(null);
+  }
+
+  function submitForm() {
+    if (modalMode === 'edit' && editingId) {
+      updateMutation.mutate({
+        id: editingId,
+        data: {
+          name: form.name,
+          type: form.type,
+          kephLevel: Number(form.kephLevel),
+          subCounty: form.subCounty,
+          lat: pin!.lat,
+          lng: pin!.lng,
+        },
+      });
+    } else {
+      createMutation.mutate();
+    }
   }
 
   const formValid =
     form.name.trim().length >= 2 &&
     form.subCounty.trim().length >= 2 &&
     pin !== null;
+
+  const formPending = createMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="col" style={{ gap: 24 }}>
@@ -357,7 +423,7 @@ function FacilitiesPage() {
                           style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
                         >
                           <button
-                            onClick={() => { setEditTarget(f); setActionId(null); }}
+                            onClick={() => openEdit(f)}
                             className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-semibold transition-colors"
                             style={{ color: 'var(--ink)' }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
@@ -378,6 +444,16 @@ function FacilitiesPage() {
                               ? <><XIcon size={15} /> Deactivate</>
                               : <><Check size={15} /> Activate</>}
                           </button>
+                          <div className="my-0.5" style={{ borderTop: '1px solid var(--border)' }} />
+                          <button
+                            onClick={() => { setDeleteTarget(f); setActionId(null); }}
+                            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-semibold transition-colors"
+                            style={{ color: 'var(--red)' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <Trash2 size={15} /> Delete
+                          </button>
                         </div>
                       )}
                     </td>
@@ -389,80 +465,100 @@ function FacilitiesPage() {
         </div>
       </div>
 
-      {/* Add Facility Modal */}
-      {showModal && (
+      {/* Add / Edit Facility Modal */}
+      {modalMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden" style={{ background: 'var(--surface)' }}>
             {/* Modal header */}
             <div className="bg-brand-sidebar px-5 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Hospital size={18} className="text-brand-green" />
+                {modalMode === 'edit'
+                  ? <PencilSimple size={18} className="text-brand-green" />
+                  : <Hospital size={18} className="text-brand-green" />}
                 <div>
                   <p className="text-xs text-slate-400 tracking-widest font-bold">Registry</p>
-                  <p className="text-sm font-bold text-white">Add New Facility</p>
+                  <p className="text-sm font-bold text-white">
+                    {modalMode === 'edit' ? 'Edit Facility' : 'Add New Facility'}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowModal(false)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+              <button onClick={closeModal} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all">
                 <XIcon size={16} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-              {/* Fields row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>Facility Name *</label>
-                  <input
-                    className={inputCls}
-                    style={inputStyle}
-                    placeholder="e.g. Kenyatta National Hospital"
-                    value={form.name}
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>Type *</label>
-                  <select
-                    className={inputCls + ' cursor-pointer'}
-                    style={inputStyle}
-                    value={form.type}
-                    onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                  >
-                    {FACILITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>KEPH Level *</label>
-                  <select
-                    className={inputCls + ' cursor-pointer'}
-                    style={inputStyle}
-                    value={form.kephLevel}
-                    onChange={e => setForm(f => ({ ...f, kephLevel: Number(e.target.value) }))}
-                  >
-                    {KEPH_LEVELS.map(l => <option key={l} value={l}>Level {l}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>Sub-County *</label>
-                  <select
-                    className={inputCls + ' cursor-pointer'}
-                    style={inputStyle}
-                    value={form.subCounty}
-                    onChange={e => setForm(f => ({ ...f, subCounty: e.target.value }))}
-                  >
-                    <option value="">Select sub-county…</option>
-                    {NAIROBI_SUB_COUNTIES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
+            <div className="p-5 space-y-6 max-h-[75vh] overflow-y-auto">
+              {/* Section 1: Identity */}
+              <div>
+                <SectionLabel n={1}>Identity</SectionLabel>
+                <input
+                  className={inputCls}
+                  style={inputStyle}
+                  placeholder="e.g. Kenyatta National Hospital"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                />
               </div>
 
-              {/* Map picker */}
+              {/* Section 2: Classification */}
               <div>
-                <label className="flex items-center gap-2 text-[10px] font-black tracking-widest mb-2" style={{ color: 'var(--muted)' }}>
-                  <MapTrifold size={13} />
-                  Location *
-                </label>
+                <SectionLabel n={2}>Classification</SectionLabel>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {FACILITY_TYPES.map(t => {
+                    const Icon = TYPE_ICONS[t] ?? Hospital;
+                    const active = form.type === t;
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, type: t }))}
+                        className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-2 py-3 transition-all"
+                        style={active
+                          ? { borderColor: 'var(--green)', background: 'var(--green-light)', color: 'var(--green)' }
+                          : { borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--muted)' }}
+                      >
+                        <Icon size={20} />
+                        <span className="text-[10px] font-bold text-center leading-tight">{t}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-6 gap-2">
+                  {KEPH_LEVELS.map(l => {
+                    const active = form.kephLevel === l;
+                    const badge = kephBadge[l];
+                    return (
+                      <button
+                        key={l}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, kephLevel: l }))}
+                        title={`KEPH Level ${l}`}
+                        className="rounded-xl py-2.5 text-center font-black text-sm transition-all border-2"
+                        style={active
+                          ? { background: badge.bg, borderColor: badge.color, color: badge.color }
+                          : { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--muted)' }}
+                      >
+                        {l}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] mt-1.5" style={{ color: 'var(--muted-2)' }}>KEPH Level (1 = community, 6 = national referral)</p>
+              </div>
+
+              {/* Section 3: Location */}
+              <div>
+                <SectionLabel n={3}>Location</SectionLabel>
+                <select
+                  className={inputCls + ' cursor-pointer mb-2'}
+                  style={inputStyle}
+                  value={form.subCounty}
+                  onChange={e => setForm(f => ({ ...f, subCounty: e.target.value }))}
+                >
+                  <option value="">Select sub-county…</option>
+                  {NAIROBI_SUB_COUNTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
 
                 {/* Search box */}
                 <div className="relative mb-2">
@@ -529,47 +625,77 @@ function FacilitiesPage() {
 
             <div className="px-5 pb-5 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)' }}>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={closeModal}
                 className="btn btn-ghost px-4 py-2 text-sm"
               >
                 Cancel
               </button>
               <button
-                onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending || !formValid}
+                onClick={submitForm}
+                disabled={formPending || !formValid}
                 className="btn btn-primary flex items-center gap-2 px-5 py-2 text-sm"
               >
-                <Plus size={14} />
-                {createMutation.isPending ? 'Adding…' : 'Add Facility'}
+                {modalMode === 'edit' ? <Check size={14} /> : <Plus size={14} />}
+                {formPending
+                  ? (modalMode === 'edit' ? 'Saving…' : 'Adding…')
+                  : (modalMode === 'edit' ? 'Save Changes' : 'Add Facility')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Facility Modal */}
-      {editTarget && (
+      {/* Delete Confirmation Dialog */}
+      {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setEditTarget(null)} />
-          <div className="relative rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" style={{ background: 'var(--surface)' }}>
-            <div className="bg-brand-sidebar px-5 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <PencilSimple size={18} className="text-brand-green" />
-                <div>
-                  <p className="text-xs text-slate-400 tracking-widest font-bold">Edit Facility</p>
-                  <p className="text-sm font-bold text-white truncate max-w-[220px]">{editTarget.name}</p>
-                </div>
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => !deleteMutation.isPending && setDeleteTarget(null)}
+          />
+          <div
+            className="relative rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            <div
+              className="px-5 py-4 flex items-center gap-3"
+              style={{ borderBottom: '1px solid var(--border)', background: 'var(--red)', color: '#fff' }}
+            >
+              <Trash2 size={18} />
+              <div>
+                <p className="text-xs tracking-widest font-bold opacity-80">Irreversible Action</p>
+                <p className="text-sm font-bold">Delete Facility</p>
               </div>
-              <button onClick={() => setEditTarget(null)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all">
-                <XIcon size={16} />
+            </div>
+            <div className="p-5 space-y-1">
+              <p className="text-sm font-black tracking-tight" style={{ color: 'var(--ink)' }}>
+                {deleteTarget.name}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                {deleteTarget.subCounty} • Level {deleteTarget.kephLevel}
+              </p>
+              <p className="text-sm leading-relaxed pt-3" style={{ color: 'var(--muted)' }}>
+                This permanently removes the facility record and cannot be undone. If it is referenced by existing incidents, deletion will be blocked; deactivate it instead.
+              </p>
+            </div>
+            <div className="px-5 pb-5 flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 border text-sm font-bold rounded-xl transition-colors disabled:opacity-50"
+                style={{ borderColor: 'var(--border)', color: 'var(--muted)', background: 'var(--surface)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                disabled={deleteMutation.isPending}
+                className="flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-xl transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'var(--red)' }}
+              >
+                <Trash2 size={14} />
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete Permanently'}
               </button>
             </div>
-            <EditFacilityForm
-              facility={editTarget}
-              onSave={data => updateMutation.mutate({ id: editTarget.id, data })}
-              onCancel={() => setEditTarget(null)}
-              isPending={updateMutation.isPending}
-            />
           </div>
         </div>
       )}
@@ -577,55 +703,19 @@ function FacilitiesPage() {
   );
 }
 
-function EditFacilityForm({ facility, onSave, onCancel, isPending }: {
-  facility: Facility;
-  onSave: (data: Partial<Facility>) => void;
-  onCancel: () => void;
-  isPending: boolean;
-}) {
-  const [name, setName] = useState(facility.name);
-  const [type, setType] = useState(facility.type);
-  const [kephLevel, setKephLevel] = useState(facility.kephLevel);
-
-  const inputStyle = { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--ink)' };
-
+function SectionLabel({ n, children }: { n: number; children: ReactNode }) {
   return (
-    <>
-      <div className="p-5 space-y-4">
-        <div>
-          <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>Name</label>
-          <input
-            className="w-full border rounded-xl px-4 py-3 text-sm font-semibold outline-none transition-all"
-            style={inputStyle}
-            value={name}
-            onChange={e => setName(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>Type</label>
-          <select className="w-full border rounded-xl px-4 py-3 text-sm font-semibold outline-none transition-all cursor-pointer" style={inputStyle} value={type} onChange={e => setType(e.target.value)}>
-            {FACILITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>KEPH Level</label>
-          <select className="w-full border rounded-xl px-4 py-3 text-sm font-semibold outline-none transition-all cursor-pointer" style={inputStyle} value={kephLevel} onChange={e => setKephLevel(Number(e.target.value))}>
-            {KEPH_LEVELS.map(l => <option key={l} value={l}>Level {l}</option>)}
-          </select>
-        </div>
-      </div>
-      <div className="px-5 pb-5 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)' }}>
-        <button onClick={onCancel} className="btn btn-ghost px-4 py-2 text-sm">Cancel</button>
-        <button
-          onClick={() => onSave({ name, type, kephLevel })}
-          disabled={isPending || name.trim().length < 2}
-          className="btn btn-primary flex items-center gap-2 px-5 py-2 text-sm"
-        >
-          <Check size={14} />
-          {isPending ? 'Saving…' : 'Save Changes'}
-        </button>
-      </div>
-    </>
+    <div className="flex items-center gap-2 mb-2">
+      <span
+        className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black flex-shrink-0"
+        style={{ background: 'var(--ink)', color: 'var(--surface)' }}
+      >
+        {n}
+      </span>
+      <span className="text-[10px] font-black tracking-widest" style={{ color: 'var(--muted)' }}>
+        {children}
+      </span>
+    </div>
   );
 }
 
