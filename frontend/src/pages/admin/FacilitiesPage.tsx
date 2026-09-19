@@ -194,12 +194,9 @@ function FacilitiesPage() {
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-1.5 h-6 bg-brand-green rounded-full" />
-            <p className="font-sans text-[11px] font-black tracking-[0.2em]" style={{ color: 'var(--muted)' }}>
-              Medical Facilities Registry
-            </p>
-          </div>
+          <p className="font-sans text-[11px] font-black tracking-[0.2em] mb-1" style={{ color: 'var(--muted)' }}>
+            Medical Facilities Registry
+          </p>
           <h2 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight" style={{ color: 'var(--ink)' }}>
             Facilities
           </h2>

@@ -70,10 +70,7 @@ function PartnerAmbulancesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-4 sm:p-6 lg:p-8 rounded-xl border shadow-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-1.5 h-6 bg-brand-green rounded-full" />
-            <p className="font-sans text-[11px] font-black tracking-[0.2em]" style={{ color: 'var(--muted)' }}>Partner Fleet</p>
-          </div>
+          <p className="font-sans text-[11px] font-black tracking-[0.2em] mb-1" style={{ color: 'var(--muted)' }}>Partner Fleet</p>
           <h2 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight" style={{ color: 'var(--ink)' }}>Partner Ambulances</h2>
           <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
             {canManage

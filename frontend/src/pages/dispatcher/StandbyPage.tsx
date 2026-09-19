@@ -83,10 +83,7 @@ function StandbyPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-4 sm:p-6 lg:p-8 rounded-xl border shadow-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-1.5 h-6 bg-brand-green rounded-full" />
-            <p className="font-sans text-[11px] font-black tracking-[0.2em]" style={{ color: 'var(--muted)' }}>Fleet Standby</p>
-          </div>
+          <p className="font-sans text-[11px] font-black tracking-[0.2em] mb-1" style={{ color: 'var(--muted)' }}>Fleet Standby</p>
           <h2 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight" style={{ color: 'var(--ink)' }}>Standby</h2>
         </div>
         <button onClick={() => setShowModal(true)} className="btn btn-primary flex items-center gap-3 px-6 py-3 sm:px-8 sm:py-4 text-xs">
