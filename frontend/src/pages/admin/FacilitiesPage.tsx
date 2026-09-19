@@ -14,7 +14,6 @@ import {
   Check,
   X as XIcon,
   MapPin,
-  Map as MapTrifold,
   LoaderCircle as Spinner,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
