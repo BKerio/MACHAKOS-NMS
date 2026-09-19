@@ -479,6 +479,22 @@ model Facility {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SubCounty - user-extensible administrative region list (county-specific,
+// e.g. Machakos's 8 sub-counties). Referenced by name as free text from
+// Facility.subCounty / Incident.subCounty, not a foreign key, so admins can
+// freely add/remove entries without touching existing records.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SubCounty {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("sub_counties")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CallLog - Yeastar PBX call records
 // ─────────────────────────────────────────────────────────────────────────────
 

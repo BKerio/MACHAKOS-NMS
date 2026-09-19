@@ -25,14 +25,9 @@ import Map from '@/components/shared/Map';
 
 const FACILITY_TYPES = ['Hospital', 'Health Centre', 'Clinic', 'Dispensary', 'Nursing Home', 'Maternity'];
 const KEPH_LEVELS = [1, 2, 3, 4, 5, 6];
-const NAIROBI_SUB_COUNTIES = [
-  'Dagoretti North', 'Dagoretti South', 'Embakasi Central', 'Embakasi East',
-  'Embakasi North', 'Embakasi South', 'Embakasi West', 'Kamukunji', 'Kasarani',
-  "Kibra", "Lang'ata", 'Makadara', 'Mathare', 'Roysambu', 'Ruaraka', 'Starehe', 'Westlands',
-];
 
-// Nairobi centre
-const NAIROBI: [number, number] = [-1.2864, 36.8172];
+// Machakos Town centre
+const MACHAKOS_CENTER: [number, number] = [-1.5177, 37.2634];
 
 const kephBadge: Record<number, { bg: string; color: string }> = {
   1: { bg: 'var(--surface-2)', color: 'var(--muted)' },
@@ -91,6 +86,15 @@ function FacilitiesPage() {
       const res = await api.get('/admin/facilities', { params });
       return res.data.data as Facility[];
     },
+  });
+
+  const { data: subCounties = [] } = useQuery({
+    queryKey: ['admin', 'sub-counties'],
+    queryFn: async () => {
+      const res = await api.get('/admin/sub-counties');
+      return (res.data.data as { name: string }[]).map(s => s.name);
+    },
+    staleTime: 5 * 60_000,
   });
 
   const createMutation = useMutation({
@@ -155,7 +159,7 @@ function FacilitiesPage() {
     searchTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Nairobi, Kenya')}&limit=5&addressdetails=1`
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Machakos, Kenya')}&limit=5&addressdetails=1`
         );
         const data = await res.json();
         setSuggestions(data ?? []);
@@ -169,7 +173,7 @@ function FacilitiesPage() {
       address.city_district, address.suburb, address.county,
       address.state_district, address.municipality,
     ].filter(Boolean).map(s => s.toLowerCase());
-    for (const sub of NAIROBI_SUB_COUNTIES) {
+    for (const sub of subCounties) {
       const subLower = sub.toLowerCase();
       if (candidates.some(c => c.includes(subLower) || subLower.includes(c))) return sub;
     }
@@ -320,7 +324,7 @@ function FacilitiesPage() {
           style={{ ...inputStyle, width: 'auto' }}
         >
           <option value="ALL">All Sub-Counties</option>
-          {NAIROBI_SUB_COUNTIES.map(s => <option key={s} value={s}>{s}</option>)}
+          {subCounties.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <select
           value={kephFilter}
@@ -556,7 +560,7 @@ function FacilitiesPage() {
                   onChange={e => setForm(f => ({ ...f, subCounty: e.target.value }))}
                 >
                   <option value="">Select sub-county…</option>
-                  {NAIROBI_SUB_COUNTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {subCounties.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
 
                 {/* Search box */}
@@ -602,7 +606,7 @@ function FacilitiesPage() {
                 {/* Map */}
                 <div className="rounded-xl overflow-hidden border" style={{ height: 240, borderColor: 'var(--border)' }}>
                   <Map
-                    center={pin ? [pin.lat, pin.lng] : NAIROBI}
+                    center={pin ? [pin.lat, pin.lng] : MACHAKOS_CENTER}
                     zoom={pin ? 15 : 13}
                     markers={pin ? [{ id: 'pin', lat: pin.lat, lng: pin.lng, title: form.name || 'Facility', type: 'facility' }] : []}
                     onLocationSelect={handleMapClick}

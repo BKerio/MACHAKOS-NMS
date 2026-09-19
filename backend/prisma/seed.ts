@@ -16,7 +16,7 @@ async function main() {
       id: 'mdc-internal-agency',
       name: 'Machakos Dispatch Center',
       type: AgencyType.INTERNAL,
-      location: 'Nairobi, Kenya',
+      location: 'Machakos, Kenya',
       contactInfo: {
         phone: '+254700000000',
         email: 'eoc@mdc.go.ke',
@@ -44,52 +44,68 @@ async function main() {
   });
   console.log(`✅ Super Admin: ${superAdmin.email}`);
 
-  // ── 3. Sample Facilities (KEPH levels 4–6) ──────────────────────────────────
+  // ── 3. Sub-Counties (Machakos County's 8 official sub-counties) ────────────
+  const subCounties = [
+    'Machakos Town', 'Mavoko', 'Kathiani', 'Masinga',
+    'Matungulu', 'Mwala', 'Yatta', 'Kangundo',
+  ];
+  for (const [i, name] of subCounties.entries()) {
+    await prisma.subCounty.upsert({
+      where: { name },
+      update: {},
+      create: { name, sortOrder: i },
+    });
+  }
+  console.log(`✅ Sub-Counties: ${subCounties.length} seeded`);
+
+  // ── 4. Sample Facilities (KEPH levels 3–5) ──────────────────────────────────
+  // Approximate town-centre coordinates - refine exact pins via the admin
+  // Facilities map picker once real GPS coordinates are confirmed.
   const facilities = [
     {
-      id: 'facility-knh',
-      name: 'Kenyatta National Hospital',
+      id: 'facility-machakos-l5',
+      name: 'Machakos Level 5 Hospital',
       type: 'Referral Hospital',
-      kephLevel: 6,
-      subCounty: 'Dagoretti North',
-      lat: -1.3009,
-      lng: 36.8062,
-    },
-    {
-      id: 'facility-pumwani',
-      name: 'Pumwani Maternity Hospital',
-      type: 'Hospital',
       kephLevel: 5,
-      subCounty: 'Kamukunji',
-      lat: -1.2746,
-      lng: 36.8395,
+      subCounty: 'Machakos Town',
+      lat: -1.5171,
+      lng: 37.2637,
     },
     {
-      id: 'facility-mbagathi',
-      name: 'Mbagathi District Hospital',
+      id: 'facility-mavoko',
+      name: 'Mavoko Sub-County Hospital',
       type: 'District Hospital',
       kephLevel: 4,
-      subCounty: 'Dagoretti South',
-      lat: -1.3223,
-      lng: 36.7636,
+      subCounty: 'Mavoko',
+      lat: -1.4557,
+      lng: 36.9776,
     },
     {
-      id: 'facility-mathare',
-      name: 'Mathare Hospital',
+      id: 'facility-kangundo',
+      name: 'Kangundo Sub-County Hospital',
+      type: 'District Hospital',
+      kephLevel: 4,
+      subCounty: 'Kangundo',
+      lat: -1.2833,
+      lng: 37.3667,
+    },
+    {
+      id: 'facility-kathiani',
+      name: 'Kathiani Sub-County Hospital',
       type: 'Hospital',
       kephLevel: 4,
-      subCounty: 'Mathare',
-      lat: -1.2612,
-      lng: 36.8619,
+      subCounty: 'Kathiani',
+      lat: -1.5667,
+      lng: 37.2000,
     },
     {
-      id: 'facility-ruaraka',
-      name: 'Ruaraka Health Centre',
+      id: 'facility-tala',
+      name: 'Tala Health Centre',
       type: 'Health Centre',
       kephLevel: 3,
-      subCounty: 'Ruaraka',
-      lat: -1.2480,
-      lng: 36.8813,
+      subCounty: 'Matungulu',
+      lat: -1.3667,
+      lng: 37.2833,
     },
   ];
 
@@ -102,7 +118,7 @@ async function main() {
     console.log(`✅ Facility: ${facility.name} (KEPH ${facility.kephLevel})`);
   }
 
-  // ── 4. Ambulance Checklist - ALS Ambulance Monthly Checklist inventory ─────
+  // ── 5. Ambulance Checklist - ALS Ambulance Monthly Checklist inventory ─────
   // Source: ambulance_checklist.xlsx. Each row becomes an InventoryItem, with
   // quantityStock/reorderLevel seeded to the checklist's "Required Qty" (the
   // minimum that must be on board). Vehicle-section rows are pass/fail
@@ -290,7 +306,7 @@ async function main() {
   }
   console.log(`✅ Ambulance Checklist: ${checklistItems.length} inventory items across ${new Set(checklistItems.map((i) => CHECKLIST_CATEGORY_MAP[i.category] ?? 'OTHER')).size} categories`);
 
-  // ── 5. Fleet - real vehicles from Uffizio/Kimii Telematics ─────────────────
+  // ── 6. Fleet - real vehicles from Uffizio/Kimii Telematics ─────────────────
   // IMEIs confirmed from live Uffizio API response (getTokenBaseLiveData),
   // company "MACHAKOS DISPATCH CENTER" (as of 2026-09-09 - the account was
   // switched from the earlier Nairobi EOC one; see the old fleet below).
@@ -370,7 +386,7 @@ async function main() {
   });
   console.log(`✅ Crew created: Driver, EMT, Nurse`);
 
-  // ── 6. Frontend Developer Account ──────────────────────────────────────────
+  // ── 7. Frontend Developer Account ──────────────────────────────────────────
   const erickyHash = await bcrypt.hash('12345678', 10);
   const ericky = await prisma.user.upsert({
     where: { email: 'ericksonmutai56@gmail.com' },
@@ -386,7 +402,7 @@ async function main() {
   });
   console.log(`✅ Frontend Dev: ${ericky.email}`);
 
-  // ── 7. Joe (AFOSI Admin) ────────────────────────────────────────────────────
+  // ── 8. Joe (AFOSI Admin) ────────────────────────────────────────────────────
   const joeHash = await bcrypt.hash('joeyflow21', 10);
   const joe = await prisma.user.upsert({
     where: { email: 'joe@afosi.org' },

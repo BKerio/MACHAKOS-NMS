@@ -31,12 +31,6 @@ import type { Facility } from '@/types/api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const SUB_COUNTIES = [
-  'Dagoretti North','Dagoretti South','Embakasi Central','Embakasi East',
-  'Embakasi North','Embakasi South','Embakasi West','Kamukunji','Kasarani',
-  'Kibra',"Lang'ata",'Makadara','Mathare','Roysambu','Ruaraka','Starehe','Westlands',
-];
-
 const ALERT_MODES = ['Phone', 'Radio', 'Walk-in', 'Other'];
 
 const ORIGIN_OPTIONS = [
@@ -295,8 +289,8 @@ const defaultForm: FormState = {
   originOfAlert: '',
   locationName: '',
   subCounty: '',
-  lat: -1.2921,
-  lng: 36.8219,
+  lat: -1.5177,
+  lng: 37.2634,
   patientName: '',
   patientContact: '',
   patientNationalId: '',
@@ -371,6 +365,16 @@ function NewIncidentWizard() {
   const detailsForNature = natureOptions.find(o => o.nature === form.alertNature)?.details ?? [];
   const isMaternity = form.alertNature?.toLowerCase().includes('maternity');
 
+  // ── Sub-counties (accessible to all roles) ─────────────────────────────────
+  const { data: subCounties = [] } = useQuery<string[]>({
+    queryKey: ['sub-counties'],
+    queryFn: async () => {
+      const res = await api.get('/incidents/sub-counties');
+      return res.data.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
   // ── Referral facilities - same source as the dispatcher's dropdown ─────────
   const { data: facilities = [] } = useQuery<Facility[]>({
     queryKey: ['facilities'],
@@ -412,9 +416,9 @@ function NewIncidentWizard() {
 
   // ── Sub-county detection ───────────────────────────────────────────────────
   // Bare direction words are NEVER enough to pick a sub-county on their own.
-  // Google frequently returns a component of just "North" / "West" for Nairobi
-  // addresses; matching that loosely used to select "Dagoretti North" for
-  // incidents anywhere in the city.
+  // Google frequently returns a component of just "North" / "West" in an
+  // address; matching that loosely could otherwise wrongly select a
+  // directional sub-county for incidents anywhere in the county.
   const DIRECTION_WORDS = new Set(['north', 'south', 'east', 'west', 'central']);
 
   const normalizePlace = (s: string) =>
@@ -423,29 +427,29 @@ function NewIncidentWizard() {
   const hasWholeWord = (haystack: string, needle: string) =>
     new RegExp(`(^|\\s)${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|\\s)`).test(haystack);
 
-  // Match any of the given place strings against the known Nairobi sub-counties,
+  // Match any of the given place strings against the known Machakos sub-counties,
   // strongest signal first.
   function matchSubCounty(candidates: string[]): string {
     const lowered = candidates.filter(Boolean).map(normalizePlace).filter(Boolean);
     if (lowered.length === 0) return '';
 
-    // 1. Exact match - "Embakasi Central" === "Embakasi Central"
-    for (const sub of SUB_COUNTIES) {
+    // 1. Exact match - "Kathiani" === "Kathiani"
+    for (const sub of subCounties) {
       const s = normalizePlace(sub);
       if (lowered.some(c => c === s)) return sub;
     }
 
     // 2. A candidate contains the FULL sub-county name as whole words -
-    //    e.g. "Embakasi Central Constituency" → Embakasi Central
-    for (const sub of SUB_COUNTIES) {
+    //    e.g. "Kathiani Constituency" → Kathiani
+    for (const sub of subCounties) {
       const s = normalizePlace(sub);
       if (lowered.some(c => hasWholeWord(c, s))) return sub;
     }
 
     // 3. A distinctive candidate word appears in the sub-county name -
-    //    e.g. "Kasarani" → Kasarani. Direction words and very short tokens are
+    //    e.g. "Mavoko" → Mavoko. Direction words and very short tokens are
     //    excluded so "North" can never decide the sub-county by itself.
-    for (const sub of SUB_COUNTIES) {
+    for (const sub of subCounties) {
       const s = normalizePlace(sub);
       if (lowered.some(c => c.length >= 4 && !DIRECTION_WORDS.has(c) && hasWholeWord(s, c))) {
         return sub;
@@ -485,7 +489,7 @@ function NewIncidentWizard() {
       const timer = setTimeout(async () => {
         try {
           const res  = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(form.locationName + ', Nairobi, Kenya')}&limit=5&addressdetails=1`
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(form.locationName + ', Machakos, Kenya')}&limit=5&addressdetails=1`
           );
           const data = await res.json();
           setSuggestions(data ?? []);
@@ -511,7 +515,7 @@ function NewIncidentWizard() {
     try {
       const details = await places.getDetails(placeId);
       // Prefer Google's own components; fall back to a reverse geocode of the
-      // coordinates (Google is unreliable for Nairobi constituencies).
+      // coordinates (Google is unreliable for Machakos's constituencies).
       let detectedSub = matchSubCounty(details.subCountyCandidates);
       if (!detectedSub) {
         setIsReverseGeocoding(true);
@@ -1019,7 +1023,7 @@ function NewIncidentWizard() {
                     )}
                   </div>
                   <CreatableCombobox
-                    options={SUB_COUNTIES}
+                    options={subCounties}
                     value={form.subCounty}
                     onChange={(v) => { set({ subCounty: v }); setSubCountySource(v ? 'MANUAL' : ''); }}
                     onCreateOption={() => {}}

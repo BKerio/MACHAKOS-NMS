@@ -204,7 +204,7 @@ function StandbyPage() {
               </div>
               <div>
                 <label className={labelCls} style={{ color: 'var(--muted)' }}>Location</label>
-                <input className={inputCls} style={inputStyle} placeholder="e.g. Kasarani Stadium" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
+                <input className={inputCls} style={inputStyle} placeholder="e.g. Machakos Stadium" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
               </div>
               <div>
                 <label className={labelCls} style={{ color: 'var(--muted)' }}>Start Time</label>

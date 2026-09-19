@@ -125,6 +125,17 @@ export const incidentRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
   );
 
   /**
+   * GET /incidents/sub-counties - list sub-county names (accessible to all authenticated roles)
+   */
+  app.get('/sub-counties', async (_request, reply) => {
+    const subCounties = await app.prisma.subCounty.findMany({
+      orderBy: { sortOrder: 'asc' },
+      select: { name: true },
+    });
+    return reply.send({ ok: true, data: subCounties.map(s => s.name) });
+  });
+
+  /**
    * GET /incidents/facilities - list active facilities (accessible to all authenticated roles)
    */
   app.get<{ Querystring: { subCounty?: string } }>('/facilities', async (request, reply) => {

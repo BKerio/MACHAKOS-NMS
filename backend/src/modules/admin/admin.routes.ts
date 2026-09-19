@@ -292,6 +292,31 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.send({ ok: true });
   });
 
+  // ── Sub-Counties (admin CRUD) ──────────────────────────────────────────────
+
+  app.get('/sub-counties', async (_request, reply) => {
+    const subCounties = await app.prisma.subCounty.findMany({ orderBy: { sortOrder: 'asc' } });
+    return reply.send({ ok: true, data: subCounties });
+  });
+
+  app.post<{ Body: { name: string } }>('/sub-counties', async (request, reply) => {
+    const name = request.body.name?.trim();
+    if (!name) throw new BadRequestError('Name is required');
+    const existing = await app.prisma.subCounty.findUnique({ where: { name } });
+    if (existing) return reply.send({ ok: true, data: existing });
+    // Append after existing entries so admin-added ones don't jump to the top.
+    const max = await app.prisma.subCounty.aggregate({ _max: { sortOrder: true } });
+    const subCounty = await app.prisma.subCounty.create({
+      data: { name, sortOrder: (max._max.sortOrder ?? -1) + 1 },
+    });
+    return reply.status(201).send({ ok: true, data: subCounty });
+  });
+
+  app.delete<{ Params: { id: string } }>('/sub-counties/:id', async (request, reply) => {
+    await app.prisma.subCounty.delete({ where: { id: request.params.id } });
+    return reply.send({ ok: true });
+  });
+
   // ── Partner Ambulances (reference info only - no GPS trackers) ────────────────
 
   app.get('/partner-ambulances', async (_request, reply) => {
