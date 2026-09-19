@@ -11,10 +11,14 @@ import {
   Plus,
   Trash2 as Trash,
   Tag,
+  Building2 as Buildings,
+  Pencil as PencilSimple,
+  Check,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/api/client';
+import { Agency } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
 
 interface SystemHealth {
@@ -32,6 +36,99 @@ function StatusBadge({ online, label }: { online: boolean; label: string }) {
       {online ? <CheckCircle /> : <XCircle />}
       {label}
     </span>
+  );
+}
+
+function OrganizationSettings() {
+  const queryClient = useQueryClient();
+  const { addNotification } = useNotificationStore();
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState('');
+
+  const { data: agencies = [] } = useQuery<Agency[]>({
+    queryKey: ['admin', 'agencies', 'INTERNAL'],
+    queryFn: async () => {
+      const res = await api.get('/admin/agencies?type=INTERNAL');
+      return res.data.data;
+    },
+  });
+
+  const agency = agencies[0];
+
+  useEffect(() => {
+    if (agency && !isEditing) setName(agency.name);
+  }, [agency, isEditing]);
+
+  const updateMutation = useMutation({
+    mutationFn: (newName: string) => api.patch(`/admin/agencies/${agency!.id}`, { name: newName }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'agencies'] });
+      setIsEditing(false);
+      addNotification({ type: 'success', title: 'Organization Renamed', message: 'The new name now appears across the app.' });
+    },
+    onError: (err: any) => {
+      addNotification({ type: 'error', title: 'Failed', message: err?.response?.data?.message || 'Could not rename organization.' });
+    },
+  });
+
+  function save() {
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || !agency) return;
+    updateMutation.mutate(trimmed);
+  }
+
+  return (
+    <div className="bg-white border border-surface-border rounded-xl shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-surface-border bg-slate-50 flex items-center gap-3">
+        <Buildings size={20} className="text-slate-text" />
+        <h3 className="font-semibold text-brand-teal">Organization</h3>
+      </div>
+      <div className="p-6 flex flex-col gap-6">
+        <div className="flex justify-between items-center">
+          <div className="flex-1">
+            <h4 className="font-sans text-sm font-bold text-slate-800">Agency Name</h4>
+            <p className="font-sans text-sm text-slate-500 mt-1 mb-3">
+              The name shown across the app for your dispatch center.
+            </p>
+            {isEditing ? (
+              <div className="flex gap-2 max-w-md">
+                <input
+                  className="flex-1 border border-surface-border rounded-lg px-3 py-2 text-sm"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && save()}
+                  autoFocus
+                />
+                <button
+                  onClick={save}
+                  disabled={updateMutation.isPending || name.trim().length < 2}
+                  className="bg-brand-teal text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1 hover:opacity-90 disabled:opacity-50"
+                >
+                  <Check size={14} /> {updateMutation.isPending ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setIsEditing(false); setName(agency?.name ?? ''); }}
+                  className="border border-surface-border px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <span className="font-sans text-lg font-bold text-slate-800">{agency?.name ?? '—'}</span>
+            )}
+          </div>
+          {!isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              disabled={!agency}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-brand-teal border border-surface-border hover:bg-slate-50 disabled:opacity-50"
+            >
+              <PencilSimple size={14} /> Rename
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -232,6 +329,8 @@ function SystemSettingsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 flex flex-col gap-6">
+
+          <OrganizationSettings />
 
           {/* Security & Access */}
           <div className="bg-white border border-surface-border rounded-xl shadow-sm overflow-hidden">
