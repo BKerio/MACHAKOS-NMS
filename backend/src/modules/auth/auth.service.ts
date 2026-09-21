@@ -4,6 +4,7 @@ import { hashPassword, comparePassword } from '../../shared/utils/hash.js';
 import { Role } from '../../shared/types/index.js';
 import { AppError, UnauthorizedError, ConflictError, BadRequestError, NotFoundError } from '../../shared/errors/AppError.js';
 import { normalizeKenyanMobile, sendAdvantaSms } from '../../services/sms.js';
+import { parseGoogleClientIds, verifyGoogleIdToken } from '../../services/googleAuth.js';
 import { getOtpStore } from './otp.store.js';
 
 // Field-crew roles that sign in with phone + SMS code instead of email + password.
@@ -91,11 +92,60 @@ export class AuthService {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    // Drivers/EMTs/Nurses sign in with phone + SMS code now - point them there
+    // Drivers/EMTs/Nurses sign in with phone OTP or Google - point them there
     // instead of letting a stale password in.
     const roles = user.roles.length ? user.roles : [user.role];
     if (roles.some((r) => OTP_ELIGIBLE_ROLES.includes(r))) {
-      throw new UnauthorizedError('Drivers, EMTs, and Nurses now sign in with a phone number and SMS code. Use Field Crew Login.');
+      throw new UnauthorizedError(
+        'Drivers, EMTs, and Nurses sign in with phone + SMS code or Google. Use Field Crew Login.'
+      );
+    }
+
+    return this.issueSession(user);
+  }
+
+  /**
+   * Field-crew Google Sign-In: verifies the Google ID token, then matches the
+   * verified email to an active onboarded Driver/EMT/Nurse account. Does not
+   * create users - Admin Add Personnel must have registered the email first.
+   */
+  async loginWithGoogle(idToken: string) {
+    const clientIds = parseGoogleClientIds(this.app.config.GOOGLE_CLIENT_IDS);
+    if (!clientIds.length) {
+      throw new AppError('Google Sign-In is not configured. Contact your administrator.', 503);
+    }
+
+    let payload;
+    try {
+      payload = await verifyGoogleIdToken(idToken, clientIds);
+    } catch (err) {
+      this.app.log.warn({ err }, 'Google ID token verification failed');
+      throw new UnauthorizedError('Google sign-in failed - invalid or expired token');
+    }
+
+    const email = payload.email?.trim().toLowerCase();
+    if (!email || payload.email_verified === false) {
+      throw new UnauthorizedError('Your Google account email could not be verified');
+    }
+
+    const user = await this.app.prisma.user.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedError(
+        'No onboarded Driver, EMT, or Nurse account matches that Google email. Ask an admin to add your email first.'
+      );
+    }
+
+    const roles = user.roles.length ? user.roles : [user.role];
+    if (!roles.some((r) => OTP_ELIGIBLE_ROLES.includes(r))) {
+      throw new UnauthorizedError(
+        'Google Sign-In is only for Drivers, EMTs, and Nurses. Use Staff Login with email and password.'
+      );
     }
 
     return this.issueSession(user);

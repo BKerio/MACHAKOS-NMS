@@ -18,6 +18,7 @@ const SIGN_IN_ENDPOINTS = [
   '/auth/login',
   '/auth/otp/request',
   '/auth/otp/verify',
+  '/auth/google',
   '/auth/select-role',
 ];
 

@@ -73,6 +73,14 @@ class NmsApi {
     return body['data'] as Map<String, dynamic>;
   }
 
+  /// Field-crew Google Sign-In: exchanges a Google ID token for the same
+  /// session shape as OTP verify. Email must already be onboarded as DRIVER/EMT/NURSE.
+  static Future<Map<String, dynamic>> loginWithGoogle(String idToken) async {
+    final res = await _post('/auth/google', {'idToken': idToken});
+    final body = _unwrap(res);
+    return body['data'] as Map<String, dynamic>;
+  }
+
   static Future<Map<String, dynamic>> selectRole(String pendingToken, String role) async {
     final res = await http.post(
       _u('/auth/select-role'),

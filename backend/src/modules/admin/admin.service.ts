@@ -66,7 +66,7 @@ export class AdminService {
     const passwordHash = await hashPassword(data.passwordRaw);
     return this.app.prisma.user.create({
       data: {
-        email: data.email, passwordHash, name: data.name,
+        email: data.email.trim().toLowerCase(), passwordHash, name: data.name,
         role: roles[0], roles, agencyId: data.agencyId, phone: data.phone,
       },
       select: { id: true, name: true, email: true, role: true, roles: true, agencyId: true, createdAt: true },

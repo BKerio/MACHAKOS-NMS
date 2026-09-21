@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { Role } from '@/types/api';
 import { ROLE_ROUTES } from '@/components/dev/DevRoleSwitcher';
+import { mountGoogleSignInButton } from '@/lib/googleAuth';
 import Logo1 from '@/assets/logos/malteser.png';
 import Logo2 from '@/assets/logos/nccg.jpg';
 
@@ -70,8 +71,10 @@ function LoginPage() {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [resendIn, setResendIn] = useState(0);
   const codeInputRef = useRef<HTMLInputElement>(null);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -96,6 +99,44 @@ function LoginPage() {
     });
     navigate(routeForRole(result.user.role));
   };
+
+  const completeGoogleLogin = async (idToken: string) => {
+    setServerError('');
+    setGoogleSubmitting(true);
+    try {
+      const res = await api.post('/auth/google', { idToken });
+      finishLogin(res.data.data);
+    } catch (error: any) {
+      const msg = error?.response?.data?.message;
+      setServerError(msg || 'Google sign-in failed. Use your onboarded Gmail, or sign in with phone.');
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  };
+
+  // Single official Google Sign-In button (GIS) on the field-crew phone step.
+  useEffect(() => {
+    if (mode !== 'field' || otpStep !== 'phone' || pendingSelection) return;
+    const el = googleBtnRef.current;
+    if (!el) return;
+
+    let cancelled = false;
+    void mountGoogleSignInButton(
+      el,
+      (idToken) => {
+        if (!cancelled) void completeGoogleLogin(idToken);
+      },
+      (message) => {
+        if (!cancelled) setServerError(message);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      el.replaceChildren();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, otpStep, pendingSelection]);
 
   const onSubmit = async (data: LoginForm) => {
     setServerError('');
@@ -345,8 +386,33 @@ function LoginPage() {
               ) : otpStep === 'phone' ? (
                 <form onSubmit={requestCode} className="col" style={{ gap: 16, marginTop: serverError ? 16 : 12 }}>
                   <p className="login-sub" style={{ margin: 0 }}>
-                    For Drivers, EMTs, and Nurses. We&apos;ll text a 6-digit code to your registered phone number.
+                    For Drivers, EMTs, and Nurses. Sign in with your onboarded Google account or a code texted to your registered phone.
                   </p>
+
+                  <div
+                    ref={googleBtnRef}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      minHeight: 44,
+                      opacity: googleSubmitting ? 0.6 : 1,
+                      pointerEvents: googleSubmitting ? 'none' : 'auto',
+                    }}
+                    aria-busy={googleSubmitting}
+                  />
+                  {googleSubmitting && (
+                    <p className="login-sub" style={{ margin: 0, textAlign: 'center', fontSize: 13 }}>
+                      <LoaderCircle size={14} className="spin" style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
+                      Signing in with Google…
+                    </p>
+                  )}
+
+                  <div className="row" style={{ alignItems: 'center', gap: 12 }} aria-hidden>
+                    <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', letterSpacing: 0.04 }}>or phone</span>
+                    <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                  </div>
+
                   <div className="field">
                     <label className="label" htmlFor="login-phone">Phone number</label>
                     <div className="input-icon">
@@ -356,7 +422,6 @@ function LoginPage() {
                         type="tel"
                         inputMode="tel"
                         autoComplete="tel"
-                        autoFocus
                         placeholder="0712345678"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
@@ -367,7 +432,7 @@ function LoginPage() {
 
                   <button
                     className="btn btn-primary btn-block btn-lg login-submit"
-                    disabled={otpSubmitting || phone.trim().length < 9}
+                    disabled={otpSubmitting || googleSubmitting || phone.trim().length < 9}
                     type="submit"
                     style={{ marginTop: 4 }}
                   >

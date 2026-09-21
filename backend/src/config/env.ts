@@ -96,6 +96,13 @@ const schema = {
       type: 'string',
       default: '',
     },
+    // Google Sign-In for field crew (Driver/EMT/Nurse). Comma-separated OAuth
+    // client IDs from Google Cloud Console (Web + Android + iOS as needed).
+    // The ID token audience must match one of these. Leave empty to disable.
+    GOOGLE_CLIENT_IDS: {
+      type: 'string',
+      default: '',
+    },
   },
 };
 
@@ -126,6 +133,7 @@ declare module 'fastify' {
       YEASTAR_CLIENT_SECRET: string;
       YEASTAR_WEBHOOK_SECRET: string;
       GOOGLE_MAPS_KEY: string;
+      GOOGLE_CLIENT_IDS: string;
     };
   }
 }

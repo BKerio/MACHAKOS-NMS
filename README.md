@@ -204,7 +204,7 @@ To ensure accountability across all roles, the system will implement automated a
 ## 4. API & Socket.io Endpoint Map
 
 ### REST API (Fastify)
-- **Auth**: `POST /auth/login`, `POST /auth/register`, `POST /auth/otp/verify`, `GET /auth/me`
+- **Auth**: `POST /auth/login`, `POST /auth/otp/*`, `POST /auth/google` (field crew Google ID token → JWT), `GET /auth/me`
 - **Watchers**: `GET /incidents`, `POST /incidents`, `GET /incidents/:id`, `PATCH /incidents/:id/submit`
 - **Dispatchers**: 
     - `GET /dispatch/queue` (Pending cases)

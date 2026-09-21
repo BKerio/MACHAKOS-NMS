@@ -2,16 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:eoc_mcg/config/server.dart';
 import 'package:eoc_mcg/screen/operator/operator_shell.dart';
 import 'package:eoc_mcg/services/nms_api.dart';
 import 'package:eoc_mcg/services/notification_service.dart';
 import 'package:eoc_mcg/theme/tokens.dart';
 
 /// Flutter counterpart of frontend/src/pages/auth/LoginPage.tsx - same
-/// co-branded card, phone -> code steps, multi-role picker and footer, so
+/// co-branded card, Google + phone OTP, multi-role picker and footer, so
 /// crews see one consistent sign-in across web and phone.
 ///
-/// Goes straight to phone entry: the backend rejects password login for
+/// Goes straight to field-crew entry: the backend rejects password login for
 /// Drivers/EMTs/Nurses, and this app has no dispatcher or admin screens to
 /// land a staff account on, so there's no staff-login tab to choose here.
 class OtpLoginScreen extends StatefulWidget {
@@ -61,12 +64,22 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
   _OtpStep _otpStep = _OtpStep.phone;
 
   bool _submitting = false;
+  bool _googleSubmitting = false;
   bool _selectingRole = false;
   String _serverError = '';
   int _resendIn = 0;
   Timer? _resendTimer;
 
   _PendingSelection? _pendingSelection;
+
+  GoogleSignIn? _googleSignIn;
+
+  GoogleSignIn get _google {
+    return _googleSignIn ??= GoogleSignIn(
+      scopes: const ['email', 'profile'],
+      serverClientId: Config.googleServerClientId.isEmpty ? null : Config.googleServerClientId,
+    );
+  }
 
   @override
   void dispose() {
@@ -91,7 +104,7 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
   }
 
   Future<void> _requestCode() async {
-    if (_submitting) return;
+    if (_submitting || _googleSubmitting) return;
     final phone = _phoneController.text.trim();
     if (phone.length < 9) {
       setState(() => _serverError = 'Enter a valid phone number.');
@@ -120,6 +133,75 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
     }
   }
 
+  Future<void> _applySession(Map<String, dynamic> session) async {
+    if (session['requiresRoleSelection'] == true) {
+      final user = session['user'] as Map<String, dynamic>? ?? {};
+      setState(() {
+        _pendingSelection = _PendingSelection(
+          pendingToken: session['pendingToken'] as String,
+          roles: (session['roles'] as List<dynamic>).cast<String>(),
+          name: user['name'] as String? ?? '',
+        );
+      });
+      return;
+    }
+
+    await NmsApi.saveSession(session);
+    unawaited(NotificationService().uploadToken());
+    _goToShell();
+  }
+
+  Future<void> _signInWithGoogle() async {
+    if (_googleSubmitting || _submitting) return;
+    if (!Config.googleSignInConfigured) {
+      setState(() => _serverError = 'Google Sign-In is not configured on this build.');
+      return;
+    }
+
+    setState(() {
+      _serverError = '';
+      _googleSubmitting = true;
+    });
+
+    try {
+      final account = await _google.signIn();
+      if (account == null) {
+        if (mounted) {
+          setState(() => _serverError = 'Google sign-in was cancelled. You can also use your phone number.');
+        }
+        return;
+      }
+
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _serverError =
+                'Google did not return an ID token. Ensure GOOGLE_SERVER_CLIENT_ID is set to your Web client ID.';
+          });
+        }
+        return;
+      }
+
+      final session = await NmsApi.loginWithGoogle(idToken);
+      if (!mounted) return;
+      await _applySession(session);
+    } on NmsApiException catch (e) {
+      if (mounted) setState(() => _serverError = e.message);
+      try {
+        await _google.signOut();
+      } catch (_) {}
+    } catch (e) {
+      if (mounted) setState(() => _serverError = errorMessage(e));
+      try {
+        await _google.signOut();
+      } catch (_) {}
+    } finally {
+      if (mounted) setState(() => _googleSubmitting = false);
+    }
+  }
+
   Future<void> _verifyCode() async {
     final code = _codeController.text.trim();
     if (code.length != 6 || _submitting) return;
@@ -131,22 +213,7 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
     try {
       final session = await NmsApi.verifyOtp(_phoneController.text.trim(), code);
       if (!mounted) return;
-
-      if (session['requiresRoleSelection'] == true) {
-        final user = session['user'] as Map<String, dynamic>? ?? {};
-        setState(() {
-          _pendingSelection = _PendingSelection(
-            pendingToken: session['pendingToken'] as String,
-            roles: (session['roles'] as List<dynamic>).cast<String>(),
-            name: user['name'] as String? ?? '',
-          );
-        });
-        return;
-      }
-
-      await NmsApi.saveSession(session);
-      unawaited(NotificationService().uploadToken());
-      _goToShell();
+      await _applySession(session);
     } on NmsApiException catch (e) {
       if (mounted) {
         setState(() => _serverError = e.message);
@@ -371,21 +438,31 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
   }
 
   Widget _buildPhoneStep() {
-    final canSubmit = _phoneController.text.trim().length >= 9 && !_submitting;
+    final canSubmit = _phoneController.text.trim().length >= 9 && !_submitting && !_googleSubmitting;
+    final googleReady = Config.googleSignInConfigured;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Subtitle(
-          "For Drivers, EMTs, and Nurses. We'll text a 6-digit code to your registered phone number.",
+          'For Drivers, EMTs, and Nurses. Sign in with your onboarded Google account or a code texted to your registered phone.',
         ),
+        if (googleReady) ...[
+          const SizedBox(height: 16),
+          _GoogleSignInButton(
+            busy: _googleSubmitting,
+            onPressed: (_googleSubmitting || _submitting) ? null : _signInWithGoogle,
+          ),
+          const SizedBox(height: 16),
+          const _OrDivider(label: 'or phone'),
+        ],
         const SizedBox(height: 16),
         const _FieldLabel('Phone number'),
         const SizedBox(height: 6),
         TextField(
           controller: _phoneController,
           keyboardType: TextInputType.phone,
-          autofocus: true,
+          autofocus: !googleReady,
           textInputAction: TextInputAction.done,
           style: const TextStyle(fontSize: 14, color: AppColors.ink),
           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s]'))],
@@ -624,6 +701,78 @@ class _ResendButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OrDivider extends StatelessWidget {
+  final String label;
+  const _OrDivider({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: Divider(color: AppColors.border, height: 1)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.muted,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+        const Expanded(child: Divider(color: AppColors.border, height: 1)),
+      ],
+    );
+  }
+}
+
+class _GoogleSignInButton extends StatelessWidget {
+  final bool busy;
+  final VoidCallback? onPressed;
+
+  const _GoogleSignInButton({required this.busy, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.ink,
+          side: const BorderSide(color: AppColors.border),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+        ),
+        child: busy
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.muted),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SvgPicture.asset(
+                    'asset/google_g.svg',
+                    width: 22,
+                    height: 22,
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Continue with Google',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
       ),
     );
   }

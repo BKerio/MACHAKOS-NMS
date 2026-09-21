@@ -31,6 +31,10 @@ const otpVerifySchema = z.object({
   code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
 });
 
+const googleLoginSchema = z.object({
+  idToken: z.string().min(20, 'Google ID token is required'),
+});
+
 const updateMeSchema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters').optional(),
@@ -84,6 +88,17 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
 
     const result = await authService.verifyOtp(parsed.data.phone, parsed.data.code);
+    return reply.send({ ok: true, data: result });
+  });
+
+  // Field crew: Google ID token → same JWT session as OTP (onboarded email only).
+  app.post('/google', async (request, reply) => {
+    const parsed = googleLoginSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0].message);
+    }
+
+    const result = await authService.loginWithGoogle(parsed.data.idToken);
     return reply.send({ ok: true, data: result });
   });
 
