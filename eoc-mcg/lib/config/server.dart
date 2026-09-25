@@ -1,7 +1,7 @@
 class Config {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://machakos.brighton.co.ke/api',
+    defaultValue: 'https://eoc-mcg.brighton.co.ke/api',
   );
 
   /// Web OAuth client ID from Google Cloud Console. Passed as

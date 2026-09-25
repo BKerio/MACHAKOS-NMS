@@ -97,7 +97,7 @@ export class AuthService {
     const roles = user.roles.length ? user.roles : [user.role];
     if (roles.some((r) => OTP_ELIGIBLE_ROLES.includes(r))) {
       throw new UnauthorizedError(
-        'Drivers, EMTs, and Nurses sign in with phone + SMS code or Google. Use Field Crew Login.'
+        'Drivers, EMTs, and Nurses sign in with phone + SMS code. Use Field Crew Login.'
       );
     }
 

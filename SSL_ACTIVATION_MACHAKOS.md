@@ -1,4 +1,4 @@
-# SSL/HTTPS Activation: machakos.brighton.co.ke
+# SSL/HTTPS Activation: eoc-mcg.brighton.co.ke (formerly machakos.brighton.co.ke)
 
 How HTTPS was set up for the NMS-EOC (MACHAKOS-NMS) deployment on `34.30.37.245`. Same pattern as [SSL_ACTIVATION.md](SSL_ACTIVATION.md) (tasks.millenium.co.ke), read that first if this is your first time touching either server. Written after the fact as a runbook — read this before touching nginx or Certbot on this server again.
 
@@ -6,14 +6,28 @@ How HTTPS was set up for the NMS-EOC (MACHAKOS-NMS) deployment on `34.30.37.245`
 
 | | |
 |---|---|
-| Live URL | **https://machakos.brighton.co.ke/** |
-| Server | `34.30.37.245` (Ubuntu 22.04.5 LTS, hostname `eocsvr`) |
+| Live URL | **https://eoc-mcg.brighton.co.ke/** |
+| Server | `34.30.37.245` (Ubuntu 22.04.5 LTS, hostname `eocsvr`, SSH user `squadron`, key `~/.ssh/eocsvr_key`) |
 | Web server | nginx 1.18.0 |
-| Certificate | Let's Encrypt, RSA, auto-renewing |
-| Issued | 2026-09-09 → expires 2026-12-08 |
+| Certificate | Let's Encrypt, auto-renewing |
+| Issued | 2026-09-25 → expires 2026-12-24 |
 | Certbot account email | briankerio47@gmail.com |
 
-`http://machakos.brighton.co.ke/` and `http://34.30.37.245/` both redirect (301) to the HTTPS URL above.
+`http://eoc-mcg.brighton.co.ke/` and `http://34.30.37.245/` both redirect (301) to the HTTPS URL above.
+
+## Domain move: machakos.brighton.co.ke → eoc-mcg.brighton.co.ke (2026-09-25)
+
+The `machakos.brighton.co.ke` DNS record was removed (NXDOMAIN on both 1.1.1.1 and 8.8.8.8) and `eoc-mcg.brighton.co.ke` was pointed at `34.30.37.245` instead. The server itself was healthy throughout; only DNS changed. To move over:
+
+1. Backed up `nms-eoc` and `ip-redirect` to `/root/nginx-backups/*.bak.20260925-054405`.
+2. `nms-eoc`: both `server_name` lines → `eoc-mcg.brighton.co.ke machakos.brighton.co.ke` (old name kept so it works again if its DNS is ever restored).
+3. `ip-redirect`: bare-IP redirect target → `https://eoc-mcg.brighton.co.ke`.
+4. `sudo certbot --nginx -d eoc-mcg.brighton.co.ke --non-interactive --agree-tos -m briankerio47@gmail.com --redirect < /dev/null` — new cert at `/etc/letsencrypt/live/eoc-mcg.brighton.co.ke/`, installed into `nms-eoc`. The old `machakos.brighton.co.ke` cert still exists but is no longer referenced; its renewals will start failing once the old name can't be validated, which is harmless — delete it with `sudo certbot delete --cert-name machakos.brighton.co.ke` when convenient.
+5. `/var/www/MACHAKOS-NMS/frontend/.env` → `VITE_API_BASE_URL=https://eoc-mcg.brighton.co.ke/api`, `VITE_SOCKET_URL=https://eoc-mcg.brighton.co.ke`, then `npm run build`. Without this the page loads but every API call goes to the dead domain.
+
+`CORS_ORIGIN` in the backend `.env` is currently `*` (it was set back from the domain at some point after the original setup), so no backend change was needed.
+
+The rest of this document describes the original 2026-09-09 setup under the old domain; the same structure applies with the new name.
 
 ## Starting point
 
