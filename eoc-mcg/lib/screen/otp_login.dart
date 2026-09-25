@@ -24,11 +24,12 @@ class OtpLoginScreen extends StatefulWidget {
 enum _OtpStep { phone, code }
 
 /// Masks a phone number for display once a code has been sent, e.g.
-/// "0712345678" -> "0712*****78" - keeps enough on each end to confirm it's
+/// "0717000480" -> "0717****480" - keeps enough on each end to confirm it's
 /// the right number without showing the whole thing on screen.
 String maskPhone(String phone) {
-  if (phone.length <= 6) return phone;
-  return '${phone.substring(0, 4)}*****${phone.substring(phone.length - 2)}';
+  final p = phone.replaceAll(RegExp(r'\s'), '');
+  if (p.length <= 7) return p;
+  return '${p.substring(0, 4)}****${p.substring(p.length - 3)}';
 }
 
 const Map<String, String> _roleLabels = {

@@ -39,6 +39,13 @@ function routeForRole(role: Role) {
   return ROLE_ROUTES[role] || '/unauthorized';
 }
 
+/** "0717000480" -> "0717****480": enough to confirm the number without showing it all. */
+function maskPhone(phone: string): string {
+  const p = phone.replace(/\s/g, '');
+  if (p.length <= 7) return p;
+  return `${p.slice(0, 4)}****${p.slice(-3)}`;
+}
+
 interface PendingRoleSelection {
   pendingToken: string;
   roles: Role[];
@@ -141,7 +148,7 @@ function LoginPage() {
       addNotification({
         type: 'success',
         title: 'Code sent',
-        message: `A 6-digit code was sent to ${phone}.`,
+        message: `A 6-digit code was sent to ${maskPhone(phone)}.`,
       });
       setTimeout(() => codeInputRef.current?.focus(), 50);
     } catch (error: any) {
@@ -152,13 +159,12 @@ function LoginPage() {
     }
   };
 
-  const verifyCode = async (e: FormEvent) => {
-    e.preventDefault();
-    if (code.length !== 6 || otpSubmitting) return;
+  const submitCode = async (value: string) => {
+    if (value.length !== 6 || otpSubmitting) return;
     setServerError('');
     setOtpSubmitting(true);
     try {
-      const res = await api.post('/auth/otp/verify', { phone, code });
+      const res = await api.post('/auth/otp/verify', { phone, code: value });
       finishLogin(res.data.data);
     } catch (error: any) {
       const msg = error?.response?.data?.message;
@@ -166,6 +172,18 @@ function LoginPage() {
     } finally {
       setOtpSubmitting(false);
     }
+  };
+
+  const verifyCode = (e: FormEvent) => {
+    e.preventDefault();
+    void submitCode(code);
+  };
+
+  // Verifies as soon as the 6th digit lands (typed, pasted, or SMS autofill).
+  const onCodeChange = (raw: string) => {
+    const next = raw.replace(/\D/g, '').slice(0, 6);
+    setCode(next);
+    if (next.length === 6 && next !== code) void submitCode(next);
   };
 
   const switchMode = (next: LoginMode) => {
@@ -394,7 +412,7 @@ function LoginPage() {
                   </button>
 
                   <div className="field">
-                    <label className="label" htmlFor="login-code">Enter the 6-digit code sent to {phone}</label>
+                    <label className="label" htmlFor="login-code">Enter the 6-digit code sent to {maskPhone(phone)}</label>
                     <div className="input-icon">
                       <input
                         ref={codeInputRef}
@@ -407,7 +425,7 @@ function LoginPage() {
                         placeholder="000000"
                         style={{ letterSpacing: 4, fontWeight: 700 }}
                         value={code}
-                        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        onChange={(e) => onCodeChange(e.target.value)}
                       />
                       <KeyRound size={16} />
                     </div>
