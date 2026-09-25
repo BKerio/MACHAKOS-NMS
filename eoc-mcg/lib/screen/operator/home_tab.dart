@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:eoc_mcg/models/task.dart';
@@ -33,10 +35,31 @@ class _HomeTabState extends State<HomeTab> {
   /// Bumped on check-in/out so the check-in and crew cards rebuild with fresh data.
   int _refreshToken = 0;
 
+  /// Re-reads the checked-in vehicle so the fuel reading tracks the GPS
+  /// poller (~1 min), without rebuilding the check-in/crew cards.
+  Timer? _fuelTimer;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _fuelTimer = Timer.periodic(const Duration(seconds: 60), (_) => _refreshVehicle());
+  }
+
+  @override
+  void dispose() {
+    _fuelTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshVehicle() async {
+    if (_myVehicle == null) return;
+    try {
+      final vehicle = await NmsApi.getMyCheckIn();
+      if (mounted) setState(() => _myVehicle = vehicle);
+    } catch (_) {
+      // Keep the last reading on a transient network error.
+    }
   }
 
   Future<void> _load() async {
@@ -95,6 +118,10 @@ class _HomeTabState extends State<HomeTab> {
             userId: _userId,
             onChanged: _refresh,
           ),
+          if (_myVehicle != null) ...[
+            const SizedBox(height: 16),
+            _FuelCard(vehicle: _myVehicle!),
+          ],
           if (isDriver && _myVehicle != null) ...[
             const SizedBox(height: 16),
             CrewAssignmentCard(
@@ -108,6 +135,93 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 10),
           _QuickAccessGrid(activeTask: _activeTask, historyCount: _historyCount, onSelectTab: widget.onSelectTab),
           const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+/// Live fuel level of the checked-in ambulance, from its GPS tracker's fuel
+/// sensor. Only some units have a sensor fitted; the rest show a notice.
+class _FuelCard extends StatelessWidget {
+  final Vehicle vehicle;
+
+  const _FuelCard({required this.vehicle});
+
+  // The poller refreshes fuel about every minute; a much older reading
+  // usually means the tracker is offline, not that the level is current.
+  static const _staleAfter = Duration(hours: 2);
+
+  static String _timeAgo(DateTime at) {
+    final mins = DateTime.now().difference(at).inMinutes;
+    if (mins < 1) return 'just now';
+    if (mins < 60) return '$mins min ago';
+    final hours = (mins / 60).round();
+    if (hours < 24) return '$hours hr${hours == 1 ? '' : 's'} ago';
+    final days = (hours / 24).round();
+    return '$days day${days == 1 ? '' : 's'} ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final litres = vehicle.lastFuelLevelL;
+    final readAt = DateTime.tryParse(vehicle.lastFuelLevelAt ?? '')?.toLocal();
+    final hasReading = litres != null && readAt != null;
+    final stale = hasReading && DateTime.now().difference(readAt) > _staleAfter;
+
+    return AppCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: hasReading ? AppColors.greenLight : AppColors.surface2,
+              borderRadius: BorderRadius.circular(AppRadius.base),
+            ),
+            child: Icon(
+              Icons.local_gas_station_rounded,
+              size: 20,
+              color: hasReading ? AppColors.green : AppColors.muted,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'FUEL LEVEL · ${vehicle.registrationNumber}',
+                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.muted),
+                ),
+                const SizedBox(height: 3),
+                if (hasReading) ...[
+                  Text(
+                    '${litres.toStringAsFixed(1)} L',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    stale
+                        ? 'Last reading ${_timeAgo(readAt)}. The tracker may be offline.'
+                        : 'From the fuel sensor, updated ${_timeAgo(readAt)}',
+                    style: TextStyle(fontSize: 11.5, color: stale ? AppColors.amber : AppColors.muted),
+                  ),
+                ] else ...[
+                  const Text(
+                    'No fuel sensor fitted',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    "This ambulance's tracker doesn't report a fuel level.",
+                    style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );

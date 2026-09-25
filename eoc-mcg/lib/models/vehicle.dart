@@ -29,6 +29,11 @@ class Vehicle {
   final String? checkInLocationName;
   final String? checkedInAt;
 
+  /// Litres from a real fuel-sensor port on the GPS tracker. Null when no
+  /// probe is fitted - not the same as an empty tank.
+  final double? lastFuelLevelL;
+  final String? lastFuelLevelAt;
+
   /// Only present on nearby handover candidates (km from the releasing unit).
   final double? distanceKm;
 
@@ -47,6 +52,8 @@ class Vehicle {
     this.lastLocationName,
     this.checkInLocationName,
     this.checkedInAt,
+    this.lastFuelLevelL,
+    this.lastFuelLevelAt,
     this.distanceKm,
     this.currentDriver,
     this.currentEmt,
@@ -64,6 +71,8 @@ class Vehicle {
     lastLocationName: json['lastLocationName'] as String?,
     checkInLocationName: json['checkInLocationName'] as String?,
     checkedInAt: json['checkedInAt'] as String?,
+    lastFuelLevelL: (json['lastFuelLevelL'] as num?)?.toDouble(),
+    lastFuelLevelAt: json['lastFuelLevelAt'] as String?,
     distanceKm: (json['distanceKm'] as num?)?.toDouble(),
     currentDriver: CrewMemberRef.fromJson(json['currentDriver'] as Map<String, dynamic>?),
     currentEmt: CrewMemberRef.fromJson(json['currentEmt'] as Map<String, dynamic>?),

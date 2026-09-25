@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Ambulance, MapPin, Navigation as NavigationIcon, Users,
-  History as HistoryIcon, ArrowRight, CircleCheck as CheckCircle, UserCog, Package,
+  History as HistoryIcon, ArrowRight, CircleCheck as CheckCircle, UserCog, Package, Fuel,
 } from 'lucide-react';
 import { getActiveTask, getMyCheckIn, getTaskHistory } from '@/api/responder';
 import { useAuthStore } from '@/stores/authStore';
@@ -11,6 +11,63 @@ import { socket } from '@/lib/socket';
 import ShiftCheckInCard from '@/components/operator/ShiftCheckInCard';
 import StatusBadge from '@/components/operator/StatusBadge';
 import { inAppNavigateUrl } from '@/utils/navigateUrl';
+import type { Vehicle } from '@/types/api';
+
+// The GPS poller refreshes fuel about every minute; a much older reading
+// usually means the tracker is offline, not that the level is still current.
+const FUEL_STALE_MS = 2 * 60 * 60 * 1000;
+
+function timeAgo(iso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function FuelCard({ vehicle }: { vehicle: Vehicle }) {
+  const litres = vehicle.lastFuelLevelL;
+  const readAt = vehicle.lastFuelLevelAt;
+  const hasReading = litres != null && !!readAt;
+  const stale = hasReading && Date.now() - new Date(readAt!).getTime() > FUEL_STALE_MS;
+
+  return (
+    <div className="card card-pad">
+      <div className="flex items-center gap-3">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: hasReading ? 'var(--green-light)' : 'var(--surface-2)' }}
+        >
+          <Fuel size={18} color={hasReading ? 'var(--green)' : 'var(--muted)'} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="eyebrow">Fuel level · {vehicle.registrationNumber}</p>
+          {hasReading ? (
+            <>
+              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--ink)' }}>
+                {litres!.toFixed(1)} L
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: stale ? 'var(--amber, #B45309)' : 'var(--muted)' }}>
+                {stale
+                  ? `Last reading ${timeAgo(readAt!)}. The tracker may be offline.`
+                  : `From the fuel sensor, updated ${timeAgo(readAt!)}`}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-bold mt-0.5" style={{ color: 'var(--ink)' }}>No fuel sensor fitted</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                This ambulance&apos;s tracker doesn&apos;t report a fuel level.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DriverDashboardPage() {
   const navigate = useNavigate();
@@ -22,7 +79,11 @@ function DriverDashboardPage() {
     queryFn: getActiveTask,
     refetchInterval: 20000,
   });
-  const { data: myVehicle } = useQuery({ queryKey: ['operator', 'my-checkin'], queryFn: getMyCheckIn });
+  const { data: myVehicle } = useQuery({
+    queryKey: ['operator', 'my-checkin'],
+    queryFn: getMyCheckIn,
+    refetchInterval: 60000,
+  });
   // A generous limit keeps "completed today" accurate for a normal shift's
   // case volume without pulling the driver's entire history.
   const { data: recentHistory } = useQuery({
@@ -90,6 +151,8 @@ function DriverDashboardPage() {
           </div>
         </div>
       </div>
+
+      {myVehicle && <FuelCard vehicle={myVehicle} />}
 
       <ShiftCheckInCard />
 
