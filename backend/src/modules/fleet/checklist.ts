@@ -19,7 +19,8 @@ import { vehicleCrewIds } from './crew.js';
  * once at least one MEDICAL item AND at least one VEHICLE item have been
  * confirmed OK this shift - not every one of the ~230 catalog items. A group
  * with zero requiredForDispatch items is trivially satisfied (nothing to
- * confirm in it).
+ * confirm in it). An item of the group currently checked out onto the vehicle
+ * (Inventory "On board") also satisfies it.
  */
 export interface ChecklistSummary {
   complete: boolean;
@@ -42,18 +43,32 @@ async function computeSummary(
     item: { ...baseWhere, ...extra },
   });
 
-  const [totalRequired, confirmed, medicalRequired, medicalConfirmed, vehicleRequired, vehicleConfirmed] =
-    await Promise.all([
-      prisma.inventoryItem.count({ where: baseWhere }),
-      prisma.vehicleChecklistCheck.count({ where: confirmedWhere() }),
-      prisma.inventoryItem.count({ where: { ...baseWhere, itemType: 'MEDICAL' } }),
-      prisma.vehicleChecklistCheck.count({ where: confirmedWhere({ itemType: 'MEDICAL' }) }),
-      prisma.inventoryItem.count({ where: { ...baseWhere, itemType: 'VEHICLE' } }),
-      prisma.vehicleChecklistCheck.count({ where: confirmedWhere({ itemType: 'VEHICLE' }) }),
-    ]);
+  // Stock the crew has drawn onto this ambulance (Inventory > On board) is
+  // physically present, so it proves the group just as a checklist tick does.
+  // Not limited to this shift: onboard stock stays on the vehicle until returned.
+  const onboardWhere = (itemType: string) => ({
+    vehicleId,
+    status: 'CHECKED_OUT',
+    item: { ...baseWhere, itemType },
+  });
 
-  const medicalOk = medicalRequired === 0 || medicalConfirmed > 0;
-  const vehicleOk = vehicleRequired === 0 || vehicleConfirmed > 0;
+  const [
+    totalRequired, confirmed,
+    medicalRequired, medicalConfirmed, medicalOnboard,
+    vehicleRequired, vehicleConfirmed, vehicleOnboard,
+  ] = await Promise.all([
+    prisma.inventoryItem.count({ where: baseWhere }),
+    prisma.vehicleChecklistCheck.count({ where: confirmedWhere() }),
+    prisma.inventoryItem.count({ where: { ...baseWhere, itemType: 'MEDICAL' } }),
+    prisma.vehicleChecklistCheck.count({ where: confirmedWhere({ itemType: 'MEDICAL' }) }),
+    prisma.inventoryCheckout.count({ where: onboardWhere('MEDICAL') }),
+    prisma.inventoryItem.count({ where: { ...baseWhere, itemType: 'VEHICLE' } }),
+    prisma.vehicleChecklistCheck.count({ where: confirmedWhere({ itemType: 'VEHICLE' }) }),
+    prisma.inventoryCheckout.count({ where: onboardWhere('VEHICLE') }),
+  ]);
+
+  const medicalOk = medicalRequired === 0 || medicalConfirmed > 0 || medicalOnboard > 0;
+  const vehicleOk = vehicleRequired === 0 || vehicleConfirmed > 0 || vehicleOnboard > 0;
 
   return { complete: medicalOk && vehicleOk, totalRequired, confirmed, medicalOk, vehicleOk };
 }
@@ -69,7 +84,7 @@ export function checklistIncompleteMessage(summary: ChecklistSummary): string {
   const missing: string[] = [];
   if (!summary.medicalOk) missing.push('a medical item');
   if (!summary.vehicleOk) missing.push('a vehicle item');
-  return `Vehicle checklist incomplete: confirm at least ${missing.join(' and ')} before dispatch`;
+  return `Vehicle checklist incomplete: confirm or add to the ambulance at least ${missing.join(' and ')} before dispatch`;
 }
 
 /** Full checklist for one vehicle: every active+required item plus its current (this-shift) state, if any. */

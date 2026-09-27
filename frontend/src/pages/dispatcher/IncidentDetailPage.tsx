@@ -1237,8 +1237,8 @@ function IncidentDetailPage() {
                     )}
                     {sv.checklistComplete === false && (
                       <p className="text-xs text-status-warning font-medium mt-3">
-                        Equipment checklist incomplete - crew must confirm at least one medical item and one vehicle
-                        item before this vehicle can be dispatched.
+                        Equipment checklist incomplete - crew must confirm (or add to the ambulance from Inventory) at
+                        least one medical item and one vehicle item before this vehicle can be dispatched.
                       </p>
                     )}
                   </div>
