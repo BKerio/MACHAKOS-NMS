@@ -134,7 +134,7 @@ export async function getAssignableCrew(): Promise<AssignableCrewMember[]> {
 
 export async function assignVehicleCrew(
   vehicleId: string,
-  crew: { emtId?: string | null; nurseId?: string | null }
+  crew: { emtId?: string | null; emt2Id?: string | null; nurseId?: string | null; nurse2Id?: string | null }
 ): Promise<Vehicle> {
   const res = await api.post(`/fleet/${vehicleId}/crew`, crew);
   return res.data.data as Vehicle;

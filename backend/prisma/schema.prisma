@@ -116,11 +116,15 @@ model User {
   driverTasks         Task[]     @relation("TaskDriver")
   emtTasks            Task[]     @relation("TaskEmt")
   nurseTasks          Task[]     @relation("TaskNurse")
+  emt2Tasks           Task[]     @relation("TaskEmt2")
+  nurse2Tasks         Task[]     @relation("TaskNurse2")
   auditLogs           AuditLog[]
 
   currentDriverVehicles Vehicle[] @relation("VehicleCurrentDriver")
   currentEmtVehicles    Vehicle[] @relation("VehicleCurrentEmt")
   currentNurseVehicles  Vehicle[] @relation("VehicleCurrentNurse")
+  currentEmt2Vehicles   Vehicle[] @relation("VehicleCurrentEmt2")
+  currentNurse2Vehicles Vehicle[] @relation("VehicleCurrentNurse2")
 
   uploadedPatientCareReports PatientCareReport[] @relation("UserUploadedPatientCareReports")
   checkIns                   CheckIn[]           @relation("UserCheckIns")
@@ -279,6 +283,14 @@ model Task {
   nurseId String? @map("nurse_id")
   nurse   User?   @relation("TaskNurse", fields: [nurseId], references: [id])
 
+  // Second medic slots: a valid crew is any two medics (EMT + nurse, two EMTs,
+  // or two nurses), so either role can appear twice. See fleet/crew.ts.
+  emt2Id String? @map("emt2_id")
+  emt2   User?   @relation("TaskEmt2", fields: [emt2Id], references: [id])
+
+  nurse2Id String? @map("nurse2_id")
+  nurse2   User?   @relation("TaskNurse2", fields: [nurse2Id], references: [id])
+
   patientCareReports PatientCareReport[]
   stops              TaskStop[]
 
@@ -422,6 +434,13 @@ model Vehicle {
 
   currentNurseId  String? @map("current_nurse_id")
   currentNurse    User?   @relation("VehicleCurrentNurse", fields: [currentNurseId], references: [id])
+
+  // Second medic slots - see the note on Task.emt2Id.
+  currentEmt2Id   String? @map("current_emt2_id")
+  currentEmt2     User?   @relation("VehicleCurrentEmt2", fields: [currentEmt2Id], references: [id])
+
+  currentNurse2Id String? @map("current_nurse2_id")
+  currentNurse2   User?   @relation("VehicleCurrentNurse2", fields: [currentNurse2Id], references: [id])
 
   tasks     Task[]
   checkIns  CheckIn[]

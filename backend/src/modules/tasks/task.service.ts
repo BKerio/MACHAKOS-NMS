@@ -5,6 +5,16 @@ import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { sendAdvantaSms } from '../../services/sms.js';
 import { getChecklistSummary, checklistIncompleteMessage } from '../fleet/checklist.js';
+import {
+  clearedCrew,
+  crewInclude,
+  crewIncompleteMessage,
+  isCrewComplete,
+  taskCrewFromVehicle,
+  taskCrewIds,
+  taskCrewInclude,
+  vehicleCrewIds,
+} from '../fleet/crew.js';
 import { PushSenderService } from '../notifications/push-sender.service.js';
 
 /** Mirrors TaskStatus.labels in frontend/src/utils/taskStatus.ts and nccg/lib/models/task.dart. */
@@ -126,7 +136,7 @@ export class TaskService {
     const task = await this.app.prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundError('Task not found');
 
-    const isCrew = [task.driverId, task.emtId, task.nurseId].includes(user.userId);
+    const isCrew = taskCrewIds(task).includes(user.userId);
     const isDispatch = (<Role[]>[Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN]).includes(user.role);
     if (!isCrew && !isDispatch) throw new ForbiddenError('You are not assigned to this task');
 
@@ -170,7 +180,7 @@ export class TaskService {
     const task = await this.app.prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundError('Task not found');
 
-    const isCrew = [task.driverId, task.emtId, task.nurseId].includes(user.userId);
+    const isCrew = taskCrewIds(task).includes(user.userId);
     const isDispatch = (<Role[]>[Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN]).includes(user.role);
     if (!isCrew && !isDispatch) throw new ForbiddenError('You do not have permission to view reports for this task');
 
@@ -210,17 +220,16 @@ export class TaskService {
       this.app.prisma.incident.findUnique({ where: { id: data.incidentId } }),
       this.app.prisma.vehicle.findUnique({
         where: { id: data.vehicleId },
-        include: {
-          currentDriver: { select: { id: true, name: true, phone: true } },
-          currentEmt:    { select: { id: true, name: true, phone: true } },
-          currentNurse:  { select: { id: true, name: true, phone: true } },
-        },
+        include: crewInclude,
       }),
     ]);
 
     if (!incident) throw new NotFoundError('Incident not found');
     if (!vehicle) throw new NotFoundError('Vehicle not found');
-    if (!vehicle.currentDriverId) throw new BadRequestError('No driver is checked in to this vehicle');
+    const driverId = vehicle.currentDriverId;
+    if (!driverId) throw new BadRequestError('No driver is checked in to this vehicle');
+    const crewProblem = crewIncompleteMessage(vehicle);
+    if (crewProblem) throw new BadRequestError(crewProblem);
 
     const checklist = await getChecklistSummary(this.app.prisma, data.vehicleId);
     if (!checklist.complete) {
@@ -233,9 +242,7 @@ export class TaskService {
           status: TaskStatus.PENDING,
           incidentId: data.incidentId,
           vehicleId: data.vehicleId,
-          driverId: vehicle.currentDriverId,
-          emtId: vehicle.currentEmtId ?? undefined,
-          nurseId: vehicle.currentNurseId ?? undefined,
+          ...taskCrewFromVehicle({ ...vehicle, currentDriverId: driverId }),
         },
       }),
       this.app.prisma.incident.update({
@@ -252,22 +259,15 @@ export class TaskService {
     ]);
 
     // Notify crew via socket
-    let room = this.app.io.to(`user:${vehicle.currentDriverId}`);
-    if (vehicle.currentEmtId) room = room.to(`user:${vehicle.currentEmtId}`);
-    if (vehicle.currentNurseId) room = room.to(`user:${vehicle.currentNurseId}`);
-    room.emit('task:assigned', task);
+    this.app.io.to(vehicleCrewIds(vehicle).map((id) => `user:${id}`)).emit('task:assigned', task);
 
     // Notify crew via SMS + push (fire-and-forget - never blocks dispatch)
     this.notifyCrewOfAssignment(
-      [vehicle.currentDriver, vehicle.currentEmt, vehicle.currentNurse],
+      [vehicle.currentDriver, vehicle.currentEmt, vehicle.currentEmt2, vehicle.currentNurse, vehicle.currentNurse2],
       incident,
       vehicle.registrationNumber,
     );
-    this.notifyCrewOfPushAssignment(
-      [vehicle.currentDriverId, vehicle.currentEmtId, vehicle.currentNurseId],
-      incident,
-      vehicle.registrationNumber,
-    );
+    this.notifyCrewOfPushAssignment(vehicleCrewIds(vehicle), incident, vehicle.registrationNumber);
 
     return task;
   }
@@ -328,6 +328,10 @@ export class TaskService {
       if (!newVehicle.currentDriverId) {
         throw new BadRequestError('No driver is checked in to the replacement vehicle');
       }
+      const replacementCrewProblem = crewIncompleteMessage(newVehicle);
+      if (replacementCrewProblem) {
+        throw new BadRequestError(`Replacement vehicle: ${replacementCrewProblem.toLowerCase()}`);
+      }
       const replacementChecklist = await getChecklistSummary(this.app.prisma, newVehicle.id);
       if (!replacementChecklist.complete) {
         throw new BadRequestError(`Replacement ${checklistIncompleteMessage(replacementChecklist).toLowerCase()}`);
@@ -359,19 +363,16 @@ export class TaskService {
       where: { id: task.vehicleId },
       data: {
         status: VehicleStatus.READY,
-        currentDriverId: null,
-        currentEmtId: null,
-        currentNurseId: null,
+        ...clearedCrew,
       },
     });
 
     // Tell the original crew their task is cancelled so their app clears it.
-    let oldRoom = this.app.io.to(`user:${task.driverId}`).to(`role:${Role.DISPATCHER}`);
-    if (task.emtId) oldRoom = oldRoom.to(`user:${task.emtId}`);
-    if (task.nurseId) oldRoom = oldRoom.to(`user:${task.nurseId}`);
-    oldRoom.emit('task:updated', cancelled);
+    this.app.io
+      .to([...taskCrewIds(task).map((id) => `user:${id}`), `role:${Role.DISPATCHER}`])
+      .emit('task:updated', cancelled);
     this.notifyCrewOfStatusPush(
-      [task.driverId, task.emtId, task.nurseId],
+      taskCrewIds(task),
       user.userId,
       task.incident.caseNumber,
       TaskStatus.CANCELLED,
@@ -380,7 +381,7 @@ export class TaskService {
       .to(`role:${Role.DISPATCHER}`)
       .to(`role:${Role.ADMIN}`)
       .to(`role:${Role.SUPER_ADMIN}`)
-      .emit('vehicle:crew', { id: task.vehicleId, currentDriverId: null, currentEmtId: null, currentNurseId: null });
+      .emit('vehicle:crew', { id: task.vehicleId, ...clearedCrew });
 
     // If no replacement was given/found, send the incident back to dispatch handling.
     if (!newVehicle) {
@@ -397,16 +398,12 @@ export class TaskService {
         status: TaskStatus.PENDING,
         incidentId: task.incidentId,
         vehicleId: newVehicle.id,
-        driverId: newVehicle.currentDriverId!,
-        emtId: newVehicle.currentEmtId ?? undefined,
-        nurseId: newVehicle.currentNurseId ?? undefined,
+        ...taskCrewFromVehicle({ ...newVehicle, currentDriverId: newVehicle.currentDriverId! }),
       },
       include: {
         incident: true,
         vehicle: { select: { id: true, registrationNumber: true, imei: true } },
-        driver: { select: { id: true, name: true, phone: true } },
-        emt: { select: { id: true, name: true, phone: true } },
-        nurse: { select: { id: true, name: true, phone: true } },
+        ...taskCrewInclude,
       },
     });
     await this.app.prisma.vehicle.update({
@@ -418,42 +415,39 @@ export class TaskService {
       data: { status: IncidentStatus.DISPATCHED },
     });
 
-    let newRoom = this.app.io.to(`user:${newVehicle.currentDriverId}`).to(`role:${Role.DISPATCHER}`);
-    if (newVehicle.currentEmtId) newRoom = newRoom.to(`user:${newVehicle.currentEmtId}`);
-    if (newVehicle.currentNurseId) newRoom = newRoom.to(`user:${newVehicle.currentNurseId}`);
-    newRoom.emit('task:assigned', newTask);
+    this.app.io
+      .to([...vehicleCrewIds(newVehicle).map((id) => `user:${id}`), `role:${Role.DISPATCHER}`])
+      .emit('task:assigned', newTask);
 
     // Notify the replacement crew via SMS + push (fire-and-forget)
     this.notifyCrewOfAssignment(
-      [newTask.driver, newTask.emt, newTask.nurse],
+      [newTask.driver, newTask.emt, newTask.emt2, newTask.nurse, newTask.nurse2],
       newTask.incident,
       newVehicle.registrationNumber,
     );
-    this.notifyCrewOfPushAssignment(
-      [newVehicle.currentDriverId, newVehicle.currentEmtId, newVehicle.currentNurseId],
-      newTask.incident,
-      newVehicle.registrationNumber,
-    );
+    this.notifyCrewOfPushAssignment(vehicleCrewIds(newVehicle), newTask.incident, newVehicle.registrationNumber);
 
     return { cancelled, newTask, checkedOutVehicleId: task.vehicleId };
   }
 
-  /** Pick the nearest READY vehicle with a checked-in driver in the agency. */
+  /** Pick the nearest READY vehicle with a complete crew in the agency. */
   private async findAvailableVehicleForHandover(
     agencyId: string,
     excludeVehicleId: string,
     lat?: number | null,
     lng?: number | null,
   ) {
-    const candidates = await this.app.prisma.vehicle.findMany({
-      where: {
-        agencyId,
-        isActive: true,
-        status: VehicleStatus.READY,
-        currentDriverId: { not: null },
-        id: { not: excludeVehicleId },
-      },
-    });
+    const candidates = (
+      await this.app.prisma.vehicle.findMany({
+        where: {
+          agencyId,
+          isActive: true,
+          status: VehicleStatus.READY,
+          currentDriverId: { not: null },
+          id: { not: excludeVehicleId },
+        },
+      })
+    ).filter(isCrewComplete);
     if (candidates.length === 0) return null;
     if (lat == null || lng == null) return candidates[0];
 
@@ -491,7 +485,7 @@ export class TaskService {
     if (!task) throw new NotFoundError('Task not found');
 
     // Basic authorization: user must be part of the task or be dispatcher/admin
-    const isCrew = [task.driverId, task.emtId, task.nurseId].includes(user.userId);
+    const isCrew = taskCrewIds(task).includes(user.userId);
     const isDispatch = (<Role[]>[Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN]).includes(user.role);
 
     if (!isCrew && !isDispatch) {
@@ -551,17 +545,14 @@ export class TaskService {
     }
 
     // Broadcast update to the crew and dispatchers
-    let updateRoom = this.app.io
-      .to(`user:${task.driverId}`)
-      .to(`role:${Role.DISPATCHER}`);
-    if (task.emtId) updateRoom = updateRoom.to(`user:${task.emtId}`);
-    if (task.nurseId) updateRoom = updateRoom.to(`user:${task.nurseId}`);
-    updateRoom.emit('task:updated', updatedTask);
+    this.app.io
+      .to([...taskCrewIds(task).map((id) => `user:${id}`), `role:${Role.DISPATCHER}`])
+      .emit('task:updated', updatedTask);
 
     // Push the other crew on this task (fire-and-forget) - e.g. the EMT/nurse
     // find out the driver marked them en route without needing the app open.
     this.notifyCrewOfStatusPush(
-      [task.driverId, task.emtId, task.nurseId],
+      taskCrewIds(task),
       user.userId,
       task.incident.caseNumber,
       newStatus,
@@ -576,15 +567,13 @@ export class TaskService {
   async getActiveTask(userId: string) {
     const task = await this.app.prisma.task.findFirst({
       where: {
-        OR: [{ driverId: userId }, { emtId: userId }, { nurseId: userId }],
+        OR: [{ driverId: userId }, { emtId: userId }, { emt2Id: userId }, { nurseId: userId }, { nurse2Id: userId }],
         status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
       },
       include: {
         incident: true,
         vehicle: { select: { id: true, registrationNumber: true, imei: true } },
-        driver: { select: { id: true, name: true, phone: true } },
-        emt: { select: { id: true, name: true, phone: true } },
-        nurse: { select: { id: true, name: true, phone: true } },
+        ...taskCrewInclude,
       },
       orderBy: { receivedAt: 'desc' },
     });
@@ -600,7 +589,7 @@ export class TaskService {
     const [data, total] = await Promise.all([
       this.app.prisma.task.findMany({
         where: {
-          OR: [{ driverId: userId }, { emtId: userId }, { nurseId: userId }],
+          OR: [{ driverId: userId }, { emtId: userId }, { emt2Id: userId }, { nurseId: userId }, { nurse2Id: userId }],
           status: { in: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
         },
         orderBy: { receivedAt: 'desc' },
@@ -615,7 +604,7 @@ export class TaskService {
       }),
       this.app.prisma.task.count({
         where: {
-          OR: [{ driverId: userId }, { emtId: userId }, { nurseId: userId }],
+          OR: [{ driverId: userId }, { emtId: userId }, { emt2Id: userId }, { nurseId: userId }, { nurse2Id: userId }],
           status: { in: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
         },
       }),
@@ -643,7 +632,7 @@ export class TaskService {
     const task = await this.app.prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundError('Task');
 
-    const isCrew = [task.driverId, task.emtId, task.nurseId].includes(userId);
+    const isCrew = taskCrewIds(task).includes(userId);
     if (!isCrew) throw new ForbiddenError('You are not assigned to this task');
 
     // Vital signs captured at hospital handover live on the task.
@@ -681,7 +670,7 @@ export class TaskService {
     const task = await this.app.prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundError('Task');
 
-    const isCrew = [task.driverId, task.emtId, task.nurseId].includes(user.userId);
+    const isCrew = taskCrewIds(task).includes(user.userId);
     const isDispatch = (<Role[]>[Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN]).includes(user.role);
     if (!isCrew && !isDispatch) throw new ForbiddenError('You are not assigned to this task');
 
@@ -711,12 +700,19 @@ export class TaskService {
    */
   private emitStopEvent(
     event: 'task:stop-added' | 'task:stop-updated',
-    task: { incidentId: string; driverId: string; emtId: string | null; nurseId: string | null },
+    task: {
+      incidentId: string;
+      driverId: string;
+      emtId: string | null;
+      emt2Id: string | null;
+      nurseId: string | null;
+      nurse2Id: string | null;
+    },
     payload: unknown,
   ) {
     this.app.io.to(`role:${Role.DISPATCHER}`).emit(event, payload);
-    for (const uid of [task.driverId, task.emtId, task.nurseId]) {
-      if (uid) this.app.io.to(`user:${uid}`).emit(event, payload);
+    for (const uid of taskCrewIds(task)) {
+      this.app.io.to(`user:${uid}`).emit(event, payload);
     }
     this.app.io.to(`incident:${task.incidentId}`).emit(event, payload);
   }
@@ -731,7 +727,7 @@ export class TaskService {
   async markStopArrived(taskId: string, stopId: string, user: { userId: string; role: Role }) {
     const task = await this.app.prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundError('Task');
-    const isCrew = [task.driverId, task.emtId, task.nurseId].includes(user.userId);
+    const isCrew = taskCrewIds(task).includes(user.userId);
     const isDispatch = (<Role[]>[Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN]).includes(user.role);
     if (!isCrew && !isDispatch) throw new ForbiddenError('You are not assigned to this task');
 

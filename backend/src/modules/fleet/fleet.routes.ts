@@ -250,10 +250,13 @@ export const fleetRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   /**
    * POST /fleet/:vehicleId/crew
-   * Driver assigns/clears the EMT and/or nurse on their vehicle.
-   * Body: { emtId?: string | null; nurseId?: string | null } (omit a key to leave unchanged)
+   * Driver assigns/clears the medic slots on their vehicle (two EMT, two nurse).
+   * Body: { emtId?, emt2Id?, nurseId?, nurse2Id?: string | null } (omit a key to leave unchanged)
    */
-  app.post<{ Params: { vehicleId: string }; Body: { emtId?: string | null; nurseId?: string | null } }>(
+  app.post<{
+    Params: { vehicleId: string };
+    Body: { emtId?: string | null; emt2Id?: string | null; nurseId?: string | null; nurse2Id?: string | null };
+  }>(
     '/:vehicleId/crew',
     { preValidation: [requireRole([Role.DRIVER, Role.ADMIN, Role.SUPER_ADMIN])] },
     async (request, reply) => {

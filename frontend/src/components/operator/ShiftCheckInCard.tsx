@@ -11,10 +11,11 @@ import {
 } from '@/api/responder';
 import type { Role, Vehicle } from '@/types/api';
 
-const ROLE_SLOT: Record<'DRIVER' | 'EMT' | 'NURSE', keyof Vehicle> = {
-  DRIVER: 'currentDriver',
-  EMT: 'currentEmt',
-  NURSE: 'currentNurse',
+// Medics have two slots each (a crew can be two EMTs or two nurses).
+const ROLE_SLOTS: Record<'DRIVER' | 'EMT' | 'NURSE', (keyof Vehicle)[]> = {
+  DRIVER: ['currentDriver'],
+  EMT: ['currentEmt', 'currentEmt2'],
+  NURSE: ['currentNurse', 'currentNurse2'],
 };
 
 function slotLabel(role: Role) {
@@ -241,10 +242,14 @@ function ShiftCheckInCard() {
                 <p className="text-sm" style={{ color: 'var(--muted)' }}>No active GPS vehicles found for your agency.</p>
               ) : (
                 vehicles.map((vehicle) => {
-                  const slot = ROLE_SLOT[user.role as keyof typeof ROLE_SLOT];
-                  const occupant = slot ? (vehicle[slot] as { id: string; name: string } | null | undefined) : null;
-                  const isMine = occupant?.id === user.id;
-                  const isTaken = !!occupant && !isMine;
+                  const slots = ROLE_SLOTS[user.role as keyof typeof ROLE_SLOTS] ?? [];
+                  const occupants = slots
+                    .map((s) => vehicle[s] as { id: string; name: string } | null | undefined)
+                    .filter((o): o is { id: string; name: string } => !!o);
+                  const isMine = occupants.some((o) => o.id === user.id);
+                  // The driver seat is single; medics are only turned away once both of their slots are taken.
+                  const isTaken = !isMine && occupants.length === slots.length && slots.length > 0;
+                  const occupant = occupants[0];
 
                   return (
                     <div key={vehicle.id}>
@@ -252,7 +257,13 @@ function ShiftCheckInCard() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{vehicle.registrationNumber}</p>
                           <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-                            {isMine ? `You are checked in as ${roleLabel}` : isTaken ? `${roleLabel}: ${occupant!.name}` : `${roleLabel} slot open`}
+                            {isMine
+                              ? `You are checked in as ${roleLabel}`
+                              : isTaken
+                                ? `${roleLabel}: ${occupants.map((o) => o.name).join(', ')}`
+                                : occupant && slots.length > 1
+                                  ? `${roleLabel}: ${occupant.name} · 1 slot open`
+                                  : `${roleLabel} slot open`}
                           </p>
                         </div>
                         {isTaken ? (

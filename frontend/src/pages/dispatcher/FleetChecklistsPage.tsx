@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, TriangleAlert, ChevronRight, Truck } from 'lucide-react';
 import { getFleetChecklists, getVehicleChecklist } from '@/api/checklist';
 import type { VehicleChecklistItem } from '@/types/api';
+import { crewShortfall, isCrewComplete, medicsInline } from '@/utils/crew';
 
 function categoryLabel(value: string) {
   return value
@@ -137,8 +138,8 @@ function FleetChecklistsPage() {
                     <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{v.registrationNumber}</p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
                       {v.currentDriver ? v.currentDriver.name : 'No driver checked in'}
-                      {v.currentEmt ? ` · EMT ${v.currentEmt.name}` : ''}
-                      {v.currentNurse ? ` · Nurse ${v.currentNurse.name}` : ''}
+                      {medicsInline(v)}
+                      {v.currentDriver && !isCrewComplete(v) ? ` · ⚠ crew incomplete (${crewShortfall(v)})` : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">

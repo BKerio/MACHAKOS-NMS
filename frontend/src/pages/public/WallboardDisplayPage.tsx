@@ -42,7 +42,9 @@ interface DisplayVehicle {
   agencyName: string | null;
   driver: string | null;
   emt: string | null;
+  emt2: string | null;
   nurse: string | null;
+  nurse2: string | null;
 }
 
 interface DisplayPayload {
@@ -126,7 +128,7 @@ function WallboardDisplayPage() {
   const vehicles = data?.vehicles ?? [];
   const watchers = (data?.onDuty ?? []).filter(u => u.role === 'WATCHER');
   const dispatchers = (data?.onDuty ?? []).filter(u => u.role === 'DISPATCHER');
-  const crewed = vehicles.filter(v => v.driver || v.emt || v.nurse);
+  const crewed = vehicles.filter(v => v.driver || v.emt || v.emt2 || v.nurse || v.nurse2);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--nav-bg)', padding: 28, color: '#fff' }}>
@@ -154,8 +156,8 @@ function WallboardDisplayPage() {
         <Stat label="Ambulances on duty" value={crewed.length} Icon={Truck} />
         <Stat label="With GPS tracker" value={vehicles.filter(v => v.hasTracker).length} Icon={WifiHigh} />
         <Stat label="Drivers logged in" value={vehicles.filter(v => v.driver).length} Icon={SteeringWheel} />
-        <Stat label="EMTs in ambulance" value={vehicles.filter(v => v.emt).length} Icon={FirstAidKit} />
-        <Stat label="Nurses in ambulance" value={vehicles.filter(v => v.nurse).length} Icon={FirstAidKit} />
+        <Stat label="EMTs in ambulance" value={vehicles.reduce((n, v) => n + (v.emt ? 1 : 0) + (v.emt2 ? 1 : 0), 0)} Icon={FirstAidKit} />
+        <Stat label="Nurses in ambulance" value={vehicles.reduce((n, v) => n + (v.nurse ? 1 : 0) + (v.nurse2 ? 1 : 0), 0)} Icon={FirstAidKit} />
       </div>
 
       {/* Duty roster */}
@@ -196,7 +198,13 @@ function WallboardDisplayPage() {
         )}
         {vehicles.map(v => {
           const live = !!v.lastLocationAt && Date.now() - new Date(v.lastLocationAt).getTime() < TRACKER_STALE_MS;
-          const crew = [v.driver && `${v.driver} (driver)`, v.emt && `${v.emt} (EMT)`, v.nurse && `${v.nurse} (nurse)`].filter(Boolean) as string[];
+          const crew = [
+            v.driver && `${v.driver} (driver)`,
+            v.emt && `${v.emt} (EMT)`,
+            v.emt2 && `${v.emt2} (EMT)`,
+            v.nurse && `${v.nurse} (nurse)`,
+            v.nurse2 && `${v.nurse2} (nurse)`,
+          ].filter(Boolean) as string[];
           return (
             <div key={v.id} style={{ background: 'rgba(255,255,255,.05)', border: '1px solid var(--nav-border)', borderRadius: 14, padding: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>

@@ -22,6 +22,10 @@ const returnSchema = z.object({
   quantity: z.number().int().positive(),
 });
 
+const returnAllSchema = z.object({
+  itemType: z.enum(['MEDICAL', 'VEHICLE']).optional(),
+});
+
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const result = schema.safeParse(body);
   if (!result.success) throw new BadRequestError(result.error.issues[0].message);
@@ -54,6 +58,16 @@ export const inventoryRoutes: FastifyPluginAsync = async (app: FastifyInstance) 
   app.get('/my', { preValidation: [requireRole(crewRoles)] }, async (request, reply) => {
     const data = await inventoryService.myStock(request.user.userId);
     return reply.send({ ok: true, data });
+  });
+
+  /**
+   * POST /inventory/return-all - return everything onboard the crew's ambulance.
+   * Optional body `{ itemType: 'MEDICAL' | 'VEHICLE' }` limits it to one side.
+   */
+  app.post('/return-all', { preValidation: [requireRole(crewRoles)] }, async (request, reply) => {
+    const { itemType } = parse(returnAllSchema, request.body ?? {});
+    const result = await inventoryService.returnAll(request.user.userId, itemType);
+    return reply.send({ ok: true, data: result });
   });
 
   /** POST /inventory/checkouts/:id/return - return some/all of a checked-out quantity. */

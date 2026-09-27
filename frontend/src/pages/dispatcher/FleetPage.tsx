@@ -22,6 +22,7 @@ import AddVehicleModal from '@/components/shared/AddVehicleModal';
 import { useVehicleTracking, getVehicleTrackingStatus, LiveVehicle } from '@/hooks/useVehicleTracking';
 import { useNotificationStore } from '@/stores/notificationStore';
 import VehicleDispatchPanel from '@/components/shared/VehicleDispatchPanel';
+import { MIN_MEDICS, vehicleMedics } from '@/utils/crew';
 
 type StatusFilter = 'ALL' | 'ready' | 'no-driver' | 'engaged' | 'unavailable';
 
@@ -419,12 +420,16 @@ function FleetPage() {
                 <div className="eyebrow">Current Crew</div>
               </div>
               {[
-                { role: 'Driver', person: selected.currentDriver },
-                { role: 'EMT', person: selected.currentEmt },
-                { role: 'Nurse', person: selected.currentNurse },
-              ].map(({ role, person }, i, arr) => (
+                { key: 'driver', role: 'Driver', person: selected.currentDriver },
+                ...vehicleMedics(selected).map((m, i) => ({ key: `medic-${i}`, role: m.role, person: m.person })),
+                ...Array.from({ length: Math.max(0, MIN_MEDICS - vehicleMedics(selected).length) }, (_, i) => ({
+                  key: `open-${i}`,
+                  role: 'Medic',
+                  person: null,
+                })),
+              ].map(({ key, role, person }, i, arr) => (
                 <div
-                  key={role}
+                  key={key}
                   className="row"
                   style={{ gap: 10, padding: '10px 14px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : undefined }}
                 >

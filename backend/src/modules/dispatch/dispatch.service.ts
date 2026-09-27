@@ -4,6 +4,7 @@ import { FleetService } from '../fleet/fleet.service.js';
 import { IncidentStatus, Role, TaskStatus } from '../../shared/types/index.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { getChecklistSummary } from '../fleet/checklist.js';
+import { crewInclude, MIN_MEDICS } from '../fleet/crew.js';
 
 export class DispatchService {
   private fleetService: FleetService;
@@ -204,19 +205,26 @@ export class DispatchService {
   }
 
   /**
-   * Attaches pre-dispatch checklist readiness to each candidate vehicle, so
-   * the dispatcher sees which units are actually assignable before they try -
-   * rather than discovering it via the 400 that createTask now throws for an
-   * incomplete checklist.
+   * Attaches pre-dispatch readiness (equipment checklist + crew rule) to each
+   * candidate vehicle, so the dispatcher sees which units are actually
+   * assignable before they try - rather than discovering it via the 400 that
+   * createTask throws.
    */
-  private async withChecklistSummary<T extends { id: string }>(vehicles: T[]) {
+  private async withChecklistSummary<
+    T extends { id: string; currentDriver: unknown; currentEmt: unknown; currentEmt2: unknown; currentNurse: unknown; currentNurse2: unknown },
+  >(vehicles: T[]) {
     const summaries = await Promise.all(vehicles.map((v) => getChecklistSummary(this.app.prisma, v.id)));
-    return vehicles.map((v, i) => ({
-      ...v,
-      checklistComplete: summaries[i].complete,
-      checklistConfirmed: summaries[i].confirmed,
-      checklistTotal: summaries[i].totalRequired,
-    }));
+    return vehicles.map((v, i) => {
+      const medicCount = [v.currentEmt, v.currentEmt2, v.currentNurse, v.currentNurse2].filter(Boolean).length;
+      return {
+        ...v,
+        medicCount,
+        crewComplete: !!v.currentDriver && medicCount >= MIN_MEDICS,
+        checklistComplete: summaries[i].complete,
+        checklistConfirmed: summaries[i].confirmed,
+        checklistTotal: summaries[i].totalRequired,
+      };
+    });
   }
 
   /**
@@ -224,12 +232,6 @@ export class DispatchService {
    */
   async findNearestVehicles(lat: number, lng: number, agencyId?: string, limit: number = 5) {
     const allLocations = await this.fleetService.getAllActiveVehicleLocations();
-
-    const crewInclude = {
-      currentDriver: { select: { id: true, name: true, phone: true } },
-      currentEmt:    { select: { id: true, name: true, phone: true } },
-      currentNurse:  { select: { id: true, name: true, phone: true } },
-    } as const;
 
     if (allLocations.length > 0) {
       const availableVehicles = allLocations.filter(v => {
@@ -267,7 +269,9 @@ export class DispatchService {
           ...v,
           currentDriver: crewMap.get(v.id)?.currentDriver ?? null,
           currentEmt:    crewMap.get(v.id)?.currentEmt    ?? null,
+          currentEmt2:   crewMap.get(v.id)?.currentEmt2   ?? null,
           currentNurse:  crewMap.get(v.id)?.currentNurse  ?? null,
+          currentNurse2: crewMap.get(v.id)?.currentNurse2 ?? null,
         }))
       );
     }
@@ -296,7 +300,9 @@ export class DispatchService {
         distanceKm: null,
         currentDriver: v.currentDriver,
         currentEmt:    v.currentEmt,
+        currentEmt2:   v.currentEmt2,
         currentNurse:  v.currentNurse,
+        currentNurse2: v.currentNurse2,
       }))
     );
   }

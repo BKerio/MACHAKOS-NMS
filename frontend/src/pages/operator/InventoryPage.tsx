@@ -12,7 +12,7 @@ import {
   Ambulance,
 } from 'lucide-react';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { getAvailableInventory, checkoutInventory, getMyInventory, returnInventory } from '@/api/inventory';
+import { getAvailableInventory, checkoutInventory, getMyInventory, returnInventory, returnAllInventory } from '@/api/inventory';
 import { getMyCheckIn } from '@/api/responder';
 import type { InventoryCategory, InventoryCheckout, InventoryItem, InventoryItemType } from '@/types/api';
 
@@ -42,6 +42,7 @@ function InventoryPage() {
   const [cartOpen, setCartOpen] = useState(false);
   const [returnTarget, setReturnTarget] = useState<InventoryCheckout | null>(null);
   const [returnQty, setReturnQty] = useState(1);
+  const [confirmReturnAll, setConfirmReturnAll] = useState(false);
 
   const { addNotification } = useNotificationStore();
   const queryClient = useQueryClient();
@@ -83,6 +84,22 @@ function InventoryPage() {
       queryClient.invalidateQueries({ queryKey: ['operator', 'inventory'] });
       setReturnTarget(null);
       addNotification({ type: 'success', title: 'Returned', message: 'Stock returned to central inventory.' });
+    },
+    onError: (err: any) => {
+      addNotification({ type: 'error', title: 'Return failed', message: getErrorMessage(err, 'Could not return stock.') });
+    },
+  });
+
+  const returnAllMutation = useMutation({
+    mutationFn: returnAllInventory,
+    onSuccess: ({ units }) => {
+      queryClient.invalidateQueries({ queryKey: ['operator', 'inventory'] });
+      setConfirmReturnAll(false);
+      addNotification({
+        type: 'success',
+        title: 'All stock returned',
+        message: `${units} unit${units === 1 ? '' : 's'} returned to central inventory.`,
+      });
     },
     onError: (err: any) => {
       addNotification({ type: 'error', title: 'Return failed', message: getErrorMessage(err, 'Could not return stock.') });
@@ -155,6 +172,13 @@ function InventoryPage() {
         <div className="card card-pad">
           <div className="flex items-center justify-between mb-2">
             <p className="label">On {myVehicle.registrationNumber}</p>
+            <button
+              type="button"
+              onClick={() => setConfirmReturnAll(true)}
+              className="btn btn-sm btn-ghost flex items-center gap-1.5"
+            >
+              <Undo2 size={14} /> Return all
+            </button>
           </div>
           <div className="col" style={{ gap: 8 }}>
             {myStock.map((co) => {
@@ -423,6 +447,34 @@ function InventoryPage() {
                 className="btn btn-primary px-4 py-2 text-sm disabled:opacity-40"
               >
                 {returnMutation.isPending ? 'Returning...' : 'Return'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return-all confirm */}
+      {confirmReturnAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmReturnAll(false)} />
+          <div className="relative w-full max-w-sm rounded-2xl shadow-xl overflow-hidden border" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+            <div className="px-5 py-4">
+              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Return all onboard stock?</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                All {myStock.length} item{myStock.length === 1 ? '' : 's'} on {myVehicle?.registrationNumber ?? 'your ambulance'} go back to central inventory.
+              </p>
+            </div>
+            <div className="px-5 py-4 flex gap-2 justify-end" style={{ borderTop: '1px solid var(--border)' }}>
+              <button type="button" onClick={() => setConfirmReturnAll(false)} className="px-4 py-2 text-sm font-bold rounded-xl border" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => returnAllMutation.mutate()}
+                disabled={returnAllMutation.isPending}
+                className="btn btn-primary px-4 py-2 text-sm disabled:opacity-40"
+              >
+                {returnAllMutation.isPending ? 'Returning...' : 'Return all'}
               </button>
             </div>
           </div>

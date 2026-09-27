@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { BadRequestError } from '../../shared/errors/AppError.js';
+import { MEDIC_SLOTS } from '../fleet/crew.js';
 
 export class InventoryService {
   constructor(private app: FastifyInstance) {}
@@ -21,7 +22,7 @@ export class InventoryService {
     const vehicle = await this.app.prisma.vehicle.findFirst({
       where: {
         isActive: true,
-        OR: [{ currentDriverId: userId }, { currentEmtId: userId }, { currentNurseId: userId }],
+        OR: [{ currentDriverId: userId }, ...MEDIC_SLOTS.map((slot) => ({ [slot]: userId }))],
       },
     });
     if (!vehicle) {
@@ -109,6 +110,42 @@ export class InventoryService {
         },
         include: { item: true },
       });
+    });
+  }
+
+  /**
+   * Return every outstanding item on the crew's ambulance in one transaction.
+   * With [itemType], only that side (MEDICAL stock or VEHICLE equipment) goes
+   * back, so the app's per-tab "Return all" doesn't empty the other tab too.
+   */
+  async returnAll(userId: string, itemType?: 'MEDICAL' | 'VEHICLE') {
+    const vehicle = await this.getMyVehicle(userId);
+
+    return this.app.prisma.$transaction(async (tx) => {
+      const checkouts = await tx.inventoryCheckout.findMany({
+        where: {
+          vehicleId: vehicle.id,
+          status: 'CHECKED_OUT',
+          ...(itemType ? { item: { itemType } } : {}),
+        },
+      });
+      const now = new Date();
+      let units = 0;
+      for (const checkout of checkouts) {
+        const outstanding = checkout.quantity - checkout.returnedQuantity;
+        if (outstanding > 0) {
+          await tx.inventoryItem.update({
+            where: { id: checkout.itemId },
+            data: { quantityStock: { increment: outstanding } },
+          });
+          units += outstanding;
+        }
+        await tx.inventoryCheckout.update({
+          where: { id: checkout.id },
+          data: { returnedQuantity: checkout.quantity, status: 'RETURNED', returnedAt: now },
+        });
+      }
+      return { items: checkouts.length, units };
     });
   }
 }

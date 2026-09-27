@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftRight, X as XIcon, LoaderCircle } from 'lucide-react';
 import { getAvailableHandoverVehicles, getErrorMessage } from '@/api/responder';
 import { HANDOVER_REASON_PRESETS, buildHandoverReason } from '@/utils/closureReasons';
+import { medicsInline } from '@/utils/crew';
 
 function formatDistance(km?: number | null) {
   if (km == null || !Number.isFinite(km)) return 'Distance unknown';
@@ -171,7 +172,7 @@ function HandoverModal({
                           </p>
                           <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
                             {v.currentDriver?.name ?? 'Driver'}
-                            {v.currentEmt ? ` · EMT ${v.currentEmt.name}` : ''}
+                            {medicsInline(v)}
                             {v.lastLocationName ? ` · ${v.lastLocationName}` : ''}
                           </p>
                         </div>

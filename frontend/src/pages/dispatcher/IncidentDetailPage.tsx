@@ -40,6 +40,7 @@ import { useVehicleTracking } from '@/hooks/useVehicleTracking';
 import { socket } from '@/lib/socket';
 import { fmtDateTime, NBO_TZ } from '@/lib/datetime';
 import { confirmDialog } from '@/lib/alert';
+import { crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -1094,14 +1095,23 @@ function IncidentDetailPage() {
                         <p className="font-semibold text-brand-teal text-sm">{v.registrationNumber}</p>
                         <p className="text-xs text-slate-text mt-0.5">
                           {v.currentDriver?.name ?? '-'}
-                          {v.currentEmt ? ` · EMT ${v.currentEmt.name}` : ''}
-                          {v.currentNurse ? ` · Nurse ${v.currentNurse.name}` : ''}
+                          {medicsInline(v)}
                         </p>
                       </td>
                       <td className="px-6 py-3">
-                        <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-brand-green/10 text-brand-green">
-                          Ready
-                        </span>
+                        {!isCrewComplete(v) ? (
+                          <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-status-warning/10 text-status-warning">
+                            Crew incomplete
+                          </span>
+                        ) : v.checklistComplete === false ? (
+                          <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-status-warning/10 text-status-warning">
+                            Checklist incomplete
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-brand-green/10 text-brand-green">
+                            Ready
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-3 text-right">
                         <CaretRight size={16} className="text-slate-text" />
@@ -1137,8 +1147,8 @@ function IncidentDetailPage() {
                         <option key={v.id} value={v.id}>
                           {v.registrationNumber}
                           {v.currentDriver ? ` - ${v.currentDriver.name}` : ' - no driver'}
-                          {v.currentEmt ? ` / EMT ${v.currentEmt.name}` : ''}
-                          {v.currentNurse ? ` / Nurse ${v.currentNurse.name}` : ''}
+                          {medicsInline(v, ' / ')}
+                          {v.currentDriver && !isCrewComplete(v) ? ` · ⚠ crew incomplete (${crewShortfall(v)})` : ''}
                           {v.checklistComplete === false ? ' · ⚠ checklist incomplete' : ''}
                         </option>
                       ))}
@@ -1190,24 +1200,39 @@ function IncidentDetailPage() {
                 const sv = (nearestVehicles || []).find(v => v.id === selectedVehicleId);
                 if (!sv) return null;
                 const hasDriver = !!sv.currentDriver;
+                const crewReady = isCrewComplete(sv);
+                const medics = vehicleMedics(sv);
+                const rows = [
+                  { key: 'driver', role: 'Driver', name: sv.currentDriver?.name, missing: 'Not checked in' },
+                  ...medics.map((m, i) => ({ key: `medic-${i}`, role: m.role, name: m.person.name, missing: '' })),
+                  // Placeholders so the dispatcher can see how many medics are still needed.
+                  ...Array.from({ length: Math.max(0, MIN_MEDICS - medics.length) }, (_, i) => ({
+                    key: `open-${i}`,
+                    role: 'Medic',
+                    name: undefined,
+                    missing: 'Needed',
+                  })),
+                ];
                 return (
-                  <div className={`rounded-lg p-4 border text-sm ${hasDriver ? 'bg-brand-green/5 border-brand-green/20' : 'bg-status-warning/5 border-status-warning/30'}`}>
+                  <div className={`rounded-lg p-4 border text-sm ${crewReady ? 'bg-brand-green/5 border-brand-green/20' : 'bg-status-warning/5 border-status-warning/30'}`}>
                     <p className="text-xs font-black tracking-widest mb-3 text-slate-400">Crew on board</p>
-                    {[
-                      { role: 'Driver', person: sv.currentDriver },
-                      { role: 'EMT', person: sv.currentEmt },
-                      { role: 'Nurse', person: sv.currentNurse },
-                    ].map(({ role, person }) => (
-                      <div key={role} className="flex items-center justify-between py-1">
+                    {rows.map(({ key, role, name, missing }) => (
+                      <div key={key} className="flex items-center justify-between py-1">
                         <span className="text-xs text-slate-400">{role}</span>
-                        <span className={`text-xs font-semibold ${person ? 'text-brand-teal' : role === 'Driver' ? 'text-status-danger' : 'text-slate-400'}`}>
-                          {person?.name ?? (role === 'Driver' ? 'Not checked in' : 'Unassigned')}
+                        <span className={`text-xs font-semibold ${name ? 'text-brand-teal' : 'text-status-danger'}`}>
+                          {name ?? missing}
                         </span>
                       </div>
                     ))}
                     {!hasDriver && (
                       <p className="text-xs text-status-warning font-medium mt-3">
                         A driver must be checked in via the mobile app before dispatching.
+                      </p>
+                    )}
+                    {hasDriver && !crewReady && (
+                      <p className="text-xs text-status-warning font-medium mt-3">
+                        Crew incomplete - an ambulance needs two medics (an EMT and a nurse, two EMTs, or two
+                        nurses) before it can be dispatched.
                       </p>
                     )}
                     {sv.checklistComplete === false && (
@@ -1234,9 +1259,11 @@ function IncidentDetailPage() {
                 disabled={
                   !selectedVehicleId ||
                   // Offline units have no driver account by design - only tracked
-                  // vehicles require a checked-in driver and a complete checklist.
-                  (!isOfflineSelected &&
-                    !(nearestVehicles || []).find(v => v.id === selectedVehicleId)?.currentDriver) ||
+                  // vehicles require a complete crew and a complete checklist.
+                  (!isOfflineSelected && (() => {
+                    const sv = (nearestVehicles || []).find(v => v.id === selectedVehicleId);
+                    return !sv?.currentDriver || !isCrewComplete(sv);
+                  })()) ||
                   (!isOfflineSelected &&
                     (nearestVehicles || []).find(v => v.id === selectedVehicleId)?.checklistComplete === false) ||
                   dispatchMutation.isPending ||
@@ -1293,13 +1320,12 @@ function IncidentDetailPage() {
 
           <div className="p-6 flex flex-col gap-6">
             {/* Crew Members */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {[
-                { role: 'Driver', member: activeTask.driver },
-                { role: 'EMT',    member: activeTask.emt },
-                { role: 'Nurse',  member: activeTask.nurse },
-              ].map(({ role, member }) => (
-                <div key={role} className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                { key: 'driver', role: 'Driver', member: activeTask.driver },
+                ...taskMedics(activeTask).map((m, i) => ({ key: `medic-${i}`, role: m.role, member: m.person })),
+              ].map(({ key, role, member }) => (
+                <div key={key} className="bg-slate-50 rounded-lg p-4 border border-slate-100">
                   <p className="text-[10px] font-black text-slate-400 tracking-widest mb-1">{role}</p>
                   {member ? (
                     <>

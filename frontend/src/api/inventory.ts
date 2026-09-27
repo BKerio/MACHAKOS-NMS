@@ -26,3 +26,8 @@ export async function returnInventory(checkoutId: string, quantity: number): Pro
   const res = await api.post(`/inventory/checkouts/${checkoutId}/return`, { quantity });
   return res.data.data as InventoryCheckout;
 }
+
+export async function returnAllInventory(): Promise<{ items: number; units: number }> {
+  const res = await api.post('/inventory/return-all');
+  return res.data.data as { items: number; units: number };
+}

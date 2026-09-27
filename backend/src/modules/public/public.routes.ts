@@ -53,7 +53,9 @@ export const publicRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
           lastLocationName: true,
           currentDriver: { select: { name: true } },
           currentEmt: { select: { name: true } },
+          currentEmt2: { select: { name: true } },
           currentNurse: { select: { name: true } },
+          currentNurse2: { select: { name: true } },
           agency: { select: { name: true } },
         },
       });
@@ -83,7 +85,9 @@ export const publicRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
               agencyName: v.agency?.name ?? null,
               driver: v.currentDriver?.name ?? null,
               emt: v.currentEmt?.name ?? null,
+              emt2: v.currentEmt2?.name ?? null,
               nurse: v.currentNurse?.name ?? null,
+              nurse2: v.currentNurse2?.name ?? null,
             })),
           },
         });

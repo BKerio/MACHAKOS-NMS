@@ -4,6 +4,7 @@ import { DispatchService } from './dispatch.service.js';
 import { requireRole } from '../../shared/guards/requireRole.js';
 import { Role } from '../../shared/types/index.js';
 import { BadRequestError } from '../../shared/errors/AppError.js';
+import { crewInclude, isCrewComplete } from '../fleet/crew.js';
 
 const assignRoles = [Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN];
 
@@ -116,13 +117,11 @@ export const dispatchRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
         where: request.query.includeInactive === 'true' ? {} : { isActive: true },
         orderBy: { createdAt: 'desc' },
         include: {
-          agency:        { select: { id: true, name: true } },
-          currentDriver: { select: { id: true, name: true, phone: true } },
-          currentEmt:    { select: { id: true, name: true, phone: true } },
-          currentNurse:  { select: { id: true, name: true, phone: true } },
+          agency: { select: { id: true, name: true } },
+          ...crewInclude,
         },
       });
-      return reply.send({ ok: true, data: vehicles });
+      return reply.send({ ok: true, data: vehicles.map((v) => ({ ...v, crewComplete: isCrewComplete(v) })) });
     }
   );
 

@@ -1,6 +1,7 @@
 import { PrismaClient } from '../../generated/prisma/index.js';
 import { Role } from '../../shared/types/index.js';
 import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
+import { vehicleCrewIds } from './crew.js';
 
 /**
  * Shared source of truth for "is this vehicle's pre-dispatch checklist
@@ -111,10 +112,10 @@ export async function getChecklistDetail(prisma: PrismaClient, vehicleId: string
 export async function assertCrewOnVehicle(prisma: PrismaClient, vehicleId: string, userId: string) {
   const vehicle = await prisma.vehicle.findUnique({
     where: { id: vehicleId },
-    select: { currentDriverId: true, currentEmtId: true, currentNurseId: true },
+    select: { currentDriverId: true, currentEmtId: true, currentEmt2Id: true, currentNurseId: true, currentNurse2Id: true },
   });
   if (!vehicle) throw new NotFoundError('Vehicle not found');
-  const onCrew = [vehicle.currentDriverId, vehicle.currentEmtId, vehicle.currentNurseId].includes(userId);
+  const onCrew = vehicleCrewIds(vehicle).includes(userId);
   if (!onCrew) throw new ForbiddenError('You are not currently checked in to this vehicle');
 }
 

@@ -5,12 +5,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/err
 import { reverseGeocodePlace } from '../../shared/utils/geocode.js';
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
-
-const crewInclude = {
-  currentDriver: { select: { id: true, name: true, phone: true } },
-  currentEmt: { select: { id: true, name: true, phone: true } },
-  currentNurse: { select: { id: true, name: true, phone: true } },
-} satisfies Prisma.VehicleInclude;
+import { clearedCrew, crewInclude, isCrewComplete, slotsForRole, EMT_SLOTS, NURSE_SLOTS, MEDIC_SLOTS, type CrewSlot } from './crew.js';
 
 export class FleetService {
   constructor(private app: FastifyInstance) {}
@@ -109,11 +104,10 @@ export class FleetService {
       .map(data => JSON.parse(data));
   }
 
-  private crewField(role: Role): 'currentDriverId' | 'currentEmtId' | 'currentNurseId' {
-    if (role === Role.DRIVER) return 'currentDriverId';
-    if (role === Role.EMT) return 'currentEmtId';
-    if (role === Role.NURSE) return 'currentNurseId';
-    throw new BadRequestError('Role cannot check in to a vehicle');
+  private crewSlots(role: Role): readonly CrewSlot[] {
+    const slots = slotsForRole(role);
+    if (slots.length === 0) throw new BadRequestError('Role cannot check in to a vehicle');
+    return slots;
   }
 
   private checkinDir() {
@@ -160,10 +154,21 @@ export class FleetService {
     location: { lat: number; lng: number; locationName?: string | null },
     selfie: { filename: string; mimetype: string; file: NodeJS.ReadableStream }
   ) {
-    const field = this.crewField(role);
+    const slots = this.crewSlots(role);
 
     const vehicle = await this.app.prisma.vehicle.findUnique({ where: { id: vehicleId } });
     if (!vehicle) throw new NotFoundError('Vehicle not found');
+
+    // The driver seat is single, so a new driver takes it over. Medics fill
+    // the first free slot for their role (two per role, see crew.ts) and are
+    // turned away once both are taken rather than bumping a colleague.
+    const field =
+      role === Role.DRIVER
+        ? slots[0]
+        : (slots.find((s) => vehicle[s] === userId) ?? slots.find((s) => !vehicle[s]));
+    if (!field) {
+      throw new BadRequestError(`This ambulance already has two ${role === Role.EMT ? 'EMTs' : 'nurses'} checked in`);
+    }
 
     // 1. Persist the accountability selfie to disk
     await this.ensureCheckinDir();
@@ -190,11 +195,13 @@ export class FleetService {
       );
     }
 
-    // 2. Clear user from any vehicle they were previously checked into
-    await this.app.prisma.vehicle.updateMany({
-      where: { [field]: userId },
-      data: { [field]: null },
-    });
+    // 2. Clear user from any vehicle (or other slot) they previously held
+    for (const slot of slots) {
+      await this.app.prisma.vehicle.updateMany({
+        where: { [slot]: userId },
+        data: { [slot]: null },
+      });
+    }
 
     // 3. Record the check-in event (selfie + GPS + place name at shift start)
     const checkIn = await this.app.prisma.checkIn.create({
@@ -251,10 +258,10 @@ export class FleetService {
    * Crew member checks out of a vehicle (on logout or end of shift).
    */
   async checkOutFromCrew(vehicleId: string, userId: string, role: Role) {
-    const field = this.crewField(role);
     const vehicle = await this.app.prisma.vehicle.findUnique({ where: { id: vehicleId } });
     if (!vehicle) throw new NotFoundError('Vehicle not found');
-    if (vehicle[field] !== userId) {
+    const field = this.crewSlots(role).find((s) => vehicle[s] === userId);
+    if (!field) {
       throw new ForbiddenError('You are not checked in to this vehicle');
     }
 
@@ -274,9 +281,7 @@ export class FleetService {
     const updated = await this.app.prisma.vehicle.update({
       where: { id: vehicleId },
       data: {
-        currentDriverId: null,
-        currentEmtId: null,
-        currentNurseId: null,
+        ...clearedCrew,
         status: VehicleStatus.READY,
       },
       include: crewInclude,
@@ -356,9 +361,8 @@ export class FleetService {
    * Vehicle the current user is checked in to, if any - plus their latest check-in place.
    */
   async getMyCheckIn(userId: string, role: Role) {
-    const field = this.crewField(role);
     const vehicle = await this.app.prisma.vehicle.findFirst({
-      where: { [field]: userId, isActive: true },
+      where: { OR: this.crewSlots(role).map((s) => ({ [s]: userId })), isActive: true },
       include: crewInclude,
     });
     if (!vehicle) return null;
@@ -378,11 +382,6 @@ export class FleetService {
     };
   }
 
-  /**
-   * Driver assigns (or clears) the EMT / nurse on their vehicle. Passing an id sets
-   * that crew member; passing null clears it; omitting the key leaves it unchanged.
-   * Only the driver currently checked in to the vehicle (or an admin) may do this.
-   */
   // ── Standby deployments (fleet standby reporting, #11) ───────────────────────
 
   /** Put a vehicle on standby for an event/location. */
@@ -453,10 +452,14 @@ export class FleetService {
     });
   }
 
+  /**
+   * Driver (or admin) sets or clears the medic slots on their vehicle. Passing
+   * an id sets that slot; null clears it; omitting the key leaves it unchanged.
+   */
   async assignCrew(
     vehicleId: string,
     actor: { userId: string; role: Role; agencyId?: string },
-    crew: { emtId?: string | null; nurseId?: string | null },
+    crew: { emtId?: string | null; emt2Id?: string | null; nurseId?: string | null; nurse2Id?: string | null },
   ) {
     const vehicle = await this.app.prisma.vehicle.findUnique({ where: { id: vehicleId } });
     if (!vehicle) throw new NotFoundError('Vehicle');
@@ -467,49 +470,49 @@ export class FleetService {
       throw new ForbiddenError('Only the checked-in driver can assign crew for this vehicle');
     }
 
-    const data: Record<string, string | null> = {};
+    const requested = [
+      { key: 'emtId', slot: EMT_SLOTS[0], role: Role.EMT, label: 'EMT' },
+      { key: 'emt2Id', slot: EMT_SLOTS[1], role: Role.EMT, label: 'EMT' },
+      { key: 'nurseId', slot: NURSE_SLOTS[0], role: Role.NURSE, label: 'Nurse' },
+      { key: 'nurse2Id', slot: NURSE_SLOTS[1], role: Role.NURSE, label: 'Nurse' },
+    ] as const;
 
-    if (crew.emtId !== undefined) {
-      if (crew.emtId === null) {
-        data.currentEmtId = null;
-      } else {
-        const emt = await this.app.prisma.user.findUnique({ where: { id: crew.emtId } });
-        if (!emt || !emt.isActive || emt.role !== Role.EMT) {
-          throw new BadRequestError('Selected EMT is invalid or inactive');
-        }
-        if (emt.agencyId !== vehicle.agencyId) {
-          throw new BadRequestError('EMT must belong to the same agency as the vehicle');
-        }
-        // Clear this EMT from any other vehicle before assigning
-        await this.app.prisma.vehicle.updateMany({
-          where: { currentEmtId: crew.emtId },
-          data: { currentEmtId: null },
-        });
-        data.currentEmtId = crew.emtId;
-      }
-    }
+    const data: Partial<Record<CrewSlot, string | null>> = {};
+    const placed = new Map<string, CrewSlot>();
 
-    if (crew.nurseId !== undefined) {
-      if (crew.nurseId === null) {
-        data.currentNurseId = null;
-      } else {
-        const nurse = await this.app.prisma.user.findUnique({ where: { id: crew.nurseId } });
-        if (!nurse || !nurse.isActive || nurse.role !== Role.NURSE) {
-          throw new BadRequestError('Selected nurse is invalid or inactive');
-        }
-        if (nurse.agencyId !== vehicle.agencyId) {
-          throw new BadRequestError('Nurse must belong to the same agency as the vehicle');
-        }
-        await this.app.prisma.vehicle.updateMany({
-          where: { currentNurseId: crew.nurseId },
-          data: { currentNurseId: null },
-        });
-        data.currentNurseId = crew.nurseId;
+    for (const r of requested) {
+      const id = crew[r.key];
+      if (id === undefined) continue;
+      if (id === null) {
+        data[r.slot] = null;
+        continue;
       }
+      if (placed.has(id)) throw new BadRequestError('The same person cannot fill two crew slots');
+      const member = await this.app.prisma.user.findUnique({ where: { id } });
+      if (!member || !member.isActive || member.role !== r.role) {
+        throw new BadRequestError(`Selected ${r.label} is invalid or inactive`);
+      }
+      if (member.agencyId !== vehicle.agencyId) {
+        throw new BadRequestError(`${r.label} must belong to the same agency as the vehicle`);
+      }
+      placed.set(id, r.slot);
+      data[r.slot] = id;
     }
 
     if (Object.keys(data).length === 0) {
-      throw new BadRequestError('Provide emtId and/or nurseId to update');
+      throw new BadRequestError('Provide emtId, emt2Id, nurseId and/or nurse2Id to update');
+    }
+
+    // A person sits in one slot on one vehicle: free each newly placed medic
+    // from other vehicles, and from any other slot on this one.
+    for (const [id, target] of placed) {
+      for (const slot of MEDIC_SLOTS) {
+        await this.app.prisma.vehicle.updateMany({
+          where: { [slot]: id, NOT: { id: vehicleId } },
+          data: { [slot]: null },
+        });
+        if (slot !== target && vehicle[slot] === id && !(slot in data)) data[slot] = null;
+      }
     }
 
     const updated = await this.app.prisma.vehicle.update({
@@ -522,11 +525,11 @@ export class FleetService {
   }
 
   /**
-   * READY vehicles in an agency that have a checked-in driver - candidates for
+   * READY vehicles in an agency with a complete crew - candidates for
    * handover / case reassignment.
    */
-  listAvailableVehiclesForHandover(agencyId: string, excludeVehicleId?: string) {
-    return this.app.prisma.vehicle.findMany({
+  async listAvailableVehiclesForHandover(agencyId: string, excludeVehicleId?: string) {
+    const vehicles = await this.app.prisma.vehicle.findMany({
       where: {
         agencyId,
         isActive: true,
@@ -537,6 +540,7 @@ export class FleetService {
       orderBy: { registrationNumber: 'asc' },
       include: crewInclude,
     });
+    // Handover goes through the same crew rule as dispatch.
+    return vehicles.filter(isCrewComplete);
   }
-
 }

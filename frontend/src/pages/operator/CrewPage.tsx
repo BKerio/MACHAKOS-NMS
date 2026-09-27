@@ -8,6 +8,7 @@ import CrewAssignmentCard from '@/components/operator/CrewAssignmentCard';
 import AvailableAmbulancesCard from '@/components/operator/AvailableAmbulancesCard';
 import StatusBadge from '@/components/operator/StatusBadge';
 import { inAppNavigateUrl } from '@/utils/navigateUrl';
+import { taskMedics } from '@/utils/crew';
 
 function CrewMemberRow({ icon, role, name, phone }: { icon: React.ReactNode; role: string; name: string; phone?: string | null }) {
   return (
@@ -81,14 +82,24 @@ function CrewPage() {
             {task.driver ? (
               <CrewMemberRow icon={<Car size={18} style={{ color: 'var(--green)' }} />} role="Driver" name={task.driver.name} phone={task.driver.phone} />
             ) : null}
-            {task.emt ? (
-              <CrewMemberRow icon={<Stethoscope size={18} style={{ color: 'var(--green)' }} />} role="EMT" name={task.emt.name} phone={task.emt.phone} />
-            ) : (
-              <p className="text-sm py-2" style={{ color: 'var(--muted)' }}>No EMT assigned to this case.</p>
+            {taskMedics(task).length === 0 && (
+              <p className="text-sm py-2" style={{ color: 'var(--muted)' }}>No medics assigned to this case.</p>
             )}
-            {task.nurse && (
-              <CrewMemberRow icon={<HeartPulse size={18} style={{ color: 'var(--green)' }} />} role="Nurse" name={task.nurse.name} phone={task.nurse.phone} />
-            )}
+            {taskMedics(task).map((m, i) => (
+              <CrewMemberRow
+                key={i}
+                icon={
+                  m.role === 'EMT' ? (
+                    <Stethoscope size={18} style={{ color: 'var(--green)' }} />
+                  ) : (
+                    <HeartPulse size={18} style={{ color: 'var(--green)' }} />
+                  )
+                }
+                role={m.role}
+                name={m.person.name}
+                phone={m.person.phone}
+              />
+            ))}
           </div>
 
           {user?.role === 'DRIVER' && inAppMapsUrl ? (

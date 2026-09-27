@@ -20,6 +20,7 @@ import { useVehicleTracking } from '@/hooks/useVehicleTracking';
 // used below to build the vehicle lookup.
 import OpsMap from '@/components/shared/Map';
 import { fmtDate, fmtTime } from '@/lib/datetime';
+import { crewShortfall, isCrewComplete, vehicleMedics } from '@/utils/crew';
 
 const NAIROBI_CENTER: [number, number] = [-1.2921, 36.8219];
 const TRACKER_STALE_MS = 5 * 60 * 1000; // no fix in 5 min → treat as "no signal"
@@ -72,7 +73,8 @@ function DutyRow({ name, since }: { name: string; since: string }) {
 function AmbulanceCard({ vehicle, live }: { vehicle: Vehicle; live?: { timestamp: string } }) {
   const lastFix = live?.timestamp ?? vehicle.lastLocationAt;
   const isLive = !!lastFix && Date.now() - new Date(lastFix).getTime() < TRACKER_STALE_MS;
-  const hasCrew = !!(vehicle.currentDriver || vehicle.currentEmt || vehicle.currentNurse);
+  const medics = vehicleMedics(vehicle);
+  const hasCrew = !!vehicle.currentDriver || medics.length > 0;
 
   const statusPill =
     vehicle.status === 'BUSY' ? 'pill-red' : vehicle.status === 'MAINTENANCE' ? 'pill-gray' : 'pill-green';
@@ -107,15 +109,13 @@ function AmbulanceCard({ vehicle, live }: { vehicle: Vehicle; live?: { timestamp
               <SteeringWheel size={14} /> {vehicle.currentDriver.name} <span className="muted">(driver)</span>
             </div>
           )}
-          {vehicle.currentEmt && (
-            <div className="row" style={{ gap: 7, fontSize: 12.5, color: '#DCEAE2' }}>
-              <FirstAidKit size={14} /> {vehicle.currentEmt.name} <span className="muted">(EMT)</span>
+          {medics.map((m, i) => (
+            <div key={i} className="row" style={{ gap: 7, fontSize: 12.5, color: '#DCEAE2' }}>
+              <FirstAidKit size={14} /> {m.person.name} <span className="muted">({m.role === 'EMT' ? 'EMT' : 'nurse'})</span>
             </div>
-          )}
-          {vehicle.currentNurse && (
-            <div className="row" style={{ gap: 7, fontSize: 12.5, color: '#DCEAE2' }}>
-              <FirstAidKit size={14} /> {vehicle.currentNurse.name} <span className="muted">(nurse)</span>
-            </div>
+          ))}
+          {vehicle.currentDriver && !isCrewComplete(vehicle) && (
+            <div style={{ fontSize: 12, color: '#F5C26B' }}>Crew incomplete - {crewShortfall(vehicle)}</div>
           )}
         </div>
       ) : (
@@ -154,10 +154,11 @@ function WallboardPage() {
   }, [queryClient]);
 
   const activeVehicles = vehicles.filter((v) => v.isActive);
-  const onDuty = activeVehicles.filter((v) => v.currentDriver || v.currentEmt || v.currentNurse);
+  const onDuty = activeVehicles.filter((v) => v.currentDriver || vehicleMedics(v).length > 0);
   const driversOnDuty = activeVehicles.filter((v) => v.currentDriver);
-  const emtsOnDuty = activeVehicles.filter((v) => v.currentEmt);
-  const nursesOnDuty = activeVehicles.filter((v) => v.currentNurse);
+  // People, not vehicles - an ambulance can carry two EMTs or two nurses.
+  const emtsOnDuty = activeVehicles.flatMap((v) => vehicleMedics(v).filter((m) => m.role === 'EMT'));
+  const nursesOnDuty = activeVehicles.flatMap((v) => vehicleMedics(v).filter((m) => m.role === 'Nurse'));
   const withTrackers = activeVehicles.filter((v) => !!v.imei);
 
   return (

@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Check, LoaderCircle } from 'lucide-react';
+import { UserPlus, Check, LoaderCircle, AlertTriangle } from 'lucide-react';
 import { getAssignableCrew, assignVehicleCrew, getErrorMessage } from '@/api/responder';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
 import { socket } from '@/lib/socket';
+import { crewShortfall } from '@/utils/crew';
 import type { AssignableCrewMember, Vehicle } from '@/types/api';
+
+type SlotKey = 'emtId' | 'emt2Id' | 'nurseId' | 'nurse2Id';
 
 function roleLabel(role: 'EMT' | 'NURSE') {
   return role === 'EMT' ? 'EMT' : 'nurse';
@@ -37,8 +40,8 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
   }, [isDriver, queryClient]);
 
   const setSlotMutation = useMutation({
-    mutationFn: ({ role, userId }: { role: 'EMT' | 'NURSE'; userId: string | null }) =>
-      assignVehicleCrew(myVehicle.id, role === 'EMT' ? { emtId: userId } : { nurseId: userId }),
+    mutationFn: ({ slot, userId }: { role: 'EMT' | 'NURSE'; slot: SlotKey; userId: string | null }) =>
+      assignVehicleCrew(myVehicle.id, { [slot]: userId }),
     onSuccess: (_data, { role, userId }) => {
       queryClient.invalidateQueries({ queryKey: ['operator', 'my-checkin'] });
       queryClient.invalidateQueries({ queryKey: ['operator', 'assignable-crew'] });
@@ -59,12 +62,41 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
 
   const emts = members.filter((m) => m.role === 'EMT');
   const nurses = members.filter((m) => m.role === 'NURSE');
+  const shortfall = crewShortfall(myVehicle);
 
-  const renderPicker = (role: 'EMT' | 'NURSE', options: AssignableCrewMember[], currentId?: string | null) => {
+  // Two slots per role; toggling a person fills the first free one or empties theirs.
+  const slotsFor = (role: 'EMT' | 'NURSE'): { key: SlotKey; id: string | undefined }[] =>
+    role === 'EMT'
+      ? [{ key: 'emtId', id: myVehicle.currentEmt?.id }, { key: 'emt2Id', id: myVehicle.currentEmt2?.id }]
+      : [{ key: 'nurseId', id: myVehicle.currentNurse?.id }, { key: 'nurse2Id', id: myVehicle.currentNurse2?.id }];
+
+  const toggle = (role: 'EMT' | 'NURSE', personId: string) => {
+    const slots = slotsFor(role);
+    const held = slots.find((s) => s.id === personId);
+    if (held) {
+      setSlotMutation.mutate({ role, slot: held.key, userId: null });
+      return;
+    }
+    const free = slots.find((s) => !s.id);
+    if (!free) {
+      addNotification({
+        type: 'info',
+        title: `Two ${role === 'EMT' ? 'EMTs' : 'nurses'} already assigned`,
+        message: 'Remove one first to swap someone in.',
+      });
+      return;
+    }
+    setSlotMutation.mutate({ role, slot: free.key, userId: personId });
+  };
+
+  const renderPicker = (role: 'EMT' | 'NURSE', options: AssignableCrewMember[]) => {
+    const assignedIds = slotsFor(role).map((s) => s.id).filter(Boolean);
     const busy = setSlotMutation.isPending && setSlotMutation.variables?.role === role;
     return (
       <div className="mb-4">
-        <p className="label mb-2">{role}</p>
+        <p className="label mb-2">
+          {role === 'EMT' ? 'EMTs' : 'Nurses'} <span style={{ color: 'var(--muted)', fontWeight: 500 }}>({assignedIds.length} of 2)</span>
+        </p>
         {isLoading ? (
           <div className="skel" style={{ height: 40 }} />
         ) : options.length === 0 ? (
@@ -73,19 +105,8 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            <button
-              onClick={() => currentId && setSlotMutation.mutate({ role, userId: null })}
-              disabled={setSlotMutation.isPending || !currentId}
-              className="text-left px-3.5 py-2.5 rounded-xl border-2 transition-all"
-              style={!currentId ? { borderColor: 'var(--green)', background: 'var(--green-light)' } : { borderColor: 'var(--border)', background: 'var(--surface)' }}
-            >
-              <p className={`text-sm ${!currentId ? 'font-bold' : ''}`} style={{ color: !currentId ? 'var(--green)' : 'var(--muted)' }}>
-                {currentId ? 'Remove from this ambulance' : 'Nobody assigned'}
-              </p>
-              {currentId && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>They stay on shift - no check-out needed</p>}
-            </button>
             {options.map((person) => {
-              const active = currentId === person.id;
+              const active = assignedIds.includes(person.id);
               const takenElsewhere = !active && person.status === 'TAKEN' && person.assignedVehicleId != null && person.assignedVehicleId !== myVehicle.id;
               const otherAmbulance = person.assignedVehicleRegistration ?? 'another ambulance';
               return (
@@ -97,7 +118,7 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
                       return;
                     }
                     if (setSlotMutation.isPending) return;
-                    setSlotMutation.mutate({ role, userId: person.id });
+                    toggle(role, person.id);
                   }}
                   disabled={setSlotMutation.isPending && !takenElsewhere}
                   className="flex items-center gap-2.5 text-left px-3.5 py-2.5 rounded-xl border-2 transition-all"
@@ -111,6 +132,7 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
                     <p className={`text-sm ${active ? 'font-bold' : ''}`} style={{ color: 'var(--ink)' }}>{person.name}</p>
                     {person.phone && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{person.phone}</p>}
                     {takenElsewhere && <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>With {otherAmbulance}</p>}
+                    {active && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Tap to remove - they stay on shift</p>}
                   </div>
                   {busy && active ? (
                     <LoaderCircle size={18} className="animate-spin" style={{ color: 'var(--green)' }} />
@@ -137,14 +159,26 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
         <div className="flex-1">
           <p className="text-base font-bold" style={{ color: 'var(--ink)' }}>Assign crew</p>
           <p className="text-sm mt-0.5" style={{ color: 'var(--muted)' }}>
-            Pick an EMT and nurse for {myVehicle.registrationNumber}. If someone shows Taken, they’re already
-            helping another ambulance.
+            {myVehicle.registrationNumber} needs two medics to take calls: an EMT and a nurse, two EMTs, or two
+            nurses. If someone shows Taken, they’re already helping another ambulance.
           </p>
         </div>
       </div>
 
-      {renderPicker('EMT', emts, myVehicle.currentEmt?.id)}
-      {renderPicker('NURSE', nurses, myVehicle.currentNurse?.id)}
+      <div
+        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl mb-4 text-sm font-semibold"
+        style={
+          shortfall
+            ? { background: 'var(--amber-soft)', color: 'var(--amber)' }
+            : { background: 'var(--green-light)', color: 'var(--green)' }
+        }
+      >
+        {shortfall ? <AlertTriangle size={16} /> : <Check size={16} />}
+        {shortfall ? `Not ready for dispatch - ${shortfall}` : 'Crew ready for dispatch'}
+      </div>
+
+      {renderPicker('EMT', emts)}
+      {renderPicker('NURSE', nurses)}
     </div>
   );
 }

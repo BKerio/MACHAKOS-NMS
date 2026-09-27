@@ -12,6 +12,7 @@ import api from '@/api/client';
 import { Vehicle, Incident } from '@/types/api';
 import { LiveVehicle, getVehicleTrackingStatus } from '@/hooks/useVehicleTracking';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { crewShortfall, isCrewComplete, MIN_MEDICS, vehicleMedics } from '@/utils/crew';
 
 // ── Haversine (km) ────────────────────────────────────────────────────────────
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -96,6 +97,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
     : clickedVehicle;
   const trackingStatus = getVehicleTrackingStatus(effectiveVehicle);
   const hasDriver = !!dbVehicle?.currentDriver;
+  const crewReady = !!dbVehicle && isCrewComplete(dbVehicle);
   const isVehicleBusy = dbVehicle?.status === 'BUSY';
   const isLoading = loadingVehicles || loadingIncidents;
 
@@ -128,6 +130,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
 
   const canDispatch =
     hasDriver &&
+    crewReady &&
     !isVehicleBusy &&
     !!selectedIncidentId &&
     !!dbVehicle &&
@@ -177,12 +180,21 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
           ) : (
             <div className="flex flex-col gap-2">
               {[
-                { role: 'Driver', person: dbVehicle?.currentDriver, required: true },
-                { role: 'EMT', person: dbVehicle?.currentEmt, required: false },
-                { role: 'Nurse', person: dbVehicle?.currentNurse, required: false },
-              ].map(({ role, person, required }) => (
+                { key: 'driver', role: 'Driver', person: dbVehicle?.currentDriver, required: true },
+                ...(dbVehicle ? vehicleMedics(dbVehicle) : []).map((m, i) => ({
+                  key: `medic-${i}`,
+                  role: m.role,
+                  person: m.person,
+                  required: true,
+                })),
+                // Open medic places still needed before this unit can be dispatched.
+                ...Array.from(
+                  { length: Math.max(0, MIN_MEDICS - (dbVehicle ? vehicleMedics(dbVehicle).length : 0)) },
+                  (_, i) => ({ key: `open-${i}`, role: 'Medic', person: null, required: true }),
+                ),
+              ].map(({ key, role, person, required }) => (
                 <div
-                  key={role}
+                  key={key}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-lg ${
                     person
                       ? 'bg-brand-green/5 border border-brand-green/20'
@@ -223,7 +235,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
                           : 'text-slate-400'
                     }`}
                   >
-                    {person?.name ?? (required ? 'Not checked in' : 'Unassigned')}
+                    {person?.name ?? (role === 'Driver' ? 'Not checked in' : 'Needed')}
                   </span>
                 </div>
               ))}
@@ -337,7 +349,9 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
           <p className="text-xs text-center text-status-warning font-medium mb-3">
             {!hasDriver
               ? 'Driver must check in via mobile before dispatching'
-              : 'Vehicle is currently on an active task'}
+              : !crewReady
+                ? `Crew incomplete (${crewShortfall(dbVehicle!)}) - needs an EMT and a nurse, two EMTs, or two nurses`
+                : 'Vehicle is currently on an active task'}
           </p>
         )}
         <button

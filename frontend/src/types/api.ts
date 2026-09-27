@@ -76,7 +76,13 @@ export interface Vehicle {
   agencyId: string;
   currentDriver?: CrewMember | null;
   currentEmt?: CrewMember | null;
+  currentEmt2?: CrewMember | null;
   currentNurse?: CrewMember | null;
+  currentNurse2?: CrewMember | null;
+  /** Driver plus two medics (EMT + nurse, two EMTs, or two nurses) - computed
+   * by the backend on dispatcher-facing lists; see utils/crew.ts otherwise. */
+  crewComplete?: boolean;
+  medicCount?: number;
   /** Pre-dispatch equipment checklist readiness, present on dispatcher-facing
    * vehicle lists (nearest-vehicles, admin vehicle list) - see backend
    * fleet/checklist.ts. Absent on payloads that don't compute it. */
@@ -340,10 +346,14 @@ export interface Task {
   vehicle?: Vehicle;
   driverId: string;
   emtId?: string | null;
+  emt2Id?: string | null;
   nurseId?: string | null;
+  nurse2Id?: string | null;
   driver?: Pick<User, 'id' | 'name' | 'phone'> | null;
   emt?: Pick<User, 'id' | 'name' | 'phone'> | null;
+  emt2?: Pick<User, 'id' | 'name' | 'phone'> | null;
   nurse?: Pick<User, 'id' | 'name' | 'phone'> | null;
+  nurse2?: Pick<User, 'id' | 'name' | 'phone'> | null;
   incident?: Incident;
 }
 

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { IncidentStatus, Role, TaskStatus, VehicleStatus } from '../../shared/types/index.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { NATURE_TAXONOMY } from './nature-taxonomy.js';
+import { taskCrewIds } from '../fleet/crew.js';
 
 export class IncidentService {
   constructor(private app: FastifyInstance) {}
@@ -258,7 +259,9 @@ export class IncidentService {
             vehicle: true,
             driver: { select: { name: true, phone: true } },
             emt:    { select: { name: true, phone: true } },
+            emt2:   { select: { name: true, phone: true } },
             nurse:  { select: { name: true, phone: true } },
+            nurse2: { select: { name: true, phone: true } },
           },
           orderBy: { receivedAt: 'desc' },
         },
@@ -678,12 +681,9 @@ export class IncidentService {
       const updatedTask = await this.app.prisma.task.findUnique({ where: { id: task.id } });
       if (!updatedTask) continue;
 
-      let updateRoom = this.app.io
-        .to(`user:${task.driverId}`)
-        .to(`role:${Role.DISPATCHER}`);
-      if (task.emtId) updateRoom = updateRoom.to(`user:${task.emtId}`);
-      if (task.nurseId) updateRoom = updateRoom.to(`user:${task.nurseId}`);
-      updateRoom.emit('task:updated', updatedTask);
+      this.app.io
+        .to([...taskCrewIds(task).map((id) => `user:${id}`), `role:${Role.DISPATCHER}`])
+        .emit('task:updated', updatedTask);
     }
 
     return updated;

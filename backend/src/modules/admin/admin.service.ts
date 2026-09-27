@@ -4,6 +4,7 @@ import { AgencyType, Role } from '../../shared/types/index.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError.js';
 import { hashPassword } from '../../shared/utils/hash.js';
 import { getChecklistSummary } from '../fleet/checklist.js';
+import { isCrewComplete } from '../fleet/crew.js';
 
 export class AdminService {
   constructor(private app: FastifyInstance) {}
@@ -152,6 +153,7 @@ export class AdminService {
     const summaries = await Promise.all(vehicles.map((v) => getChecklistSummary(this.app.prisma, v.id)));
     const withChecklist = vehicles.map((v, i) => ({
       ...v,
+      crewComplete: isCrewComplete(v),
       checklistComplete: summaries[i].complete,
       checklistConfirmed: summaries[i].confirmed,
       checklistTotal: summaries[i].totalRequired,
