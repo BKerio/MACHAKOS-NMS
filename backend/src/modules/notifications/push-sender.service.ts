@@ -35,6 +35,16 @@ export class PushSenderService {
 
       const results = await client.sendMulticast(tokens, title, body, data);
 
+      // Surface real delivery failures - e.g. "SenderId mismatch" when the
+      // active gateway key is for a different Firebase project than the app.
+      const failed = results.filter((r) => !r.success);
+      if (failed.length > 0) {
+        this.app.log.warn(
+          { title, sent: results.length - failed.length, failed: failed.length, errors: [...new Set(failed.map((r) => r.error))] },
+          'Some push notifications were not delivered',
+        );
+      }
+
       // Clear tokens FCM says are dead, so future sends don't keep retrying them.
       const stale = results.filter((r) => !r.success && STALE_TOKEN_ERROR.test(r.error ?? '')).map((r) => r.token);
       if (stale.length > 0) {

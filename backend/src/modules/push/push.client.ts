@@ -36,6 +36,16 @@ export class FcmPushClient {
         tokens,
         notification: { title, body },
         data,
+        // Dispatch alerts must wake a locked phone in Doze straight away, on
+        // the crew app's max-importance channel (MACHAKOS/app push_service.dart).
+        android: {
+          priority: 'high',
+          notification: { channelId: 'high_importance_channel', sound: 'default', defaultVibrateTimings: true },
+        },
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: { aps: { sound: 'default', 'interruption-level': 'time-sensitive' } },
+        },
       });
       return response.responses.map((r, i) => ({
         token: tokens[i],
