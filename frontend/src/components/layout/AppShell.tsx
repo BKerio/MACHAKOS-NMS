@@ -100,27 +100,38 @@ function AppShell() {
   // the mobile app - dispatchers/admins already see everything live via the
   // socket handlers above, so it's scoped to the roles push actually targets.
   // Lazy-imported so the Firebase SDK isn't in every role's bundle.
+  //
+  // Keyed on the user's id and role, not the user object: a profile refresh
+  // replaces the object, and re-running this would needlessly unregister and
+  // re-register the browser.
+  const userId = user?.id;
+  const userRole = user?.role;
   useEffect(() => {
-    if (!token || !user || !FIELD_CREW_ROLES.includes(user.role)) return;
+    if (!token || !userId || !userRole || !FIELD_CREW_ROLES.includes(userRole)) return;
     let cancelled = false;
+    let stopListening: (() => void) | null = null;
+    const session = token; // still valid in the cleanup below, unlike the store's
 
-    import('@/lib/firebasePush').then(({ registerWebPush, onForegroundMessage }) => {
+    import('@/lib/firebasePush').then(async ({ registerWebPush, onForegroundMessage }) => {
       if (cancelled) return;
       registerWebPush();
-      onForegroundMessage(({ title, body }) => {
+      const stop = await onForegroundMessage(({ title, body }) => {
         addNotification({
           type: 'info',
           title: title || 'New notification',
           message: body || '',
         });
       });
+      if (cancelled) stop();
+      else stopListening = stop;
     });
 
     return () => {
       cancelled = true;
-      import('@/lib/firebasePush').then(({ unregisterWebPush }) => unregisterWebPush());
+      stopListening?.();
+      import('@/lib/firebasePush').then(({ unregisterWebPush }) => unregisterWebPush(session));
     };
-  }, [addNotification, token, user]);
+  }, [addNotification, token, userId, userRole]);
 
   if (!token) return <Navigate to="/login" replace />;
 

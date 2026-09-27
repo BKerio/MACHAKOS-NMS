@@ -16,6 +16,9 @@ const firebaseConfig = {
 
 let messaging: Messaging | null = null;
 
+/** This browser's token as last registered, so sign-out removes only it. */
+let registeredToken: string | null = null;
+
 async function getMessagingInstance(): Promise<Messaging | null> {
   if (messaging) return messaging;
   if (!(await isSupported())) return null; // e.g. Safari without web push, or non-browser context
@@ -48,16 +51,31 @@ export async function registerWebPush(): Promise<void> {
     const token = await getToken(msg, { vapidKey, serviceWorkerRegistration: registration });
     if (!token) return;
 
-    await api.post('/notifications/token', { fcmToken: token });
+    // The backend keeps one row per device, so this browser and the crew
+    // app on the same user's phone both receive alerts.
+    await api.post('/notifications/token', { fcmToken: token, platform: 'WEB' });
+    registeredToken = token;
   } catch (err) {
     console.warn('Web push registration failed:', err);
   }
 }
 
-/** Clears this browser's push token on sign-out, mirroring the mobile app. */
-export async function unregisterWebPush(): Promise<void> {
+/**
+ * Clears this browser's push token on sign-out. Only this browser's: the
+ * same user's phone must keep getting case alerts.
+ */
+export async function unregisterWebPush(bearer?: string | null): Promise<void> {
+  const token = registeredToken;
+  registeredToken = null;
+  if (!token) return; // never registered here - nothing of ours to remove
   try {
-    await api.delete('/notifications/token');
+    // [bearer] is the session captured when push was registered: on sign-out
+    // the store's token is already gone, and without it this call would 401
+    // and leave the signed-out browser still receiving case alerts.
+    await api.delete('/notifications/token', {
+      data: { fcmToken: token },
+      headers: bearer ? { Authorization: `Bearer ${bearer}` } : undefined,
+    });
   } catch {
     // Best-effort - the token naturally stops being usable once the session ends.
   }
@@ -66,10 +84,14 @@ export async function unregisterWebPush(): Promise<void> {
 /** Foreground messages don't trigger the service worker's notification popup
  *  on their own - `onMessageHandler` lets the caller route them into the
  *  app's own in-app notification drawer instead. */
-export async function onForegroundMessage(handler: (payload: { title?: string; body?: string }) => void): Promise<void> {
+export async function onForegroundMessage(
+  handler: (payload: { title?: string; body?: string }) => void,
+): Promise<() => void> {
   const msg = await getMessagingInstance();
-  if (!msg) return;
-  onMessage(msg, (payload) => {
+  if (!msg) return () => {};
+  // Returns the unsubscribe, so re-registering (e.g. sign out then in again
+  // in the same tab) doesn't stack handlers and duplicate every alert.
+  return onMessage(msg, (payload) => {
     handler({ title: payload.notification?.title, body: payload.notification?.body });
   });
 }

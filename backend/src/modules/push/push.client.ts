@@ -46,6 +46,13 @@ export class FcmPushClient {
           headers: { 'apns-priority': '10' },
           payload: { aps: { sound: 'default', 'interruption-level': 'time-sensitive' } },
         },
+        // Web dashboard: Machakos icon (served by the frontend), and keep the
+        // alert on screen until the operator acts on it. Clicks are routed by
+        // frontend/public/firebase-messaging-sw.js.
+        webpush: {
+          headers: { Urgency: 'high' },
+          notification: { icon: '/push-icon.png', badge: '/push-icon.png', requireInteraction: true },
+        },
       });
       return response.responses.map((r, i) => ({
         token: tokens[i],

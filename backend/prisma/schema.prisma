@@ -103,6 +103,8 @@ model User {
   // always kept in sync with roles[0]. When roles.length > 1, login requires
   // the user to pick which one to activate for the session (see AuthService).
   roles        Role[]   @default([])
+  // Legacy single-device token, superseded by PushToken (one row per device).
+  // Kept so old rows migrate over; no longer read or written.
   fcmToken     String?  @map("fcm_token")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -130,8 +132,27 @@ model User {
   checkIns                   CheckIn[]           @relation("UserCheckIns")
   inventoryCheckouts         InventoryCheckout[]
   checklistChecksMade        VehicleChecklistCheck[] @relation("VehicleChecklistCheckedBy")
+  pushTokens                 PushToken[]
 
   @@map("users")
+}
+
+// One Firebase Cloud Messaging token per device a user is signed in on - the
+// crew app on their phone and the web dashboard in their browser each get
+// their own row, so alerts reach every device instead of whichever last
+// registered. A token is unique: re-registering it (e.g. another user signs
+// in on the same phone) moves it to the new user.
+model PushToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  platform  String   @default("UNKNOWN") // ANDROID | IOS | WEB | UNKNOWN
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("push_tokens")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
