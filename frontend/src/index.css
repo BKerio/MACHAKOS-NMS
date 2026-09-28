@@ -424,6 +424,53 @@ body {
 @media (min-width: 1080px) { .dash-main { grid-template-columns: 2fr 1fr; } }
 .dash-lower { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
 @media (min-width: 1000px) { .dash-lower { grid-template-columns: 1fr 1fr; } }
+
+/* ── Field crew on the air (dashboard) ── */
+.crew-air {
+  display: grid; grid-template-columns: 1fr; gap: 20px; align-items: center;
+  background: var(--nav-bg); color: var(--nav-ink); border-radius: var(--radius-lg);
+  padding: 20px 22px; box-shadow: var(--shadow-md);
+}
+@media (min-width: 640px) { .crew-air { grid-template-columns: 190px 1fr; } .crew-air-side { grid-column: 1 / -1; } }
+@media (min-width: 1180px) { .crew-air { grid-template-columns: 190px 1fr 300px; } .crew-air-side { grid-column: auto; } }
+.crew-air-eyebrow { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--nav-muted); }
+.crew-air-live { width: 7px; height: 7px; border-radius: 99px; background: var(--color-status-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-status-success) 25%, transparent); }
+.crew-air-radar { position: relative; width: 88px; height: 88px; margin: 14px 0 6px; display: grid; place-items: center; }
+.crew-air-ring { position: absolute; inset: 14px; border-radius: 99px; border: 2px solid color-mix(in srgb, var(--green-bright) 55%, transparent); animation: crewRadar 2.8s ease-out infinite; }
+.crew-air-ring--late { animation-delay: 1.4s; }
+@keyframes crewRadar { 0% { transform: scale(.7); opacity: .9; } 100% { transform: scale(1.35); opacity: 0; } }
+.crew-air-count { position: relative; font-size: 40px; font-weight: 750; letter-spacing: -.04em; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
+.crew-air-caption { font-size: 12.5px; color: var(--nav-muted); }
+.crew-air-roles { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.crew-air-role { display: flex; align-items: center; gap: 12px; }
+.crew-air-role-ico { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; }
+.crew-air-role-body { flex: 1; min-width: 0; }
+.crew-air-role-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; color: var(--nav-ink); margin-bottom: 6px; }
+.crew-air-role-head b { font-size: 18px; font-weight: 750; color: #fff; font-variant-numeric: tabular-nums; }
+.crew-air-bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+.crew-air-bar > span { display: block; height: 100%; border-radius: 99px; transition: width .5s cubic-bezier(.16,1,.3,1); }
+.crew-air-side { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; border-radius: var(--radius); background: rgba(255,255,255,.05); border: 1px solid var(--nav-border); }
+.crew-air-ready { display: flex; flex-direction: column; gap: 4px; }
+.crew-air-ready-main { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; color: #fff; }
+.crew-air-ready--ok svg { color: var(--color-status-success); }
+.crew-air-ready--warn svg { color: var(--gold); }
+.crew-air-ready-sub { font-size: 12px; line-height: 1.45; color: var(--nav-muted); }
+.crew-air-who { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--nav-ink); font: inherit; }
+.crew-air-who:focus-visible { outline: 2px solid var(--green-bright); outline-offset: 4px; border-radius: 6px; }
+.crew-air-who-label { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--nav-ink); white-space: nowrap; }
+.crew-air-stack { display: flex; }
+.crew-air-av { width: 30px; height: 30px; border-radius: 99px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; border: 2px solid var(--nav-bg); flex-shrink: 0; }
+.crew-air-stack .crew-air-av + .crew-air-av { margin-left: -8px; }
+.crew-air-av--more { background: var(--nav-bg-2); color: var(--nav-ink); }
+.crew-air-roster { grid-column: 1 / -1; list-style: none; margin: 0; padding: 4px 0 0; border-top: 1px solid var(--nav-border); display: grid; grid-template-columns: 1fr; gap: 2px; animation: fadeUp .25s ease both; }
+@media (min-width: 900px) { .crew-air-roster { grid-template-columns: 1fr 1fr; column-gap: 16px; } }
+.crew-air-person { display: flex; align-items: center; gap: 10px; padding: 9px 4px; min-width: 0; }
+.crew-air-person .crew-air-av { border-color: transparent; }
+.crew-air-person-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.crew-air-person-main b { font-size: 13.5px; font-weight: 650; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crew-air-person-main span { font-size: 11.5px; color: var(--nav-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crew-air-role-tag { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 99px; border: 1px solid; flex-shrink: 0; }
+.crew-air-since { font-size: 11.5px; color: var(--nav-muted); font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
 .detail-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 @media (min-width: 1000px) { .detail-grid { grid-template-columns: 1.6fr 1fr; align-items: start; } }
 

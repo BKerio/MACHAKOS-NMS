@@ -18,6 +18,7 @@ import { socket } from '@/lib/socket';
 import Map from '@/components/shared/Map';
 import { useVehicleTracking, LiveVehicle } from '@/hooks/useVehicleTracking';
 import VehicleDispatchPanel from '@/components/shared/VehicleDispatchPanel';
+import CrewOnAir from '@/components/dashboard/CrewOnAir';
 
 function DashboardPage() {
   const navigate = useNavigate();
@@ -110,7 +111,7 @@ function DashboardPage() {
       <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <div>
           <div className="section-title" style={{ fontSize: 20 }}>Command Dashboard</div>
-          <div className="muted" style={{ fontSize: 13.5, marginTop: 3 }}>Live operational picture · Nairobi City County</div>
+          <div className="muted" style={{ fontSize: 13.5, marginTop: 3 }}>Live operational picture · Machakos County</div>
         </div>
         <div className="wrap-gap">
           <button className="btn btn-ghost" onClick={() => navigate('/queue')}>
@@ -160,6 +161,9 @@ function DashboardPage() {
           <div className="stat-foot"><Timer size={12} /> Target 8:00</div>
         </div>
       </div>
+
+      {/* Who's actually connected from the field right now */}
+      <CrewOnAir />
 
       {/* Main: Map + Queue */}
       <div className="dash-main">
