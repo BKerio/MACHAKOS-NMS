@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlugZap, CheckCircle2, CircleSlash, FlaskConical, Save } from 'lucide-react';
-import DotLoader from '@/components/shared/DotLoader';
+import AppLoader from '@/components/shared/AppLoader';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { activateSmsGateway, deactivateSmsGateway, listSmsGateways, testSmsGateway, updateSmsGateway } from '@/api/settings';
 import type { SmsGatewaySummary } from '@/types/api';
@@ -130,7 +130,7 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
         <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginTop: 4 }}>
           <div className="flex gap-2">
             <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
-              {saveMutation.isPending ? <DotLoader size={14} /> : <Save size={14} />} Save
+              {saveMutation.isPending ? <AppLoader size={18} /> : <Save size={14} />} Save
             </button>
             <button
               type="button"
@@ -139,7 +139,7 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
               onClick={() => testMutation.mutate()}
               title={!gateway.configured ? 'Save credentials first' : undefined}
             >
-              {testMutation.isPending ? <DotLoader size={14} /> : <FlaskConical size={14} />} Test connection
+              {testMutation.isPending ? <AppLoader size={18} /> : <FlaskConical size={14} />} Test connection
             </button>
           </div>
           {gateway.isActive ? (
@@ -154,7 +154,7 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
               title={!gateway.implemented ? 'This provider is not yet wired up for sending' : !gateway.configured ? 'Save all required fields first' : undefined}
               onClick={() => activateMutation.mutate()}
             >
-              {activateMutation.isPending ? <DotLoader size={14} /> : <PlugZap size={14} />} Set as active
+              {activateMutation.isPending ? <AppLoader size={18} /> : <PlugZap size={14} />} Set as active
             </button>
           )}
         </div>

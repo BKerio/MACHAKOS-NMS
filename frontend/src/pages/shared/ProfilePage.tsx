@@ -10,11 +10,11 @@ import {
   Lock,
   Eye,
   EyeOff,
-  LoaderCircle,
   KeyRound,
   Check,
   Building2 as Buildings,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getMyProfile, updateMyProfile, getErrorMessage } from '@/api/responder';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -263,7 +263,7 @@ function ProfilePage() {
               >
                 {profileMutation.isPending ? (
                   <>
-                    <LoaderCircle size={15} className="spin" />
+                    <AppLoader size={19} />
                     Saving...
                   </>
                 ) : (
@@ -445,7 +445,7 @@ function ProfilePage() {
               >
                 {passwordMutation.isPending ? (
                   <>
-                    <LoaderCircle size={15} className="spin" />
+                    <AppLoader size={19} />
                     Updating...
                   </>
                 ) : (

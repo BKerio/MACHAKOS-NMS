@@ -6,6 +6,7 @@ import {
   Trash2,
   X as XIcon,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
@@ -129,7 +130,7 @@ function SubCountiesPage() {
       <div className="rounded-xl border shadow-sm overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <div className="w-10 h-10 border-4 border-t-brand-green rounded-full animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--green)' }} />
+            <AppLoader size={40} color="var(--green)" />
             <p className="font-black text-xs tracking-widest animate-pulse" style={{ color: 'var(--muted)' }}>Loading sub-counties…</p>
           </div>
         ) : filtered.length === 0 ? (

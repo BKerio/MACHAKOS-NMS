@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   RotateCcw as RefreshIcon, MapPin, Navigation as NavigationIcon, Phone, Users, FileText,
-  ArrowRight, XCircle, ArrowLeftRight, Ambulance, ShieldAlert, LoaderCircle,
+  ArrowRight, XCircle, ArrowLeftRight, Ambulance, ShieldAlert,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getActiveTask, getMyCheckIn, updateTaskStatus, closeIncident, handoverTask, getErrorMessage } from '@/api/responder';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -265,7 +266,7 @@ function AssignmentPage() {
               disabled={statusMutation.isPending}
               className="btn btn-primary btn-lg btn-block"
             >
-              {statusMutation.isPending ? <LoaderCircle size={18} className="animate-spin" /> : <ArrowRight size={18} />}
+              {statusMutation.isPending ? <AppLoader size={22} /> : <ArrowRight size={18} />}
               {actionLabel}
             </button>
           )}

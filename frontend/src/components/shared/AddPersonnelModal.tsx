@@ -8,6 +8,7 @@ import {
   Building2 as Buildings,
   Check,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import api from '@/api/client';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -401,7 +402,7 @@ function AddPersonnelModal({ isOpen, onClose }: AddPersonnelModalProps) {
             >
               {mutation.isPending ? (
                 <>
-                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <AppLoader size={14} color="#fff" />
                   Creating...
                 </>
               ) : (

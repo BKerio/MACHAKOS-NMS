@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Check, LoaderCircle, AlertTriangle } from 'lucide-react';
+import { UserPlus, Check, AlertTriangle } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getAssignableCrew, assignVehicleCrew, getErrorMessage } from '@/api/responder';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -135,7 +136,7 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
                     {active && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Tap to remove - they stay on shift</p>}
                   </div>
                   {busy && active ? (
-                    <LoaderCircle size={18} className="animate-spin" style={{ color: 'var(--green)' }} />
+                    <AppLoader size={22} style={{ color: 'var(--green)' }} />
                   ) : active ? (
                     <Check size={18} style={{ color: 'var(--green)' }} />
                   ) : takenElsewhere ? (

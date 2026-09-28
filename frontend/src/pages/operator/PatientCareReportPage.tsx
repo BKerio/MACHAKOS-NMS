@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { Camera, Image as ImageIcon, FileUp, CloudUpload, X as XIcon, LoaderCircle, FileText } from 'lucide-react';
+import { Camera, Image as ImageIcon, FileUp, CloudUpload, X as XIcon, FileText } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { uploadPatientCareReport, getErrorMessage } from '@/api/responder';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { confirmDialog } from '@/lib/alert';
@@ -138,7 +139,7 @@ function PatientCareReportPage() {
           Skip for now
         </button>
         <button onClick={submit} disabled={uploadMutation.isPending} className="btn flex-1" style={{ background: 'var(--nav-bg)', color: '#fff' }}>
-          {uploadMutation.isPending ? <LoaderCircle size={18} className="animate-spin" /> : <CloudUpload size={18} />}
+          {uploadMutation.isPending ? <AppLoader size={22} /> : <CloudUpload size={18} />}
           {uploadMutation.isPending ? 'Uploading…' : 'Upload report'}
         </button>
       </div>

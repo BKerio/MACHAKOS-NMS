@@ -1,4 +1,5 @@
 import { Outlet, Navigate } from 'react-router-dom';
+import AppLoader from '@/components/shared/AppLoader';
 import { Suspense, useEffect, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
@@ -172,7 +173,7 @@ function AppShell() {
           </div>
         )}
         <main className="content">
-          <Suspense fallback={<div className="p-10 text-center font-bold" style={{ color: 'var(--muted)' }}>Loading…</div>}>
+          <Suspense fallback={<div className="p-10 flex justify-center"><AppLoader size={34} color="var(--green)" label="Loading" /></div>}>
             <Outlet />
           </Suspense>
         </main>

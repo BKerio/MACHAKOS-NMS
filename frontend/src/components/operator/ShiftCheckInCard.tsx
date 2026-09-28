@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ClipboardCheck, MapPin, Camera, X as XIcon, LoaderCircle, Check, ChevronDown, ChevronUp,
+  ClipboardCheck, MapPin, Camera, X as XIcon, Check, ChevronDown, ChevronUp,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { confirmDialog } from '@/lib/alert';
@@ -86,7 +87,7 @@ function CheckInPanel({
             disabled={isLocating || isSubmitting}
             className={`btn btn-sm ${coords ? 'btn-soft' : 'btn-primary'}`}
           >
-            {isLocating ? <LoaderCircle size={14} className="animate-spin" /> : coords ? <Check size={14} /> : <MapPin size={14} />}
+            {isLocating ? <AppLoader size={18} /> : coords ? <Check size={14} /> : <MapPin size={14} />}
             {isLocating ? 'Locating…' : coords ? 'Location captured' : 'Capture location'}
           </button>
           {locError && <span className="text-xs" style={{ color: 'var(--red)' }}>{locError}</span>}
@@ -113,7 +114,7 @@ function CheckInPanel({
             disabled={!canSubmit}
             className="btn btn-primary btn-sm flex-1"
           >
-            {isSubmitting ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />}
+            {isSubmitting ? <AppLoader size={18} /> : <Check size={14} />}
             {isSubmitting ? 'Checking in…' : 'Complete check-in'}
           </button>
         </div>
@@ -202,7 +203,7 @@ function ShiftCheckInCard() {
               <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{roleLabel} · IMEI {myVehicle.imei}</p>
             </div>
             <button onClick={handleEndShift} disabled={checkOutMutation.isPending} className="btn btn-sm" style={{ border: '1.5px solid var(--red)', color: 'var(--red)', background: 'transparent' }}>
-              {checkOutMutation.isPending ? <LoaderCircle size={14} className="animate-spin" /> : 'End shift'}
+              {checkOutMutation.isPending ? <AppLoader size={18} /> : 'End shift'}
             </button>
           </div>
           <div className="flex items-center gap-2 pt-3 mt-3 border-t" style={{ borderColor: 'var(--border)' }}>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, LoaderCircle, Save } from 'lucide-react';
+import { ArrowLeft, Save } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getActiveTask, submitPatientData, getErrorMessage } from '@/api/responder';
 import { useNotificationStore } from '@/stores/notificationStore';
 
@@ -112,7 +113,7 @@ function PatientDataPage() {
       </div>
 
       <button onClick={handleSubmit} disabled={submitMutation.isPending} className="btn btn-primary btn-lg btn-block">
-        {submitMutation.isPending ? <LoaderCircle size={18} className="animate-spin" /> : <Save size={18} />}
+        {submitMutation.isPending ? <AppLoader size={22} /> : <Save size={18} />}
         {submitMutation.isPending ? 'Saving…' : 'Save Notes'}
       </button>
     </div>

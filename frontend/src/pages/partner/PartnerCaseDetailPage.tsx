@@ -13,6 +13,7 @@ import {
   ClipboardList as ClipboardText,
   CircleX as XCircle,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
 import { Incident, IncidentStatus } from '@/types/api';
@@ -76,7 +77,7 @@ function PartnerCaseDetailPage() {
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-4 border-brand-teal/20 border-t-brand-teal rounded-full animate-spin" />
+      <AppLoader size={32} className="text-brand-teal" label="Loading case" />
     </div>
   );
 

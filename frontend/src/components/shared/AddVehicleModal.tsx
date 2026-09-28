@@ -12,6 +12,7 @@ import {
   Info,
   CircleAlert as WarningCircle,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/api/client';
 import { Agency } from '@/types/api';
@@ -236,7 +237,7 @@ function AddVehicleModal({ isOpen, onClose }: AddVehicleModalProps) {
             >
               {mutation.isPending ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-brand-sidebar/30 border-t-brand-sidebar rounded-full animate-spin"></div>
+                  <AppLoader size={16} className="text-brand-sidebar" />
                   Commissioning...
                 </>
               ) : (

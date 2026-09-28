@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight, X as XIcon, LoaderCircle } from 'lucide-react';
+import { ArrowLeftRight, X as XIcon } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getAvailableHandoverVehicles, getErrorMessage } from '@/api/responder';
 import { HANDOVER_REASON_PRESETS, buildHandoverReason } from '@/utils/closureReasons';
 import { medicsInline } from '@/utils/crew';
@@ -143,7 +144,7 @@ function HandoverModal({
             <div className="mt-3">
               <p className="label mb-2.5">Choose a nearby free ambulance</p>
               {isLoading ? (
-                <LoaderCircle size={20} className="animate-spin" style={{ color: 'var(--green)' }} />
+                <AppLoader size={24} style={{ color: 'var(--green)' }} />
               ) : error ? (
                 <p className="text-sm" style={{ color: 'var(--red)' }}>{getErrorMessage(error)}</p>
               ) : vehicles.length === 0 ? (

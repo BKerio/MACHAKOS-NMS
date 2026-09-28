@@ -14,8 +14,8 @@ import {
   Check,
   X as XIcon,
   MapPin,
-  LoaderCircle as Spinner,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import type { LucideIcon } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -342,7 +342,7 @@ function FacilitiesPage() {
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <div className="w-10 h-10 border-4 border-t-brand-green rounded-full animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--green)' }} />
+              <AppLoader size={40} color="var(--green)" />
               <p className="font-black text-xs tracking-widest animate-pulse" style={{ color: 'var(--muted)' }}>Loading facilities…</p>
             </div>
           ) : (
@@ -567,7 +567,7 @@ function FacilitiesPage() {
                 <div className="relative mb-2">
                   <div className="flex items-center border rounded-xl px-3 h-11 gap-2" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
                     {isSearching || isReverseGeocoding
-                      ? <Spinner size={15} className="animate-spin flex-shrink-0" style={{ color: 'var(--muted-2)' }} />
+                      ? <AppLoader size={19} className="flex-shrink-0" style={{ color: 'var(--muted-2)' }} />
                       : <MagnifyingGlass size={15} className="flex-shrink-0" style={{ color: 'var(--muted-2)' }} />}
                     <input
                       className="flex-1 text-sm font-medium bg-transparent outline-none"

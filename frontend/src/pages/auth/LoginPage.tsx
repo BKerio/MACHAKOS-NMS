@@ -4,9 +4,10 @@ import { z } from 'zod';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Mail, Lock, Eye, EyeOff, ArrowRight, LoaderCircle, ShieldCheck, CircleAlert, ChevronLeft,
+  Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, CircleAlert, ChevronLeft,
   Phone, KeyRound, RefreshCw,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -249,7 +250,7 @@ function LoginPage() {
                     }}
                   >
                     {ROLE_LABEL[role]}
-                    {selectingRole ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}
+                    {selectingRole ? <AppLoader size={20} /> : <ArrowRight size={16} />}
                   </button>
                 ))}
               </div>
@@ -355,7 +356,7 @@ function LoginPage() {
                     style={{ marginTop: 4 }}
                   >
                     {isSubmitting ? (
-                      <><LoaderCircle size={18} className="spin" /> Signing in…</>
+                      <><AppLoader size={22} /> Signing in…</>
                     ) : (
                       <>Sign in <ArrowRight size={16} /></>
                     )}
@@ -391,7 +392,7 @@ function LoginPage() {
                     style={{ marginTop: 4 }}
                   >
                     {otpSubmitting ? (
-                      <><LoaderCircle size={18} className="spin" /> Sending code…</>
+                      <><AppLoader size={22} /> Sending code…</>
                     ) : (
                       <>Send code <ArrowRight size={16} /></>
                     )}
@@ -437,7 +438,7 @@ function LoginPage() {
                     type="submit"
                   >
                     {otpSubmitting ? (
-                      <><LoaderCircle size={18} className="spin" /> Verifying…</>
+                      <><AppLoader size={22} /> Verifying…</>
                     ) : (
                       <>Verify &amp; sign in <ArrowRight size={16} /></>
                     )}

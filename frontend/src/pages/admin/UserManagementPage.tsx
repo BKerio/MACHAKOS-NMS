@@ -16,6 +16,7 @@ import {
   TriangleAlert as AlertTriangle,
   Users,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/api/client';
@@ -349,7 +350,7 @@ function UserManagementPage() {
           <div className="overflow-x-auto flex-1 hide-scrollbar">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center h-full gap-4 py-20">
-                <div className="w-10 h-10 border-2 border-brand-teal/20 border-t-brand-teal rounded-full animate-spin" />
+                <AppLoader size={40} className="text-brand-teal" />
                 <p className="font-bold text-xs tracking-widest" style={{ color: 'var(--muted)' }}>
                   Loading users...
                 </p>
@@ -933,7 +934,7 @@ function UserManagementPage() {
             <div className="overflow-y-auto flex-1">
               {auditLoading ? (
                 <div className="flex items-center justify-center py-16 gap-3">
-                  <div className="w-8 h-8 border-2 border-brand-teal/20 border-t-brand-teal rounded-full animate-spin" />
+                  <AppLoader size={32} className="text-brand-teal" />
                   <p className="text-xs font-bold tracking-widest" style={{ color: 'var(--muted)' }}>
                     Loading audit records...
                   </p>

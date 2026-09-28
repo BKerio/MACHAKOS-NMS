@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getActiveTask, updateTaskStatus, getErrorMessage } from '@/api/responder';
 import { useNotificationStore } from '@/stores/notificationStore';
 import Map from '@/components/shared/Map';
@@ -166,7 +167,7 @@ function NavigatePage() {
             disabled={statusMutation.isPending}
             className="btn btn-primary btn-lg btn-block"
           >
-            {statusMutation.isPending ? <LoaderCircle size={18} className="animate-spin" /> : <ArrowRight size={18} />}
+            {statusMutation.isPending ? <AppLoader size={22} /> : <ArrowRight size={18} />}
             {actionLabel}
           </button>
         </div>

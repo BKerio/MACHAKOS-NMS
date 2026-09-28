@@ -21,6 +21,7 @@ import {
   Baby,
   Check,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import Map from '@/components/shared/Map';
 import CreatableCombobox from '@/components/shared/CreatableCombobox';
@@ -896,7 +897,7 @@ function NewIncidentWizard() {
                       autoComplete="off"
                     />
                     {(isReverseGeocoding || places.isLoading) && (
-                      <div className="absolute right-3 top-2.5 w-4 h-4 border-2 border-[var(--ink)] border-t-transparent rounded-full animate-spin" />
+                      <AppLoader size={16} color="var(--ink)" className="absolute right-3 top-2.5" />
                     )}
                     {/* Google Places suggestions */}
                     {places.available && showSuggestions && places.suggestions.length > 0 && (
@@ -996,7 +997,7 @@ function NewIncidentWizard() {
                       className="px-4 py-2.5 text-xs flex items-center gap-2"
                       style={{ background: 'var(--surface-2)', borderTop: '1px solid var(--border)', color: 'var(--muted)' }}
                     >
-                      <div className="w-3 h-3 border-2 border-[var(--ink)] border-t-transparent rounded-full animate-spin" />
+                      <AppLoader size={12} color="var(--ink)" />
                       Getting address...
                     </div>
                   )}

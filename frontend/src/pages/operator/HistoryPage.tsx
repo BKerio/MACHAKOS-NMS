@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ChevronDown, ChevronUp, Clock as ClockIcon, CloudUpload, FileText, Eye, LoaderCircle,
+  ChevronDown, ChevronUp, Clock as ClockIcon, CloudUpload, FileText, Eye,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getTaskHistory, getPatientCareReports, getPatientCareReportFileUrl, getErrorMessage } from '@/api/responder';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -81,7 +82,7 @@ function AssignmentCard({
 
           <p className="label mt-5 mb-3">PCR reports</p>
           {isPcrLoading ? (
-            <LoaderCircle size={18} className="animate-spin" style={{ color: 'var(--green)' }} />
+            <AppLoader size={22} style={{ color: 'var(--green)' }} />
           ) : pcrError ? (
             <p className="text-sm" style={{ color: 'var(--red)' }}>{pcrError}</p>
           ) : !pcrItems || pcrItems.length === 0 ? (
@@ -106,7 +107,7 @@ function AssignmentCard({
                         {fileTypeLabel(r.mimeType)} · {Math.round((r.fileSize / 1024) * 10) / 10} KB
                       </p>
                       <button onClick={() => onViewPcr(r)} disabled={viewingId === r.id} className="btn btn-sm btn-soft">
-                        {viewingId === r.id ? <LoaderCircle size={13} className="animate-spin" /> : <Eye size={13} />}
+                        {viewingId === r.id ? <AppLoader size={17} /> : <Eye size={13} />}
                         View
                       </button>
                     </div>
