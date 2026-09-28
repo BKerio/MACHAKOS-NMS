@@ -69,6 +69,12 @@ export interface Vehicle {
   checkInLat?: number | null;
   checkInLng?: number | null;
   checkedInAt?: string | null;
+  /** How the current driver's check-in location compared with this vehicle's
+   * GPS tracker (backend fleet/checkin-location.ts). Informational only -
+   * a MISMATCH vehicle can still be dispatched. */
+  checkInLocationMatch?: 'MATCHED' | 'MISMATCH' | 'UNVERIFIED' | null;
+  checkInDistanceM?: number | null;
+  checkInMockLocation?: boolean;
   /** Present on nearby handover candidates (km from releasing unit / scene). */
   distanceKm?: number | null;
   updatedAt?: string;

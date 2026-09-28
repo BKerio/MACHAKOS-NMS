@@ -130,7 +130,15 @@ export const fleetRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
    * Expects multipart/form-data (send the text fields BEFORE the file part):
    * - lat:  string/number - GPS latitude at check-in  (required)
    * - lng:  string/number - GPS longitude at check-in (required)
+   * - accuracy: number    - phone fix accuracy in metres (optional)
+   * - mocked:   "true"    - OS flagged the fix as simulated (optional)
+   * - mockCheck: "unavailable" - phone can't detect simulated fixes, e.g.
+   *                              iOS before 15 (optional)
    * - file: image/*       - accountability selfie      (required)
+   *
+   * The phone's position is compared with the vehicle's GPS tracker; the
+   * result (checkInLocationMatch / checkInDistanceM) is returned and shown
+   * to dispatch, but never blocks the check-in.
    */
   app.post<{ Params: { vehicleId: string } }>(
     '/:vehicleId/checkin',
@@ -153,11 +161,19 @@ export const fleetRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
           ? locationNameRaw.trim()
           : null;
 
+      // Optional phone-fix quality: accuracy radius in metres, and whether
+      // Android flagged the fix as coming from a mock-location app.
+      const accuracyRaw = Number(file.fields?.accuracy?.value);
+      const accuracyM = Number.isFinite(accuracyRaw) && accuracyRaw >= 0 ? accuracyRaw : null;
+      const mocked = String(file.fields?.mocked?.value ?? '').toLowerCase() === 'true';
+      // "unavailable" from phones that can't detect simulated fixes (iOS < 15).
+      const mockCheckAvailable = String(file.fields?.mockCheck?.value ?? '').toLowerCase() !== 'unavailable';
+
       const vehicle = await fleetService.checkInToCrew(
         request.params.vehicleId,
         request.user.userId,
         request.user.role,
-        { lat, lng, locationName },
+        { lat, lng, locationName, accuracyM, mocked, mockCheckAvailable },
         { filename: file.filename, mimetype: file.mimetype, file: file.file },
       );
       return reply.send({ ok: true, data: vehicle });

@@ -57,6 +57,13 @@ enum VehicleStatus {
   MAINTENANCE
 }
 
+/// How a crew check-in's phone location compares with the vehicle's tracker.
+enum CheckInLocationMatch {
+  MATCHED    // phone and tracker agree - crew is at the ambulance
+  MISMATCH   // phone is away from the tracker, or reported a mock location
+  UNVERIFIED // no recent tracker fix to compare against
+}
+
 enum SmsProvider {
   ADVANTA
   AFRICAS_TALKING
@@ -427,6 +434,12 @@ model Vehicle {
   lastLng            Float?    @map("last_lng")
   lastLocationAt     DateTime? @map("last_location_at")
   lastLocationName   String?   @map("last_location_name")
+  // Last fix from the GPS tracker fitted to the vehicle, written only by the
+  // tracker poller. lastLat/lastLng above can also come from a crew phone,
+  // so check-in verification compares against these instead.
+  trackerLat         Float?    @map("tracker_lat")
+  trackerLng         Float?    @map("tracker_lng")
+  trackerAt          DateTime? @map("tracker_at")
   // Live fuel-level snapshot from the GPS poller (Uffizio's "Fuel" array on
   // getTokenBaseLiveData), only set when the tracker reports a real fuel
   // sensor port (name containing "fuel") - a generic "Analog Input" port
@@ -485,6 +498,21 @@ model CheckIn {
   locationName String?  @map("location_name")
   selfiePath   String   @map("selfie_path")
   checkedInAt  DateTime @default(now()) @map("checked_in_at")
+
+  // Phone fix quality, as reported by the device.
+  accuracyM    Float?   @map("accuracy_m")
+  mockLocation Boolean  @default(false) @map("mock_location")
+  // False when the phone can't tell a simulated fix from a real one (iOS
+  // before 15), so mockLocation=false there proves nothing.
+  mockCheckAvailable Boolean @default(true) @map("mock_check_available")
+
+  // Where the vehicle's own GPS tracker put it at check-in time, and how
+  // that compares with the phone - see fleet/checkin-location.ts.
+  vehicleLat    Float?               @map("vehicle_lat")
+  vehicleLng    Float?               @map("vehicle_lng")
+  vehicleFixAt  DateTime?            @map("vehicle_fix_at")
+  distanceM     Int?                 @map("distance_m")
+  locationMatch CheckInLocationMatch @default(UNVERIFIED) @map("location_match")
 
   vehicleId String  @map("vehicle_id")
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])

@@ -56,3 +56,27 @@ export function medicsInline(v: VehicleCrew, separator = ' · '): string {
     .map((m) => `${separator}${m.role} ${m.person.name}`)
     .join('');
 }
+
+/** "180 m" / "4.6 km" / "55 km". */
+function formatMetres(m: number): string {
+  if (m < 1000) return `${m} m`;
+  const km = m / 1000;
+  return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
+}
+
+/**
+ * Warning when the current driver checked in away from this vehicle's GPS
+ * tracker (or with a fake GPS app), else null. Informational only - it never
+ * stops the vehicle from being dispatched.
+ */
+export function checkInLocationWarning(v: {
+  checkInLocationMatch?: 'MATCHED' | 'MISMATCH' | 'UNVERIFIED' | null;
+  checkInDistanceM?: number | null;
+  checkInMockLocation?: boolean;
+}): string | null {
+  if (v.checkInMockLocation) return 'driver checked in with fake GPS';
+  if (v.checkInLocationMatch !== 'MISMATCH') return null;
+  return v.checkInDistanceM != null
+    ? `driver checked in ${formatMetres(v.checkInDistanceM)} from the ambulance`
+    : 'driver checked in away from the ambulance';
+}

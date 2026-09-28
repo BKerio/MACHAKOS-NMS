@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronRight as CaretRight,
   MapPin,
+  MapPinOff,
   Pencil as PencilSimple,
   Send as PaperPlaneRight,
   Printer,
@@ -40,7 +41,7 @@ import { useVehicleTracking } from '@/hooks/useVehicleTracking';
 import { socket } from '@/lib/socket';
 import { fmtDateTime, NBO_TZ } from '@/lib/datetime';
 import { confirmDialog } from '@/lib/alert';
-import { crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
+import { checkInLocationWarning, crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -1097,6 +1098,12 @@ function IncidentDetailPage() {
                           {v.currentDriver?.name ?? '-'}
                           {medicsInline(v)}
                         </p>
+                        {checkInLocationWarning(v) && (
+                          <p className="text-xs text-status-warning font-medium mt-1 flex items-center gap-1" title="The driver's phone was away from this vehicle's GPS tracker at check-in. You can still dispatch it.">
+                            <MapPinOff size={13} />
+                            {checkInLocationWarning(v)}
+                          </p>
+                        )}
                       </td>
                       <td className="px-6 py-3">
                         {!isCrewComplete(v) ? (
@@ -1150,6 +1157,7 @@ function IncidentDetailPage() {
                           {medicsInline(v, ' / ')}
                           {v.currentDriver && !isCrewComplete(v) ? ` · ⚠ crew incomplete (${crewShortfall(v)})` : ''}
                           {v.checklistComplete === false ? ' · ⚠ checklist incomplete' : ''}
+                          {checkInLocationWarning(v) ? ` · ⚠ ${checkInLocationWarning(v)}` : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -1233,6 +1241,12 @@ function IncidentDetailPage() {
                       <p className="text-xs text-status-warning font-medium mt-3">
                         Crew incomplete - an ambulance needs two medics (an EMT and a nurse, two EMTs, or two
                         nurses) before it can be dispatched.
+                      </p>
+                    )}
+                    {checkInLocationWarning(sv) && (
+                      <p className="text-xs text-status-warning font-medium mt-3">
+                        Check-in location doesn't match: {checkInLocationWarning(sv)}. Confirm with the crew if
+                        needed - you can still dispatch this vehicle.
                       </p>
                     )}
                     {sv.checklistComplete === false && (

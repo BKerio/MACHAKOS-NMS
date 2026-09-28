@@ -58,6 +58,21 @@ function extractFuelLevel(raw: any): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/**
+ * Uffizio's GPSActualTime, e.g. "11-05-2026 12:56:08" (DD-MM-YYYY HH:mm:ss),
+ * is wall-clock time in Nairobi (EAT, UTC+3, no daylight saving) - the same
+ * zone FuelService formats its Uffizio report requests in. It used to be
+ * read as UTC, which made every fix look 3 hours newer than it was.
+ * Returns null for anything unparseable ("--", blank, bad date).
+ */
+export function parseUffizioTime(raw: unknown): Date | null {
+  const m = /^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(String(raw ?? '').trim());
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh = '00', mi = '00', ss = '00'] = m;
+  const d = new Date(`${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}+03:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 const POLL_INTERVAL_MS = 65_000;
 // Refresh the auth code 5 min before we assume it expires (default: 23h)
 const TOKEN_TTL_MS = 23 * 60 * 60 * 1000;
@@ -322,17 +337,7 @@ export class TrackingService {
       const ignRaw = String(raw.IGN ?? raw.ignition ?? '').toUpperCase();
       const ignition = ignRaw === 'ON';
 
-      // GPSActualTime format: "11-05-2026 12:56:08" (DD-MM-YYYY HH:mm:ss)
-      const rawTs = raw.GPSActualTime ?? raw.gps_actual_date_time ?? '';
-      let timestamp: string;
-      if (rawTs) {
-        // Convert DD-MM-YYYY HH:mm:ss → ISO
-        const [datePart, timePart] = rawTs.split(' ');
-        const [dd, mm, yyyy] = (datePart ?? '').split('-');
-        timestamp = `${yyyy}-${mm}-${dd}T${timePart ?? '00:00:00'}Z`;
-      } else {
-        timestamp = new Date().toISOString();
-      }
+      const timestamp = parseUffizioTime(raw.GPSActualTime ?? raw.gps_actual_date_time)?.toISOString() ?? new Date().toISOString();
 
       locations.push({
         vehicleId: dbV.id,
@@ -365,6 +370,11 @@ export class TrackingService {
             lastLat: loc.lat,
             lastLng: loc.lng,
             lastLocationAt: new Date(loc.timestamp),
+            // Tracker-only copy: crew phones can't write these, so check-in
+            // verification has an honest reference (fleet/checkin-location.ts).
+            trackerLat: loc.lat,
+            trackerLng: loc.lng,
+            trackerAt: new Date(loc.timestamp),
             // Only touch fuel fields when this poll actually reported a real
             // sensor reading - leaves the last-known value in place on a
             // vehicle whose fuel port intermittently drops out of the

@@ -1,10 +1,11 @@
 import { FastifyInstance } from 'fastify';
-import { Prisma } from '../../generated/prisma/index.js';
+import { Prisma, type CheckInLocationMatch } from '../../generated/prisma/index.js';
 import { Coordinates, Role, VehicleStatus } from '../../shared/types/index.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { reverseGeocodePlace } from '../../shared/utils/geocode.js';
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
+import { assessCheckInLocation, formatDistance } from './checkin-location.js';
 import { clearedCrew, crewInclude, isCrewComplete, slotsForRole, EMT_SLOTS, NURSE_SLOTS, MEDIC_SLOTS, type CrewSlot } from './crew.js';
 
 export class FleetService {
@@ -145,19 +146,34 @@ export class FleetService {
   /**
    * Crew member (driver/EMT/nurse) checks in to a vehicle at shift start.
    * Clears any previous assignment for this user on other vehicles.
-   * Auto-captures GPS and a human place name (e.g. "Kilimani").
+   * Auto-captures GPS and a human place name (e.g. "Kilimani"), and checks
+   * the phone's position against the vehicle's own GPS tracker so a crew
+   * member can't check in from home. The verdict is recorded and shown to
+   * dispatch; it never blocks the check-in or later assignment.
    */
   async checkInToCrew(
     vehicleId: string,
     userId: string,
     role: Role,
-    location: { lat: number; lng: number; locationName?: string | null },
+    location: {
+      lat: number;
+      lng: number;
+      locationName?: string | null;
+      accuracyM?: number | null;
+      mocked?: boolean;
+      mockCheckAvailable?: boolean;
+    },
     selfie: { filename: string; mimetype: string; file: NodeJS.ReadableStream }
   ) {
     const slots = this.crewSlots(role);
 
     const vehicle = await this.app.prisma.vehicle.findUnique({ where: { id: vehicleId } });
     if (!vehicle) throw new NotFoundError('Vehicle not found');
+
+    const verdict = assessCheckInLocation(
+      { lat: location.lat, lng: location.lng, accuracyM: location.accuracyM, mocked: location.mocked },
+      { lat: vehicle.trackerLat, lng: vehicle.trackerLng, at: vehicle.trackerAt },
+    );
 
     // The driver seat is single, so a new driver takes it over. Medics fill
     // the first free slot for their role (two per role, see crew.ts) and are
@@ -203,7 +219,8 @@ export class FleetService {
       });
     }
 
-    // 3. Record the check-in event (selfie + GPS + place name at shift start)
+    // 3. Record the check-in event (selfie + GPS + place name at shift start,
+    // plus where the tracker had the vehicle and the verdict)
     const checkIn = await this.app.prisma.checkIn.create({
       data: {
         vehicleId,
@@ -213,37 +230,91 @@ export class FleetService {
         lng: location.lng,
         locationName,
         selfiePath: storedName,
+        accuracyM: location.accuracyM ?? null,
+        mockLocation: location.mocked === true,
+        mockCheckAvailable: location.mockCheckAvailable !== false,
+        vehicleLat: vehicle.trackerLat,
+        vehicleLng: vehicle.trackerLng,
+        vehicleFixAt: vehicle.trackerAt,
+        distanceM: verdict.distanceM,
+        locationMatch: verdict.match,
       },
     });
 
-    // 4. Set the crew FK and seed live location from the check-in GPS. A new
-    // driver starting a shift resets the equipment checklist - it must be
-    // reconfirmed each shift. EMT/nurse checking in joins an already-started
-    // shift, so it doesn't reset anything already confirmed.
+    // 4. Set the crew FK. The phone's fix only moves the vehicle on the map
+    // when it can't be wrong about it:
+    //  - MATCHED: phone and tracker agree, so sync them - the tracker's point
+    //    plus the resolved place name.
+    //  - UNVERIFIED: no tracker fix to contradict it, so seed from the phone
+    //    as before (the check-in is flagged for dispatch).
+    //  - MISMATCH: leave the tracker's position alone - otherwise checking in
+    //    from home would drag the ambulance to the crew member's house.
+    // A new driver starting a shift resets the equipment checklist - it must
+    // be reconfirmed each shift. EMT/nurse checking in joins an already-
+    // started shift, so it doesn't reset anything already confirmed.
+    const position =
+      verdict.match === 'MATCHED'
+        ? { lat: vehicle.trackerLat!, lng: vehicle.trackerLng! }
+        : verdict.match === 'UNVERIFIED' && !location.mocked
+          ? { lat: location.lat, lng: location.lng }
+          : null;
+
     const updated = await this.app.prisma.vehicle.update({
       where: { id: vehicleId },
       data: {
         [field]: userId,
-        lastLat: location.lat,
-        lastLng: location.lng,
-        lastLocationAt: new Date(),
-        lastLocationName: locationName,
+        ...(position
+          ? { lastLat: position.lat, lastLng: position.lng, lastLocationAt: new Date(), lastLocationName: locationName }
+          : {}),
         ...(role === Role.DRIVER ? { checklistResetAt: new Date() } : {}),
       },
       include: crewInclude,
     });
 
-    // Keep Redis + admin live map in sync with the check-in fix
-    try {
-      await this.updateVehicleLocation(updated.imei, location.lat, location.lng, locationName);
-    } catch (err) {
-      this.app.log.warn({ err, vehicleId }, 'Failed to cache check-in location');
+    // Keep Redis + admin live map in sync with the new position
+    if (position) {
+      try {
+        await this.updateVehicleLocation(updated.imei, position.lat, position.lng, locationName);
+      } catch (err) {
+        this.app.log.warn({ err, vehicleId }, 'Failed to cache check-in location');
+      }
+    }
+
+    const verification = {
+      checkInLocationMatch: verdict.match,
+      checkInDistanceM: verdict.distanceM,
+      checkInMockLocation: location.mocked === true,
+    };
+
+    if (verdict.match === 'MISMATCH') {
+      this.app.log.warn({ vehicleId, userId, role, ...verification, reason: verdict.reason }, 'Check-in away from vehicle tracker');
+      this.app.io
+        ?.to(`role:${Role.DISPATCHER}`)
+        .to(`role:${Role.ADMIN}`)
+        .to(`role:${Role.SUPER_ADMIN}`)
+        .emit('fleet:checkin-alert', {
+          checkInId: checkIn.id,
+          vehicleId,
+          registrationNumber: updated.registrationNumber,
+          userId,
+          userName: (await this.app.prisma.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name ?? null,
+          role,
+          locationName,
+          distanceM: verdict.distanceM,
+          reason: verdict.reason,
+          message:
+            verdict.reason === 'mock_location'
+              ? `${updated.registrationNumber}: check-in used a fake GPS location`
+              : `${updated.registrationNumber}: checked in ${formatDistance(verdict.distanceM!)} from the ambulance`,
+          checkedInAt: checkIn.checkedInAt,
+        });
     }
 
     this.emitVehicleCrewUpdate({
       ...updated,
       checkedInAt: checkIn.checkedInAt,
       checkInLocationName: locationName,
+      ...(role === Role.DRIVER ? verification : {}),
     });
     return {
       ...updated,
@@ -251,6 +322,7 @@ export class FleetService {
       checkInLat: location.lat,
       checkInLng: location.lng,
       checkedInAt: checkIn.checkedInAt,
+      ...verification,
     };
   }
 
@@ -330,31 +402,58 @@ export class FleetService {
       }),
     );
 
-    // Attach latest driver check-in time per vehicle (for "logged in since …")
+    // Attach latest driver check-in per vehicle (for "logged in since …" and
+    // whether it was made at the ambulance)
+    const checkIns = await this.driverCheckIns(vehicles);
+    return vehicles.map((v) => {
+      const c = checkIns.get(v.id);
+      if (!c) return v;
+      return { ...v, ...c, checkInLocationName: c.checkInLocationName ?? v.lastLocationName };
+    });
+  }
+
+  /**
+   * The current driver's check-in on each vehicle: when, where, and how it
+   * compared with the vehicle's tracker. Vehicles without a driver, or whose
+   * latest driver check-in belongs to someone else, are left out.
+   */
+  async driverCheckIns(vehicles: { id: string; currentDriverId?: string | null }[]) {
     const withDrivers = vehicles.filter((v) => v.currentDriverId);
-    if (withDrivers.length > 0) {
-      const latestByVehicle = await this.app.prisma.checkIn.findMany({
-        where: {
-          vehicleId: { in: withDrivers.map((v) => v.id) },
-          role: Role.DRIVER,
-        },
-        orderBy: { checkedInAt: 'desc' },
-        distinct: ['vehicleId'],
-        select: { vehicleId: true, checkedInAt: true, locationName: true },
-      });
-      const map = new Map(latestByVehicle.map((c) => [c.vehicleId, c]));
-      return vehicles.map((v) => {
-        const c = map.get(v.id);
-        if (!c) return v;
-        return {
-          ...v,
-          checkedInAt: c.checkedInAt,
-          checkInLocationName: c.locationName ?? v.lastLocationName,
-        };
+    const out = new Map<string, {
+      checkedInAt: Date;
+      checkInLocationName: string | null;
+      checkInLocationMatch: CheckInLocationMatch;
+      checkInDistanceM: number | null;
+      checkInMockLocation: boolean;
+    }>();
+    if (withDrivers.length === 0) return out;
+
+    const rows = await this.app.prisma.checkIn.findMany({
+      where: { vehicleId: { in: withDrivers.map((v) => v.id) }, role: Role.DRIVER },
+      orderBy: { checkedInAt: 'desc' },
+      distinct: ['vehicleId'],
+      select: {
+        vehicleId: true,
+        userId: true,
+        checkedInAt: true,
+        locationName: true,
+        locationMatch: true,
+        distanceM: true,
+        mockLocation: true,
+      },
+    });
+    const driverOf = new Map(withDrivers.map((v) => [v.id, v.currentDriverId]));
+    for (const c of rows) {
+      if (driverOf.get(c.vehicleId) !== c.userId) continue;
+      out.set(c.vehicleId, {
+        checkedInAt: c.checkedInAt,
+        checkInLocationName: c.locationName,
+        checkInLocationMatch: c.locationMatch,
+        checkInDistanceM: c.distanceM,
+        checkInMockLocation: c.mockLocation,
       });
     }
-
-    return vehicles;
+    return out;
   }
 
   /**
@@ -370,7 +469,7 @@ export class FleetService {
     const latest = await this.app.prisma.checkIn.findFirst({
       where: { vehicleId: vehicle.id, userId },
       orderBy: { checkedInAt: 'desc' },
-      select: { lat: true, lng: true, locationName: true, checkedInAt: true },
+      select: { lat: true, lng: true, locationName: true, checkedInAt: true, locationMatch: true, distanceM: true, mockLocation: true },
     });
 
     return {
@@ -379,6 +478,9 @@ export class FleetService {
       checkInLat: latest?.lat ?? vehicle.lastLat ?? null,
       checkInLng: latest?.lng ?? vehicle.lastLng ?? null,
       checkedInAt: latest?.checkedInAt ?? null,
+      checkInLocationMatch: latest?.locationMatch ?? null,
+      checkInDistanceM: latest?.distanceM ?? null,
+      checkInMockLocation: latest?.mockLocation ?? false,
     };
   }
 

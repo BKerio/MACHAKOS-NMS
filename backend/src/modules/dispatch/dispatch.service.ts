@@ -263,10 +263,14 @@ export class DispatchService {
         select: { id: true, ...crewInclude },
       });
       const crewMap = new Map(crewRows.map(r => [r.id, r]));
+      const checkIns = await this.fleetService.driverCheckIns(
+        top.map(v => ({ id: v.id, currentDriverId: crewMap.get(v.id)?.currentDriver?.id ?? null })),
+      );
 
       return this.withChecklistSummary(
         top.map(v => ({
           ...v,
+          ...checkIns.get(v.id),
           currentDriver: crewMap.get(v.id)?.currentDriver ?? null,
           currentEmt:    crewMap.get(v.id)?.currentEmt    ?? null,
           currentEmt2:   crewMap.get(v.id)?.currentEmt2   ?? null,
@@ -284,9 +288,11 @@ export class DispatchService {
       orderBy: { registrationNumber: 'asc' },
       include: crewInclude,
     });
+    const checkIns = await this.fleetService.driverCheckIns(dbVehicles);
 
     return this.withChecklistSummary(
       dbVehicles.map(v => ({
+        ...checkIns.get(v.id),
         id: v.id,
         registrationNumber: v.registrationNumber,
         agencyId: v.agencyId,

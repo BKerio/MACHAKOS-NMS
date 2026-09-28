@@ -79,6 +79,17 @@ function AppShell() {
       });
     });
 
+    // Crew checked in away from the ambulance's GPS tracker (or with a fake
+    // GPS app). Informational - the vehicle can still be assigned.
+    socket.on('fleet:checkin-alert', (data: { message: string; userName: string | null; role: string; locationName: string | null }) => {
+      const who = [data.userName, data.role?.toLowerCase()].filter(Boolean).join(', ');
+      addNotification({
+        type: 'warning',
+        title: 'Check-in away from ambulance',
+        message: `${data.message}${who ? ` (${who})` : ''}${data.locationName ? ` - phone was at ${data.locationName}` : ''}.`,
+      });
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -87,6 +98,7 @@ function AppShell() {
       socket.off('fleet:offline');
       socket.off('task:assigned');
       socket.off('incident:escalated');
+      socket.off('fleet:checkin-alert');
     };
   }, [addNotification, token, user]);
 
