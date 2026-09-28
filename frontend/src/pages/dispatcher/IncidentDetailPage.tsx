@@ -30,6 +30,7 @@ import {
   Building2 as Buildings,
   Upload as UploadSimple,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useDirections } from '@/hooks/useDirections';
 import api from '@/api/client';
 import { Incident, Vehicle, AuditLog, CallLog, PatientCareReport, MaternityVitals, Facility } from '@/types/api';
@@ -605,7 +606,7 @@ function IncidentDetailPage() {
               disabled={incident.status === 'RESOLVED' || sendToGbvMutation.isPending}
               className="px-4 py-2 border border-status-danger/40 text-status-danger text-sm font-medium rounded-lg hover:bg-status-danger hover:text-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <ShieldWarning size={16} />
+              {sendToGbvMutation.isPending ? <AppLoader size={20} /> : <ShieldWarning size={16} />}
               Send to GBV
             </button>
           )}
@@ -764,7 +765,7 @@ function IncidentDetailPage() {
                     disabled={updateMutation.isPending}
                     className="px-4 py-1.5 bg-brand-teal text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
                   >
-                    {updateMutation.isPending ? 'Saving...' : 'Save'}
+                    {updateMutation.isPending ? <><AppLoader size={16} /> Saving...</> : 'Save'}
                   </button>
                 </div>
               )}
@@ -1038,7 +1039,9 @@ function IncidentDetailPage() {
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-md flex-shrink-0 ${
                         call.status === 'ANSWERED' ? 'bg-brand-green/10 text-brand-green' : 'bg-slate-100 text-slate-400'
                       }`}>{call.status}</span>
-                      <LinkIcon size={14} className="text-slate-200 group-hover:text-brand-teal flex-shrink-0 transition-colors" />
+                      {linkCallMutation.isPending && linkCallMutation.variables === call.id
+                        ? <AppLoader size={18} className="text-brand-teal" />
+                        : <LinkIcon size={14} className="text-slate-200 group-hover:text-brand-teal flex-shrink-0 transition-colors" />}
                     </button>
                   ))}
                 </div>
@@ -1440,7 +1443,7 @@ function IncidentDetailPage() {
                     disabled={clinicalNotesMutation.isPending}
                     className="flex items-center gap-2 px-5 py-2.5 bg-brand-green text-white text-sm font-semibold rounded-lg hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <CheckCircle size={16} />
+                    {clinicalNotesMutation.isPending ? <AppLoader size={20} /> : <CheckCircle size={16} />}
                     {clinicalNotesMutation.isPending ? 'Saving...' : 'Save Clinical Notes'}
                   </button>
                 </div>
@@ -1463,7 +1466,7 @@ function IncidentDetailPage() {
                   title={activeTask ? 'Upload or re-upload a PCR file' : 'Dispatch a vehicle first to attach a PCR'}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex-shrink-0 ${activeTask && !uploadingPcr ? 'text-brand-teal border-brand-teal/30 hover:bg-brand-teal hover:text-white cursor-pointer' : 'text-slate-300 border-slate-200 cursor-not-allowed'}`}
                 >
-                  <UploadSimple size={14} />
+                  {uploadingPcr ? <AppLoader size={18} /> : <UploadSimple size={14} />}
                   {uploadingPcr ? 'Uploading…' : pcrReports.length > 0 ? 'Re-upload PCR' : 'Upload PCR'}
                   <input
                     type="file"
@@ -1804,7 +1807,7 @@ function IncidentDetailPage() {
                 disabled={reassignReason.trim().length < 5 || reassignMutation.isPending}
                 className="px-5 py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:brightness-110 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {reassignMutation.isPending ? 'Working...' : reassignVehicleId ? 'Reassign Crew' : 'Terminate Task'}
+                {reassignMutation.isPending ? <><AppLoader size={16} /> Working...</> : reassignVehicleId ? 'Reassign Crew' : 'Terminate Task'}
               </button>
             </div>
           </div>
@@ -1840,7 +1843,7 @@ function IncidentDetailPage() {
                 disabled={resolveReason.trim().length < 5 || resolveMutation.isPending}
                 className="px-5 py-2 bg-brand-green text-white text-sm font-semibold rounded-lg hover:brightness-110 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <CheckCircle size={16} />
+                {resolveMutation.isPending ? <AppLoader size={20} /> : <CheckCircle size={16} />}
                 {resolveMutation.isPending ? 'Resolving...' : 'Mark as Resolved'}
               </button>
             </div>
@@ -1899,7 +1902,7 @@ function IncidentDetailPage() {
                 disabled={!selectedPartnerAgencyId || partnerAssignReason.trim().length < 5 || assignPartnerMutation.isPending}
                 className="px-5 py-2 bg-brand-teal text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ShareNetwork size={16} />
+                {assignPartnerMutation.isPending ? <AppLoader size={20} /> : <ShareNetwork size={16} />}
                 {assignPartnerMutation.isPending ? 'Assigning...' : 'Forward to Partner'}
               </button>
             </div>
@@ -1959,7 +1962,7 @@ function IncidentDetailPage() {
                 disabled={!escalateCasualtyCount || Number(escalateCasualtyCount) < 1 || escalateMutation.isPending}
                 className="px-5 py-2 bg-status-danger text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Warning size={16} />
+                {escalateMutation.isPending ? <AppLoader size={20} /> : <Warning size={16} />}
                 {escalateMutation.isPending ? 'Escalating...' : 'Declare MCI'}
               </button>
             </div>

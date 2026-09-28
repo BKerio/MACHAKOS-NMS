@@ -793,7 +793,7 @@ function UserManagementPage() {
                 }
                 className="btn btn-primary flex items-center gap-2 px-5 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <Check size={14} />
+                {editRoleMutation.isPending ? <AppLoader size={18} /> : <Check size={14} />}
                 {editRoleMutation.isPending ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
@@ -877,7 +877,9 @@ function UserManagementPage() {
                   background: confirmTarget.action === 'delete' ? 'var(--red)' : 'var(--ink)',
                 }}
               >
-                {confirmTarget.action === 'delete' ? <Trash2 size={14} /> : <Check size={14} />}
+                {toggleActiveMutation.isPending || deleteUserMutation.isPending
+                  ? <AppLoader size={18} />
+                  : confirmTarget.action === 'delete' ? <Trash2 size={14} /> : <Check size={14} />}
                 {toggleActiveMutation.isPending || deleteUserMutation.isPending
                   ? 'Processing...'
                   : confirmTarget.action === 'delete'

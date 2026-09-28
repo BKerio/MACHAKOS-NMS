@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search as MagnifyingGlass, Plus, Check } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 
 interface Props {
   options: string[];
@@ -146,7 +147,7 @@ function CreatableCombobox({
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--green-light)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <Plus size={14} />
+              {creating ? <AppLoader size={18} /> : <Plus size={14} />}
               {creating ? 'Adding…' : `Add "${query.trim()}"`}
             </button>
           )}

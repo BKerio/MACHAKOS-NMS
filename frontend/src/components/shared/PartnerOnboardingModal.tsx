@@ -14,6 +14,7 @@ import {
   Check,
   UserCog as UserGear,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { Agency, User } from '@/types/api';
@@ -429,7 +430,7 @@ function PartnerOnboardingModal({ isOpen, onClose }: Props) {
                     className="btn btn-primary flex-[1.4] flex items-center justify-center gap-2 px-4 py-2.5 text-sm disabled:opacity-40"
                   >
                     {createAgencyMutation.isPending ? (
-                      'Creating...'
+                      <><AppLoader size={16} /> Creating...</>
                     ) : (
                       <>
                         Continue
@@ -551,7 +552,7 @@ function PartnerOnboardingModal({ isOpen, onClose }: Props) {
                     className="btn btn-primary flex-[1.4] flex items-center justify-center gap-2 px-4 py-2.5 text-sm disabled:opacity-40"
                   >
                     {createUserMutation.isPending ? (
-                      'Saving...'
+                      <><AppLoader size={16} /> Saving...</>
                     ) : (
                       <>
                         <Handshake size={15} />
@@ -673,7 +674,7 @@ function PartnerOnboardingModal({ isOpen, onClose }: Props) {
                 className="btn btn-primary flex-[1.4] flex items-center justify-center gap-2 px-4 py-2.5 text-sm disabled:opacity-40"
               >
                 {assignMutation.isPending ? (
-                  'Assigning...'
+                  <><AppLoader size={16} /> Assigning...</>
                 ) : (
                   <>
                     <UserGear size={15} />

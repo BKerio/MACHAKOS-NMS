@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TriangleAlert as Warning, X as XIcon, CircleX as XCircle } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { CLOSURE_REASON_PRESETS, buildClosureReason } from '@/utils/closureReasons';
 
 interface EndCaseModalProps {
@@ -85,7 +86,7 @@ function EndCaseModal({ caseNumber, isSubmitting = false, onClose, onConfirm }: 
             disabled={!canSubmit}
             className="btn btn-danger flex-1"
           >
-            <XCircle size={16} />
+            {isSubmitting ? <AppLoader size={20} /> : <XCircle size={16} />}
             {isSubmitting ? 'Ending…' : 'End case'}
           </button>
         </div>

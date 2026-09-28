@@ -15,6 +15,7 @@ import {
   Pencil as PencilSimple,
   Check,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/api/client';
@@ -104,7 +105,7 @@ function OrganizationSettings() {
                   disabled={updateMutation.isPending || name.trim().length < 2}
                   className="bg-brand-teal text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1 hover:opacity-90 disabled:opacity-50"
                 >
-                  <Check size={14} /> {updateMutation.isPending ? 'Saving…' : 'Save'}
+                  {updateMutation.isPending ? <AppLoader size={18} /> : <Check size={14} />} {updateMutation.isPending ? 'Saving…' : 'Save'}
                 </button>
                 <button
                   onClick={() => { setIsEditing(false); setName(agency?.name ?? ''); }}

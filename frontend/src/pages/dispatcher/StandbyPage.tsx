@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Timer, Plus, CircleStop as StopCircle, X as XIcon } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { Vehicle } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -165,7 +166,7 @@ function StandbyPage() {
                         disabled={endMutation.isPending}
                         className="btn btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs ml-auto"
                       >
-                        <StopCircle size={15} /> End
+                        {endMutation.isPending && endMutation.variables === s.id ? <AppLoader size={19} /> : <StopCircle size={15} />} End
                       </button>
                     )}
                   </td>
@@ -218,7 +219,7 @@ function StandbyPage() {
             <div className="px-5 pb-5 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)' }}>
               <button onClick={() => setShowModal(false)} className="btn btn-ghost px-4 py-2 text-sm">Cancel</button>
               <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !formValid} className="btn btn-primary flex items-center gap-2 px-5 py-2 text-sm">
-                <Plus size={14} /> {createMutation.isPending ? 'Saving…' : 'Log Standby'}
+                {createMutation.isPending ? <AppLoader size={18} /> : <Plus size={14} />} {createMutation.isPending ? 'Saving…' : 'Log Standby'}
               </button>
             </div>
           </div>

@@ -9,6 +9,7 @@ import {
   Check,
   TriangleAlert as AlertTriangle,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
@@ -275,7 +276,7 @@ function InventoryPage() {
             className="flex-1 sm:flex-none px-4 py-3 text-xs font-black tracking-widest rounded-xl border transition-colors disabled:opacity-40"
             style={{ borderColor: 'var(--border)', color: 'var(--ink)', background: 'var(--surface-2)' }}
           >
-            {seedVitalsMutation.isPending ? 'Adding...' : 'Add Vitals Kit'}
+            {seedVitalsMutation.isPending ? <><AppLoader size={16} /> Adding...</> : 'Add Vitals Kit'}
           </button>
           <button
             type="button"
@@ -720,7 +721,7 @@ function InventoryPage() {
                   }
                   className="btn btn-primary flex-[1.4] flex items-center justify-center gap-2 text-sm disabled:opacity-40"
                 >
-                  <Check size={15} />
+                  {createMutation.isPending || updateMutation.isPending ? <AppLoader size={19} /> : <Check size={15} />}
                   {createMutation.isPending || updateMutation.isPending
                     ? 'Saving...'
                     : editTarget
@@ -765,7 +766,7 @@ function InventoryPage() {
                 className="px-4 py-2 text-sm font-bold rounded-xl text-white disabled:opacity-40"
                 style={{ background: 'var(--red)' }}
               >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                {deleteMutation.isPending ? <><AppLoader size={16} /> Deleting...</> : 'Delete'}
               </button>
             </div>
           </div>

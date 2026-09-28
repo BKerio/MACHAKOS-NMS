@@ -13,6 +13,7 @@ import {
   CircleCheck as CheckCircle,
   Building2 as Buildings,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { Agency, User } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -338,7 +339,7 @@ function PartnersPage() {
                   disabled={!editForm.email.trim() || !editForm.phone.trim() || updateContactMutation.isPending}
                   className="flex items-center gap-2 px-6 py-2.5 bg-brand-teal text-white text-sm font-bold rounded-xl hover:opacity-90 transition-all disabled:opacity-40"
                 >
-                  <CheckCircle size={16} />
+                  {updateContactMutation.isPending ? <AppLoader size={20} /> : <CheckCircle size={16} />}
                   {updateContactMutation.isPending ? 'Saving…' : 'Save Contact'}
                 </button>
               </div>

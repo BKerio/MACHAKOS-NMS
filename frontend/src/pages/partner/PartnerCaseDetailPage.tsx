@@ -113,7 +113,7 @@ function PartnerCaseDetailPage() {
             disabled={acceptMutation.isPending}
             className="px-4 py-2 bg-brand-teal text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
           >
-            <CheckCircle size={16} />
+            {acceptMutation.isPending ? <AppLoader size={20} /> : <CheckCircle size={16} />}
             {acceptMutation.isPending ? 'Accepting...' : 'Accept Case'}
           </button>
         )}
@@ -261,7 +261,7 @@ function PartnerCaseDetailPage() {
                   disabled={updateMutation.isPending || incident.status === 'DISPATCHED'}
                   className="flex items-center gap-1.5 px-4 py-2 bg-brand-green/10 text-brand-green text-sm font-semibold rounded-lg hover:bg-brand-green hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Ambulance size={15} /> Mark Dispatched
+                  {updateMutation.isPending && updateMutation.variables?.status === 'DISPATCHED' ? <AppLoader size={19} /> : <Ambulance size={15} />} Mark Dispatched
                 </button>
                 <button
                   onClick={() => updateMutation.mutate({ notes, pcrUrl: pcrUrl || undefined, status: 'RESOLVED' })}
@@ -269,14 +269,14 @@ function PartnerCaseDetailPage() {
                   className="flex items-center gap-1.5 px-4 py-2 bg-brand-teal/10 text-brand-teal text-sm font-semibold rounded-lg hover:bg-brand-teal hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   title={notes.trim().length < 5 ? 'Add case notes before resolving' : ''}
                 >
-                  <CheckCircle size={15} /> Resolve Case
+                  {updateMutation.isPending && updateMutation.variables?.status === 'RESOLVED' ? <AppLoader size={19} /> : <CheckCircle size={15} />} Resolve Case
                 </button>
                 <button
                   onClick={() => updateMutation.mutate({ notes, pcrUrl: pcrUrl || undefined })}
                   disabled={updateMutation.isPending}
                   className="ml-auto flex items-center gap-1.5 px-4 py-2 border border-surface-border text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-all disabled:opacity-40"
                 >
-                  {updateMutation.isPending ? 'Saving...' : 'Save Notes'}
+                  {updateMutation.isPending && !updateMutation.variables?.status ? <><AppLoader size={16} /> Saving...</> : 'Save Notes'}
                 </button>
               </div>
               {notes.trim().length < 5 && notes.length > 0 && (

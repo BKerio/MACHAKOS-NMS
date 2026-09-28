@@ -10,6 +10,7 @@ import {
   Calendar as CalendarBlank,
   ArrowRight,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { Incident } from '@/types/api';
 import { socket } from '@/lib/socket';
@@ -167,7 +168,7 @@ function QueuePage() {
         </div>
         {canExport && (
           <button className="btn btn-ghost" onClick={exportReport} disabled={exporting}>
-            <DownloadSimple size={16} /> {exporting ? 'Exporting…' : 'Export Report'}
+            {exporting ? <AppLoader size={20} /> : <DownloadSimple size={16} />} {exporting ? 'Exporting…' : 'Export Report'}
           </button>
         )}
       </div>

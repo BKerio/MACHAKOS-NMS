@@ -11,6 +11,7 @@ import {
   Circle,
   X,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { formatDistanceToNow } from 'date-fns';
 import { fmtDate, fmtTime } from '@/lib/datetime';
 import api from '@/api/client';
@@ -296,7 +297,7 @@ function CallLogPage() {
                   onClick={handleLinkSubmit}
                   disabled={!caseNumber.trim() || linkMutation.isPending}
                 >
-                  {linkMutation.isPending ? 'Linking…' : 'Link call'}
+                  {linkMutation.isPending ? <><AppLoader size={16} /> Linking…</> : 'Link call'}
                 </button>
               </div>
             </div>

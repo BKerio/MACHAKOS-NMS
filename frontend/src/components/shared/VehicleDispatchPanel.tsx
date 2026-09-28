@@ -7,6 +7,7 @@ import {
   CircleCheck as CheckCircle,
   User,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
 import { Vehicle, Incident } from '@/types/api';
@@ -359,7 +360,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
           disabled={!canDispatch}
           className="w-full bg-brand-green text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
         >
-          <PaperPlaneRight size={18} />
+          {dispatch.isPending ? <AppLoader size={22} /> : <PaperPlaneRight size={18} />}
           {dispatch.isPending ? 'Dispatching…' : 'Dispatch Vehicle'}
         </button>
       </div>

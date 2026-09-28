@@ -11,6 +11,7 @@ import {
   Undo2,
   Ambulance,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getAvailableInventory, checkoutInventory, getMyInventory, returnInventory, returnAllInventory } from '@/api/inventory';
 import { getMyCheckIn } from '@/api/responder';
@@ -386,7 +387,7 @@ function InventoryPage() {
                 disabled={!cartLines.length || !myVehicle || checkoutMutation.isPending}
                 className="btn btn-lg btn-primary flex items-center justify-center gap-2 disabled:opacity-40"
               >
-                <Check size={16} />
+                {checkoutMutation.isPending ? <AppLoader size={20} /> : <Check size={16} />}
                 {checkoutMutation.isPending ? 'Checking out...' : 'Confirm checkout'}
               </button>
             </div>
@@ -446,7 +447,7 @@ function InventoryPage() {
                 disabled={returnMutation.isPending}
                 className="btn btn-primary px-4 py-2 text-sm disabled:opacity-40"
               >
-                {returnMutation.isPending ? 'Returning...' : 'Return'}
+                {returnMutation.isPending ? <><AppLoader size={16} /> Returning...</> : 'Return'}
               </button>
             </div>
           </div>
@@ -474,7 +475,7 @@ function InventoryPage() {
                 disabled={returnAllMutation.isPending}
                 className="btn btn-primary px-4 py-2 text-sm disabled:opacity-40"
               >
-                {returnAllMutation.isPending ? 'Returning...' : 'Return all'}
+                {returnAllMutation.isPending ? <><AppLoader size={16} /> Returning...</> : 'Return all'}
               </button>
             </div>
           </div>

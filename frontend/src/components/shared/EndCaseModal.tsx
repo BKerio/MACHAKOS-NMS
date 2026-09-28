@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CircleX as XCircle, CircleAlert as WarningCircle, X } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { useNotificationStore } from '@/stores/notificationStore';
 
@@ -148,7 +149,7 @@ function EndCaseModal({
             disabled={!canSubmit}
             className="flex items-center gap-2 px-6 py-2.5 bg-status-danger text-white text-sm font-bold rounded-xl hover:opacity-90 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <XCircle size={16} />
+            {mutation.isPending ? <AppLoader size={20} /> : <XCircle size={16} />}
             {mutation.isPending ? 'Closing…' : 'End Case'}
           </button>
         </div>

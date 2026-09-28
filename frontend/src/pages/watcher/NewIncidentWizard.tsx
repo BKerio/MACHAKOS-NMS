@@ -955,7 +955,7 @@ function NewIncidentWizard() {
                       className="inline-flex items-center gap-1.5 text-[11px] font-black tracking-wide px-3 py-2 rounded-lg border transition-colors disabled:opacity-50"
                       style={{ borderColor: 'var(--border)', color: 'var(--ink)', background: 'var(--surface-2)' }}
                     >
-                      <MapPin size={13} />
+                      {gpsBusy ? <AppLoader size={17} /> : <MapPin size={13} />}
                       {gpsBusy ? 'Locating...' : 'Use my current location'}
                     </button>
                     {gpsError && <span className="text-xs" style={{ color: 'var(--red)' }}>{gpsError}</span>}
@@ -1611,7 +1611,7 @@ function NewIncidentWizard() {
                 className="btn btn-sm flex items-center gap-1.5 text-amber-700 border-amber-400 hover:bg-amber-50"
                 style={{ borderWidth: '1px', borderStyle: 'solid' }}
               >
-                <Eye size={14} />
+                {surveillanceMutation.isPending ? <AppLoader size={18} /> : <Eye size={14} />}
                 {surveillanceMutation.isPending ? 'Sending...' : 'Confirm'}
               </button>
             </div>
@@ -1657,7 +1657,7 @@ function NewIncidentWizard() {
                 disabled={endReason.trim().length < 10 || endCaseMutation.isPending}
                 className="btn btn-danger btn-sm flex items-center gap-1.5"
               >
-                <XCircle size={14} />
+                {endCaseMutation.isPending ? <AppLoader size={18} /> : <XCircle size={14} />}
                 {endCaseMutation.isPending ? 'Ending...' : 'Confirm'}
               </button>
             </div>
@@ -1730,7 +1730,7 @@ function NewIncidentWizard() {
                 disabled={mutation.isPending || !canSubmit}
                 className="btn btn-primary flex items-center gap-1.5 disabled:opacity-40"
               >
-                <ClipboardText size={16} />
+                {mutation.isPending ? <AppLoader size={20} /> : <ClipboardText size={16} />}
                 {mutation.isPending ? 'Submitting...' : 'Submit Alert'}
               </button>
             </>

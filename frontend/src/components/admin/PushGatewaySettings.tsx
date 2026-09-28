@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, CircleCheck as CheckCircle, CircleX as XCircle, PlugZap, CircleSlash, FlaskConical, Save } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { activatePushGateway, deactivatePushGateway, getPushGateway, testPushGateway, updatePushGateway } from '@/api/settings';
 import { useNotificationStore } from '@/stores/notificationStore';
 
@@ -103,7 +104,7 @@ function PushGatewaySettings() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex gap-2">
             <button type="submit" className="flex items-center gap-1.5 px-4 py-2 bg-brand-teal text-white text-sm font-bold rounded-lg hover:opacity-90 disabled:opacity-40" disabled={busy || !json.trim()}>
-              <Save size={14} /> {saveMutation.isPending ? 'Saving…' : 'Save'}
+              {saveMutation.isPending ? <AppLoader size={18} /> : <Save size={14} />} {saveMutation.isPending ? 'Saving…' : 'Save'}
             </button>
             <button
               type="button"
@@ -112,7 +113,7 @@ function PushGatewaySettings() {
               title={!gateway?.configured ? 'Save credentials first' : undefined}
               onClick={() => testMutation.mutate()}
             >
-              <FlaskConical size={14} /> {testMutation.isPending ? 'Testing…' : 'Test connection'}
+              {testMutation.isPending ? <AppLoader size={18} /> : <FlaskConical size={14} />} {testMutation.isPending ? 'Testing…' : 'Test connection'}
             </button>
           </div>
           {gateway?.isActive ? (
@@ -122,7 +123,7 @@ function PushGatewaySettings() {
               disabled={busy}
               onClick={() => deactivateMutation.mutate()}
             >
-              <CircleSlash size={14} /> Deactivate
+              {deactivateMutation.isPending ? <AppLoader size={18} /> : <CircleSlash size={14} />} Deactivate
             </button>
           ) : (
             <button
@@ -132,7 +133,7 @@ function PushGatewaySettings() {
               title={!gateway?.configured ? 'Save credentials first' : undefined}
               onClick={() => activateMutation.mutate()}
             >
-              <PlugZap size={14} /> Set as active
+              {activateMutation.isPending ? <AppLoader size={18} /> : <PlugZap size={14} />} Set as active
             </button>
           )}
         </div>

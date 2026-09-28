@@ -443,9 +443,11 @@ function FacilitiesPage() {
                             onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                           >
-                            {f.isActive
-                              ? <><XIcon size={15} /> Deactivate</>
-                              : <><Check size={15} /> Activate</>}
+                            {updateMutation.isPending && updateMutation.variables?.id === f.id
+                              ? <><AppLoader size={19} /> {f.isActive ? 'Deactivate' : 'Activate'}</>
+                              : f.isActive
+                                ? <><XIcon size={15} /> Deactivate</>
+                                : <><Check size={15} /> Activate</>}
                           </button>
                           <div className="my-0.5" style={{ borderTop: '1px solid var(--border)' }} />
                           <button
@@ -695,7 +697,7 @@ function FacilitiesPage() {
                 className="flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-xl transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: 'var(--red)' }}
               >
-                <Trash2 size={14} />
+                {deleteMutation.isPending ? <AppLoader size={18} /> : <Trash2 size={14} />}
                 {deleteMutation.isPending ? 'Deleting…' : 'Delete Permanently'}
               </button>
             </div>

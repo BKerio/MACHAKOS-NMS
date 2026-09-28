@@ -206,7 +206,7 @@ function SubCountiesPage() {
                 disabled={addMutation.isPending || newName.trim().length < 2}
                 className="btn btn-primary flex items-center gap-2 px-5 py-2 text-sm"
               >
-                <Plus size={14} />
+                {addMutation.isPending ? <AppLoader size={18} /> : <Plus size={14} />}
                 {addMutation.isPending ? 'Adding…' : 'Add Sub-County'}
               </button>
             </div>
@@ -256,7 +256,7 @@ function SubCountiesPage() {
                 className="flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-xl transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: 'var(--red)' }}
               >
-                <Trash2 size={14} />
+                {deleteMutation.isPending ? <AppLoader size={18} /> : <Trash2 size={14} />}
                 {deleteMutation.isPending ? 'Removing…' : 'Remove'}
               </button>
             </div>

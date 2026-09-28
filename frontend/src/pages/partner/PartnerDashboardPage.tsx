@@ -10,6 +10,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { formatDistanceToNow } from 'date-fns';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -314,7 +315,7 @@ function PartnerDashboardPage() {
                 disabled={requestMessage.trim().length < 5 || resourceRequestMutation.isPending}
                 className="flex items-center gap-2 px-5 py-2 bg-brand-teal text-white text-sm font-bold rounded-xl hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <Handshake size={14} />
+                {resourceRequestMutation.isPending ? <AppLoader size={18} /> : <Handshake size={14} />}
                 {resourceRequestMutation.isPending ? 'Sending…' : 'Send Request'}
               </button>
             </div>

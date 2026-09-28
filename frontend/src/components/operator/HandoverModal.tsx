@@ -207,7 +207,7 @@ function HandoverModal({
             disabled={!canSubmit}
             className="btn btn-primary flex-[1.4]"
           >
-            <ArrowLeftRight size={16} />
+            {isSubmitting ? <AppLoader size={20} /> : <ArrowLeftRight size={16} />}
             {isSubmitting ? 'Transferring…' : 'Transfer case'}
           </button>
         </div>

@@ -12,6 +12,7 @@ import {
   X,
   Radio,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
 import type { Vehicle } from '@/types/api';
@@ -167,7 +168,7 @@ function FuelPage() {
           disabled={isFetching || coolingDown}
           title={coolingDown ? 'Uffizio limits fuel reports to one call every ~15 minutes' : undefined}
         >
-          <ArrowsClockwise size={15} />
+          {isFetching ? <AppLoader size={19} /> : <ArrowsClockwise size={15} />}
           {isFetching ? 'Refreshing…' : coolingDown ? `Refresh in ${countdown}` : 'Refresh'}
         </button>
       </div>

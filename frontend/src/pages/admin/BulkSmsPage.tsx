@@ -4,6 +4,7 @@ import {
   MessageSquareText as ChatText,
   Send as PaperPlaneRight,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { Incident } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -209,7 +210,7 @@ function BulkSmsPage() {
             disabled={!message.trim() || !parsedNumbers.length || hasUnfilledPlaceholders || sendMutation.isPending}
             className="ml-auto flex items-center gap-2 px-6 py-3 bg-brand-teal text-white text-sm font-bold rounded-xl hover:opacity-90 transition-all disabled:opacity-40"
           >
-            <PaperPlaneRight size={16} />
+            {sendMutation.isPending ? <AppLoader size={20} /> : <PaperPlaneRight size={16} />}
             {sendMutation.isPending ? 'Sending…' : 'Send SMS'}
           </button>
         </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, TriangleAlert, ClipboardList } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getMyCheckIn } from '@/api/responder';
 import { getVehicleChecklist, submitChecklistItem } from '@/api/checklist';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -17,10 +18,12 @@ function ChecklistRow({
   item,
   onConfirm,
   busy,
+  pending,
 }: {
   item: VehicleChecklistItem;
   onConfirm: (status: 'OK' | 'ISSUE', note?: string) => void;
   busy: boolean;
+  pending?: 'OK' | 'ISSUE' | null;
 }) {
   const [noting, setNoting] = useState(false);
   const [note, setNote] = useState(item.note ?? '');
@@ -49,7 +52,7 @@ function ChecklistRow({
                 : { background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--border)' }
             }
           >
-            <CheckCircle2 size={14} /> OK
+            {pending === 'OK' ? <AppLoader size={18} /> : <CheckCircle2 size={14} />} OK
           </button>
           <button
             type="button"
@@ -62,7 +65,7 @@ function ChecklistRow({
                 : { background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--border)' }
             }
           >
-            <TriangleAlert size={14} /> Issue
+            {pending === 'ISSUE' ? <AppLoader size={18} /> : <TriangleAlert size={14} />} Issue
           </button>
         </div>
       </div>
@@ -203,6 +206,7 @@ function ChecklistPage() {
                   key={item.id}
                   item={item}
                   busy={submitMutation.isPending}
+                  pending={submitMutation.isPending && submitMutation.variables?.itemId === item.id ? submitMutation.variables.status : null}
                   onConfirm={(status, note) => submitMutation.mutate({ itemId: item.id, status, note })}
                 />
               ))}
@@ -217,6 +221,7 @@ function ChecklistPage() {
                   key={item.id}
                   item={item}
                   busy={submitMutation.isPending}
+                  pending={submitMutation.isPending && submitMutation.variables?.itemId === item.id ? submitMutation.variables.status : null}
                   onConfirm={(status, note) => submitMutation.mutate({ itemId: item.id, status, note })}
                 />
               ))}

@@ -10,6 +10,7 @@ import {
   Handshake,
   Building,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { Incident, GbvReport } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -354,7 +355,7 @@ function GbvCaseDetailPage() {
           disabled={saveMutation.isPending}
           className="flex items-center gap-2 px-6 py-3 bg-brand-teal text-white font-semibold rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
         >
-          <FloppyDisk size={18} />
+          {saveMutation.isPending ? <AppLoader size={22} /> : <FloppyDisk size={18} />}
           {saveMutation.isPending ? 'Saving…' : 'Save GBV Report'}
         </button>
       </div>

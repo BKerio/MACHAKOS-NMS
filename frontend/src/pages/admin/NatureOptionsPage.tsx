@@ -7,6 +7,7 @@ import {
   Trash2 as Trash,
   X as XIcon,
 } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
@@ -342,7 +343,7 @@ function NatureOptionsPage() {
                 disabled={addMutation.isPending}
                 style={{ flex: 2, padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--green)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: addMutation.isPending ? 0.7 : 1 }}
               >
-                {addMutation.isPending ? 'Saving…' : 'Save'}
+                {addMutation.isPending ? <><AppLoader size={16} /> Saving…</> : 'Save'}
               </button>
             </div>
           </div>

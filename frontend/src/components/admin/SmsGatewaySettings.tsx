@@ -144,7 +144,7 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
           </div>
           {gateway.isActive ? (
             <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => deactivateMutation.mutate()}>
-              <CircleSlash size={14} /> Deactivate
+              {deactivateMutation.isPending ? <AppLoader size={18} /> : <CircleSlash size={14} />} Deactivate
             </button>
           ) : (
             <button

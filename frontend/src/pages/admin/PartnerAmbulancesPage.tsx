@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Truck, Plus, Pencil as PencilSimple, Check, X as XIcon } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { PartnerAmbulance } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -135,7 +136,9 @@ function PartnerAmbulancesPage() {
                         className="btn btn-ghost px-3 py-1.5 text-xs inline-flex items-center gap-1.5 ml-1"
                         style={{ color: r.isActive ? 'var(--red)' : 'var(--green)' }}
                       >
-                        {r.isActive ? <><XIcon size={14} /> Deactivate</> : <><Check size={14} /> Activate</>}
+                        {updateMutation.isPending && updateMutation.variables?.id === r.id
+                          ? <><AppLoader size={18} /> {r.isActive ? 'Deactivate' : 'Activate'}</>
+                          : r.isActive ? <><XIcon size={14} /> Deactivate</> : <><Check size={14} /> Activate</>}
                       </button>
                     </td>
                   )}
@@ -250,7 +253,7 @@ function AmbulanceModal({ title, form, setForm, agencies, onClose, onSubmit, sub
         <div className="px-5 pb-5 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border)' }}>
           <button onClick={onClose} className="btn btn-ghost px-4 py-2 text-sm">Cancel</button>
           <button onClick={onSubmit} disabled={submitting || !valid} className="btn btn-primary flex items-center gap-2 px-5 py-2 text-sm">
-            <Plus size={14} /> {submitting ? 'Saving…' : 'Save'}
+            {submitting ? <AppLoader size={18} /> : <Plus size={14} />} {submitting ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
