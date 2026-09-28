@@ -24,7 +24,9 @@ export class FcmPushClient {
   static create(serviceAccountJson: string, log?: FastifyBaseLogger): FcmPushClient {
     const credentials = JSON.parse(serviceAccountJson);
     const name = `push-client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const app = initializeApp({ credential: cert(credentials) }, name);
+    // projectId passed explicitly: cert() alone leaves app.options.projectId
+    // unset, which made "Test connection" report project "undefined".
+    const app = initializeApp({ credential: cert(credentials), projectId: credentials.project_id }, name);
     return new FcmPushClient(app, log);
   }
 
