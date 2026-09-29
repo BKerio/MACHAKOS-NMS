@@ -41,25 +41,25 @@ const ORIGIN_OPTIONS = [
 // ── Style tokens ─────────────────────────────────────────────────────────────
 
 const inputCls = [
-  'w-full h-10 px-3.5 rounded-lg text-sm font-semibold outline-none transition-colors',
+  'w-full h-11 px-3.5 rounded-xl text-sm font-medium outline-none transition-shadow',
   'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]',
-  'placeholder:text-[var(--muted-2)] placeholder:font-medium',
-  'focus:border-[var(--ink)] focus:ring-1 focus:ring-[var(--ink)]',
+  'placeholder:text-[var(--muted-2)] placeholder:font-normal',
+  'focus:border-[var(--ink)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ink)_8%,transparent)]',
 ].join(' ');
 
 const selectCls = inputCls;
 
 const textareaCls = [
-  'w-full px-3.5 py-2.5 rounded-lg text-sm font-semibold outline-none resize-none transition-colors',
+  'w-full px-3.5 py-3 rounded-xl text-sm font-medium outline-none resize-none transition-shadow',
   'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]',
-  'placeholder:text-[var(--muted-2)] placeholder:font-medium',
-  'focus:border-[var(--ink)] focus:ring-1 focus:ring-[var(--ink)]',
+  'placeholder:text-[var(--muted-2)] placeholder:font-normal',
+  'focus:border-[var(--ink)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ink)_8%,transparent)]',
 ].join(' ');
 
 const Label = ({ children, required }: { children: ReactNode; required?: boolean }) => (
-  <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>
+  <label className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--ink)' }}>
     {children}
-    {required && <span className="ml-1" style={{ color: 'var(--red)' }}>*</span>}
+    {required && <span className="ml-0.5" style={{ color: 'var(--red)' }}>*</span>}
   </label>
 );
 
@@ -77,7 +77,7 @@ function ReviewRow({ label, value }: { label: string; value?: string | boolean }
   if (!value && value !== false) return null;
   return (
     <div className="flex gap-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
-      <span className="text-[10px] font-black tracking-widest w-28 shrink-0 pt-0.5" style={{ color: 'var(--muted)' }}>{label}</span>
+      <span className="text-[13px] font-medium w-32 shrink-0 pt-0.5" style={{ color: 'var(--muted)' }}>{label}</span>
       <span className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{String(value)}</span>
     </div>
   );
@@ -90,44 +90,47 @@ const STEPS = ['Alert & Location', 'Patient & Incident', 'Review'];
 function WizardStepper({ current }: { current: number }) {
   return (
     <div
-      className="px-5 py-3.5 border-b shrink-0"
+      className="px-5 sm:px-6 py-4 border-b shrink-0"
       style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
     >
-      <div className="max-w-3xl mx-auto flex items-center gap-2">
+      <ol className="max-w-3xl mx-auto flex items-center">
         {STEPS.map((label, i) => {
           const num = i + 1;
           const done = num < current;
           const active = num === current;
           return (
             <Fragment key={label}>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
+              <li className="flex items-center gap-2.5 min-w-0">
+                <span
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold shrink-0"
                   style={
-                    done || active
+                    done
                       ? { background: 'var(--ink)', color: 'var(--surface)' }
-                      : { background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)' }
+                      : active
+                        ? { background: 'var(--surface)', color: 'var(--ink)', boxShadow: 'inset 0 0 0 1.5px var(--ink)' }
+                        : { background: 'var(--surface-2)', color: 'var(--muted)' }
                   }
                 >
-                  {done ? <Check size={13} strokeWidth={3} /> : num}
-                </div>
+                  {done ? <Check size={13} strokeWidth={2.5} /> : num}
+                </span>
                 <span
-                  className="text-[11px] font-bold truncate hidden sm:block"
-                  style={{ color: active || done ? 'var(--ink)' : 'var(--muted)' }}
+                  className="text-[13px] font-medium truncate hidden sm:block"
+                  style={{ color: active ? 'var(--ink)' : 'var(--muted)' }}
                 >
                   {label}
                 </span>
-              </div>
+              </li>
               {i < STEPS.length - 1 && (
-                <div
-                  className="flex-1 h-px mx-1"
+                <li
+                  aria-hidden
+                  className="flex-1 h-px mx-3 sm:mx-4"
                   style={{ background: done ? 'var(--ink)' : 'var(--border)' }}
                 />
               )}
             </Fragment>
           );
         })}
-      </div>
+      </ol>
     </div>
   );
 }
@@ -135,33 +138,32 @@ function WizardStepper({ current }: { current: number }) {
 // ── Section card ──────────────────────────────────────────────────────────────
 
 function SectionCard({
-  title, icon: Icon, children, accent,
+  title, icon: Icon, children,
 }: {
   title: string;
   icon: ElementType;
   children: ReactNode;
-  accent?: string;
 }) {
   return (
-    <div
-      className="rounded-xl border shadow-sm overflow-hidden"
-      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+    <section
+      className="rounded-2xl border"
+      style={{
+        background: 'var(--surface)',
+        borderColor: 'var(--border)',
+        boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+      }}
     >
-      <div className="h-1 w-full" style={{ background: accent || 'var(--green)' }} />
-      <div
-        className="px-4 py-3 flex items-center gap-2.5"
-        style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}
-      >
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink)' }}
+      <header className="px-5 pt-5 flex items-center gap-3">
+        <span
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: 'var(--surface-2)', color: 'var(--ink)' }}
         >
-          <Icon size={15} />
-        </div>
-        <h3 className="text-sm font-bold tracking-tight" style={{ color: 'var(--ink)' }}>{title}</h3>
-      </div>
-      <div className="p-4 sm:p-5 space-y-4">{children}</div>
-    </div>
+          <Icon size={16} strokeWidth={1.75} />
+        </span>
+        <h3 className="text-[15px] font-semibold tracking-tight" style={{ color: 'var(--ink)' }}>{title}</h3>
+      </header>
+      <div className="p-5 space-y-4">{children}</div>
+    </section>
   );
 }
 
@@ -177,26 +179,30 @@ function ReviewCard({
 }) {
   return (
     <div
-      className={`rounded-xl border shadow-sm overflow-hidden${className ? ` ${className}` : ''}`}
-      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+      className={`rounded-2xl border${className ? ` ${className}` : ''}`}
+      style={{
+        background: 'var(--surface)',
+        borderColor: 'var(--border)',
+        boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+      }}
     >
       <div
-        className="px-4 py-3 flex items-center justify-between"
-        style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}
+        className="px-5 py-3.5 flex items-center justify-between"
+        style={{ borderBottom: '1px solid var(--border)' }}
       >
-        <span className="text-[10px] font-black tracking-widest" style={{ color: 'var(--muted)' }}>
+        <span className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>
           {title}
         </span>
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest px-2 py-1 rounded-md border transition-colors"
+          className="inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-1 rounded-lg border transition-colors"
           style={{ borderColor: 'var(--border)', color: 'var(--ink)', background: 'var(--surface)' }}
         >
-          <PencilSimple size={11} /> Edit
+          <PencilSimple size={12} /> Edit
         </button>
       </div>
-      <div className="px-4 py-1">{children}</div>
+      <div className="px-5 py-1">{children}</div>
     </div>
   );
 }
@@ -679,15 +685,13 @@ function NewIncidentWizard() {
     return (
       <div className="min-h-[70vh] flex items-center justify-center p-6" style={{ background: 'var(--bg)' }}>
         <div
-          className="w-full max-w-md rounded-2xl border shadow-sm overflow-hidden"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          className="w-full max-w-md rounded-2xl border"
+          style={{
+            background: 'var(--surface)',
+            borderColor: 'var(--border)',
+            boxShadow: '0 8px 30px rgba(15, 23, 42, 0.06)',
+          }}
         >
-          <div
-            className="h-1 w-full"
-            style={{
-              background: ended ? 'var(--red)' : surveillance ? '#B45309' : 'var(--green)',
-            }}
-          />
           <div className="p-8 text-center flex flex-col items-center gap-5">
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center"
@@ -756,45 +760,40 @@ function NewIncidentWizard() {
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ background: 'var(--bg)' }}>
 
-      {/* ── Wizard header ── */}
-      <div
-        className="border-b shrink-0 overflow-hidden"
+      <header
+        className="shrink-0 border-b"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
-        <div className="h-1 w-full bg-brand-green" />
-        <div className="px-5 py-3.5 flex items-center gap-4">
+        <div className="px-5 sm:px-6 py-4 flex items-center gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <div className="w-1.5 h-4 bg-brand-green rounded-full" />
-              <p className="text-[10px] font-black tracking-[0.18em]" style={{ color: 'var(--muted)' }}>
-                New Incident · Step {step} of {STEPS.length}
-              </p>
-            </div>
-            <h1 className="text-lg font-black tracking-tight truncate" style={{ color: 'var(--ink)' }}>
+            <p className="text-[12px] font-medium" style={{ color: 'var(--muted)' }}>
+              New incident · Step {step} of {STEPS.length}
+            </p>
+            <h1 className="text-xl font-semibold tracking-tight truncate mt-0.5" style={{ color: 'var(--ink)' }}>
               {stepTitle}
             </h1>
           </div>
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="p-2 rounded-lg transition-colors"
-            style={{ color: 'var(--muted)' }}
+            className="w-9 h-9 rounded-full border flex items-center justify-center transition-colors"
+            style={{ color: 'var(--muted)', borderColor: 'var(--border)', background: 'var(--surface)' }}
             title="Close"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
-      </div>
+      </header>
 
       {/* ── Step indicator ── */}
       <WizardStepper current={step} />
 
       {/* ── Step content ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 lg:p-5">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 lg:py-6">
 
         {/* ─────────────── STEP 1: Alert ─────────────── */}
         {step === 1 && (
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
 
               {/* ── Card 1: Alert ── */}
               <SectionCard title="Alert" icon={Phone}>
@@ -819,7 +818,7 @@ function NewIncidentWizard() {
                           key={m}
                           type="button"
                           onClick={() => set({ alertMode: m })}
-                          className="inline-flex items-center gap-1 rounded-md border px-3 py-2 text-[11px] font-black tracking-wide transition-colors"
+                          className="inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-medium transition-colors"
                           style={
                             on
                               ? { background: 'var(--ink)', borderColor: 'var(--ink)', color: 'var(--surface)' }
@@ -1037,7 +1036,7 @@ function NewIncidentWizard() {
 
         {/* ─────────────── STEP 2: Patient ─────────────── */}
         {step === 2 && (
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
               <SectionCard title="Patient" icon={User}>
                 <Field>
                   <Label>Patient Name</Label>
@@ -1543,10 +1542,10 @@ function NewIncidentWizard() {
                 className="rounded-xl border p-4 shadow-sm"
                 style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
               >
-                <p className="text-[10px] font-black tracking-widest mb-2" style={{ color: 'var(--muted)' }}>
+                <p className="text-[13px] font-medium mb-2" style={{ color: 'var(--muted)' }}>
                   Chief Complaint
                 </p>
-                <div className="pl-3 py-1" style={{ borderLeft: '3px solid var(--green)' }}>
+                <div className="pl-3 py-1" style={{ borderLeft: '2px solid var(--border)' }}>
                   <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{form.chiefComplaint}</p>
                 </div>
               </div>
@@ -1667,8 +1666,12 @@ function NewIncidentWizard() {
 
       {/* ── Sticky footer ── */}
       <div
-        className="border-t px-4 sm:px-5 py-3 flex items-center justify-between gap-3 shrink-0"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        className="px-5 sm:px-6 py-3.5 flex items-center justify-between gap-3 shrink-0"
+        style={{
+          background: 'var(--surface)',
+          borderTop: '1px solid var(--border)',
+          boxShadow: '0 -8px 24px rgba(15, 23, 42, 0.03)',
+        }}
       >
         <button
           type="button"
