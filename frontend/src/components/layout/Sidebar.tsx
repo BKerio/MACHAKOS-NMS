@@ -218,11 +218,6 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
               <b>Emergency Operations</b>
               <span className="brand-org">Machakos County</span>
             </div>
-
-            <div className={`sidebar-status${connected ? ' on' : ''}`} role="status">
-              <span className="sidebar-status-dot" aria-hidden="true" />
-              <span>{connected ? 'Command Centre · Live' : 'Reconnecting to dispatch…'}</span>
-            </div>
           </div>
 
           <nav className="nav-scroll" aria-label="Main">
