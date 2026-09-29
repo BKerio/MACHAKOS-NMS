@@ -153,6 +153,7 @@ function AppShell() {
       <Sidebar
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
+        connected={isConnected}
       />
       <div className="main">
         <TopBar

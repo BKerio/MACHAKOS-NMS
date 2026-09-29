@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import {
-  LayoutGrid as SquaresFour,
+  LayoutDashboard,
+  MonitorPlay,
+  Siren,
   Map as MapTrifold,
-  List as ListBullets,
   Users,
   Settings as Gear,
   ChartLine as ChartLineUp,
   Phone,
   ClipboardList as ClipboardText,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   LogOut,
   Hospital,
   Tag,
@@ -21,7 +22,6 @@ import {
   MessageSquareText as ChatText,
   Timer,
   Truck,
-  RadioTower as Broadcast,
   Fuel as GasPump,
   Ambulance,
   UserCheck,
@@ -30,6 +30,8 @@ import {
   Package,
   FileBarChart2 as FileBarChart,
   Bell,
+  CircleUserRound,
+  type LucideIcon,
 } from 'lucide-react';
 import { useActiveCalls } from '@/hooks/useActiveCalls';
 import { useIncidentQueueCount } from '@/hooks/useIncidentQueueCount';
@@ -40,80 +42,97 @@ import SidebarLogo from '@/assets/logos/nccg.jpg';
 interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
+  /** Live socket link to dispatch; drives the header status and the avatar dot. */
+  connected: boolean;
 }
 
-type NavItem = { label: string; path: string; Icon: any; roles: string[] };
+/** Each section gets its own accent hue (see `.nav-group[data-tone]` in index.css). */
+type Tone = 'core' | 'ops' | 'mgmt' | 'insight' | 'partner' | 'field' | 'account';
+type NavItem = { label: string; path: string; Icon: LucideIcon; roles: string[] };
+type NavSection = { title?: string; tone: Tone; items: NavItem[] };
 
 const ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
+const COMMAND = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'];
+const ADMINS = ['SUPER_ADMIN', 'ADMIN'];
+const CREW = ['DRIVER', 'EMT', 'NURSE'];
 
-const menuSections: { title?: string; items: NavItem[] }[] = [
+const menuSections: NavSection[] = [
   {
+    tone: 'core',
     items: [
-      { label: 'Dashboard', path: '/dashboard', Icon: SquaresFour, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'Wallboard', path: '/wallboard', Icon: Broadcast, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
+      { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard, roles: COMMAND },
+      { label: 'Wallboard', path: '/wallboard', Icon: MonitorPlay, roles: COMMAND },
     ],
   },
   {
     title: 'Operations',
+    tone: 'ops',
     items: [
-      { label: 'Incident Feed', path: '/queue', Icon: ListBullets, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'Fleet Management', path: '/fleet', Icon: MapTrifold, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'Vehicle Checklists', path: '/fleet/checklists', Icon: ClipboardText, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'Fuel Monitoring', path: '/fleet/fuel', Icon: GasPump, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'Standby', path: '/fleet/standby', Icon: Timer, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'Call Logs', path: '/call-logs', Icon: Phone, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'GBV Register', path: '/gbv/dashboard', Icon: ShieldWarning, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER'] },
+      { label: 'Incident Feed', path: '/queue', Icon: Siren, roles: COMMAND },
+      { label: 'Fleet Management', path: '/fleet', Icon: MapTrifold, roles: COMMAND },
+      { label: 'Vehicle Checklists', path: '/fleet/checklists', Icon: ClipboardText, roles: COMMAND },
+      { label: 'Fuel Monitoring', path: '/fleet/fuel', Icon: GasPump, roles: COMMAND },
+      { label: 'Standby', path: '/fleet/standby', Icon: Timer, roles: COMMAND },
+      { label: 'Call Logs', path: '/call-logs', Icon: Phone, roles: COMMAND },
+      { label: 'GBV Register', path: '/gbv/dashboard', Icon: ShieldWarning, roles: [...COMMAND, 'PARTNER'] },
     ],
   },
   {
     title: 'Management',
+    tone: 'mgmt',
     items: [
-      { label: 'Personnel', path: '/admin/users', Icon: Users, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Partners', path: '/admin/partners', Icon: Handshake, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Partner Ambulances', path: '/admin/partner-ambulances', Icon: Truck, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'] },
-      { label: 'Facilities', path: '/admin/facilities', Icon: Hospital, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Nature Options', path: '/admin/nature-options', Icon: Tag, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Sub-Counties', path: '/admin/sub-counties', Icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Inventory', path: '/admin/inventory', Icon: Package, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Bulk SMS', path: '/admin/sms', Icon: ChatText, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Notifications', path: '/admin/notifications', Icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Personnel', path: '/admin/users', Icon: Users, roles: ADMINS },
+      { label: 'Partners', path: '/admin/partners', Icon: Handshake, roles: ADMINS },
+      { label: 'Partner Ambulances', path: '/admin/partner-ambulances', Icon: Truck, roles: COMMAND },
+      { label: 'Facilities', path: '/admin/facilities', Icon: Hospital, roles: ADMINS },
+      { label: 'Nature Options', path: '/admin/nature-options', Icon: Tag, roles: ADMINS },
+      { label: 'Sub-Counties', path: '/admin/sub-counties', Icon: MapPin, roles: ADMINS },
+      { label: 'Inventory', path: '/admin/inventory', Icon: Package, roles: ADMINS },
+      { label: 'Bulk SMS', path: '/admin/sms', Icon: ChatText, roles: ADMINS },
+      { label: 'Notifications', path: '/admin/notifications', Icon: Bell, roles: ADMINS },
     ],
   },
   {
     title: 'Insights',
+    tone: 'insight',
     items: [
-      { label: 'Analytics', path: '/admin/analytics', Icon: ChartLineUp, roles: ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER'] },
-      { label: 'System Report', path: '/admin/system-report', Icon: FileBarChart, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'System Settings', path: '/admin/settings', Icon: Gear, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Analytics', path: '/admin/analytics', Icon: ChartLineUp, roles: [...COMMAND, 'PARTNER'] },
+      { label: 'System Report', path: '/admin/system-report', Icon: FileBarChart, roles: ADMINS },
+      { label: 'System Settings', path: '/admin/settings', Icon: Gear, roles: ADMINS },
     ],
   },
   {
     title: 'Partner',
+    tone: 'partner',
     items: [
-      { label: 'Partner Dashboard', path: '/partner/dashboard', Icon: SquaresFour, roles: ['PARTNER'] },
+      { label: 'Partner Dashboard', path: '/partner/dashboard', Icon: LayoutDashboard, roles: ['PARTNER'] },
     ],
   },
   {
     title: 'Field Operations',
+    tone: 'field',
     items: [
-      { label: 'Dashboard', path: '/driver/dashboard', Icon: SquaresFour, roles: ['DRIVER'] },
-      { label: 'Assignment', path: '/operator/assignment', Icon: Ambulance, roles: ['DRIVER', 'EMT', 'NURSE'] },
-      { label: 'Crew', path: '/operator/crew', Icon: UserCheck, roles: ['DRIVER', 'EMT', 'NURSE'] },
-      { label: 'Activity', path: '/operator/activity', Icon: Activity, roles: ['DRIVER', 'EMT', 'NURSE'] },
-      { label: 'History', path: '/operator/history', Icon: HistoryIcon, roles: ['DRIVER', 'EMT', 'NURSE'] },
-      { label: 'Inventory', path: '/operator/inventory', Icon: Package, roles: ['DRIVER', 'EMT', 'NURSE'] },
-      { label: 'Vehicle Checklist', path: '/operator/checklist', Icon: ClipboardText, roles: ['DRIVER', 'EMT', 'NURSE'] },
+      { label: 'Dashboard', path: '/driver/dashboard', Icon: LayoutDashboard, roles: ['DRIVER'] },
+      { label: 'Assignment', path: '/operator/assignment', Icon: Ambulance, roles: CREW },
+      { label: 'Crew', path: '/operator/crew', Icon: UserCheck, roles: CREW },
+      { label: 'Activity', path: '/operator/activity', Icon: Activity, roles: CREW },
+      { label: 'History', path: '/operator/history', Icon: HistoryIcon, roles: CREW },
+      { label: 'Inventory', path: '/operator/inventory', Icon: Package, roles: CREW },
+      { label: 'Vehicle Checklist', path: '/operator/checklist', Icon: ClipboardText, roles: CREW },
     ],
   },
   {
     title: 'Account',
+    tone: 'account',
     items: [
-      { label: 'My Profile', path: '/profile', Icon: Users, roles: ALL_ROLES },
+      { label: 'My Profile', path: '/profile', Icon: CircleUserRound, roles: ALL_ROLES },
     ],
   },
 ];
 
-function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
+type Badge = { count: number; hot: boolean; title: string };
+
+function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const addNotification = useNotificationStore((s) => s.addNotification);
@@ -140,9 +159,26 @@ function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
     .filter((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
     .sort((a, b) => b.length - a.length)[0];
 
+  const badgeFor = (path: string): Badge | null => {
+    if (path === '/queue') {
+      return {
+        count: incidentQueueCount,
+        hot: incidentQueueCount > 0,
+        title: incidentQueueCount > 0
+          ? `${incidentQueueCount} incident${incidentQueueCount === 1 ? '' : 's'} submitted`
+          : 'No incidents waiting',
+      };
+    }
+    if (path === '/call-logs' && activeCalls.length > 0) {
+      return { count: activeCalls.length, hot: true, title: `${activeCalls.length} active call${activeCalls.length === 1 ? '' : 's'}` };
+    }
+    return null;
+  };
+
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : user?.role?.charAt(0) ?? 'U';
+  const roleLabel = user?.role?.replace(/_/g, ' ').toLowerCase();
 
   const handleLogout = async () => {
     const confirmed = await confirmDialog({
@@ -169,94 +205,102 @@ function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         onMouseEnter={() => collapsed && setPeek(true)}
         onMouseLeave={() => setPeek(false)}
       >
-       <div className="sidebar-inner">
-        {/* Brand header */}
-        <div className="sidebar-head">
-          <button
-            onClick={onToggleCollapse}
-            className="sidebar-collapse-btn"
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
-          <div className="brand-logo">
-            <img src={SidebarLogo} draggable={false} alt="Machakos County" />
-          </div>
-          <div className="brand-text">
-            <b>Emergency Operations</b>
-            <span className="brand-org">Machakos County</span>
-            <span className="brand-tag">Command Centre</span>
-          </div>
-        </div>
+        <div className="sidebar-inner">
+          <div className="sidebar-head">
+            <button
+              onClick={onToggleCollapse}
+              className="sidebar-collapse-btn"
+              title={collapsed ? 'Pin sidebar open' : 'Collapse sidebar'}
+              aria-label={collapsed ? 'Pin sidebar open' : 'Collapse sidebar'}
+            >
+              {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </button>
 
-        {/* Nav scroll */}
-        <nav className="nav-scroll">
-          {visibleSections.map((section, idx) => (
-            <div className="nav-group" key={section.title ?? `section-${idx}`}>
-              {section.title && <div className="nav-group-label">{section.title}</div>}
-              {section.items.map((item) => {
-                const isActive = item.path === activePath;
-                const hasCallBadge = item.path === '/call-logs' && activeCalls.length > 0;
-                const isIncidentFeed = item.path === '/queue';
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`nav-item${isActive ? ' active' : ''}`}
-                  >
-                    <item.Icon size={20} />
-                    <span className="nav-label">{item.label}</span>
-                    {hasCallBadge && (
-                      <span className="nav-badge">{activeCalls.length}</span>
-                    )}
-                    {isIncidentFeed && (
-                      <span
-                        className="nav-badge"
-                        style={{ background: incidentQueueCount > 0 ? 'var(--red)' : 'var(--green)' }}
-                        title={incidentQueueCount > 0 ? `${incidentQueueCount} incident${incidentQueueCount === 1 ? '' : 's'} submitted` : 'No incidents waiting'}
-                      >
-                        {incidentQueueCount}
+            <div className="brand-crest">
+              <div className="brand-logo">
+                <img src={SidebarLogo} draggable={false} alt="Machakos County" />
+              </div>
+              <span className={`brand-crest-dot${connected ? ' on' : ''}`} aria-hidden="true" />
+            </div>
+
+            <div className="brand-text">
+              <b>Emergency Operations</b>
+              <span className="brand-org">Machakos County</span>
+            </div>
+
+            <div className={`sidebar-status${connected ? ' on' : ''}`} role="status">
+              <span className="sidebar-status-dot" aria-hidden="true" />
+              <span>{connected ? 'Command Centre · Live' : 'Reconnecting to dispatch…'}</span>
+            </div>
+          </div>
+
+          <nav className="nav-scroll" aria-label="Main">
+            {visibleSections.map((section, idx) => (
+              <div className="nav-group" data-tone={section.tone} key={section.title ?? `section-${idx}`}>
+                {section.title && (
+                  <div className="nav-group-label">
+                    <span className="nav-group-dot" aria-hidden="true" />
+                    <span className="nav-group-text">{section.title}</span>
+                  </div>
+                )}
+                {section.items.map((item) => {
+                  const isActive = item.path === activePath;
+                  const badge = badgeFor(item.path);
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`nav-item${isActive ? ' active' : ''}`}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      <span className="nav-tile">
+                        <item.Icon size={24} aria-hidden="true" />
                       </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
+                      <span className="nav-label">{item.label}</span>
+                      {badge && (
+                        <span className={`nav-badge${badge.hot ? ' hot' : ''}`} title={badge.title}>
+                          {badge.count}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
 
-        {/* User footer */}
-        <div className="sidebar-foot">
-          <div className="sidebar-user">
-            <div className="av av-sm" style={{ background: 'var(--green)' }}>{initials}</div>
-            <div className="sidebar-user-meta">
-              <b>{user?.name ?? 'Operator'}</b>
-              <span>{user?.role?.replace('_', ' ')}</span>
-            </div>
+          <div className="sidebar-foot">
+            <Link to="/profile" className="sidebar-user" title="My profile">
+              <span className="sidebar-av">
+                {initials}
+                <span className={`sidebar-av-dot${connected ? ' on' : ''}`} aria-hidden="true" />
+              </span>
+              <span className="sidebar-user-meta">
+                <b>{user?.name ?? 'Operator'}</b>
+                <span className="sidebar-role">{roleLabel}</span>
+              </span>
+            </Link>
+            <button onClick={handleLogout} className="sidebar-logout-btn" title="Sign out" aria-label="Sign out">
+              <LogOut size={18} />
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="sidebar-logout-btn"
-            title="Sign Out"
-          >
-            <LogOut size={15} />
-            <span>Sign Out</span>
-          </button>
         </div>
-       </div>
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="bottomnav">
+      <nav className="bottomnav" aria-label="Main">
         {visibleItems.slice(0, 5).map((item) => {
           const isActive = item.path === activePath;
-          const hasCallBadge = item.path === '/call-logs' && activeCalls.length > 0;
-          const isIncidentFeed = item.path === '/queue';
+          const badge = badgeFor(item.path);
           return (
-            <Link key={item.path} to={item.path} className={`bn-item${isActive ? ' on' : ''}`}>
-              {hasCallBadge && <span className="bn-badge" />}
-              {isIncidentFeed && (
-                <span className="bn-badge" style={{ background: incidentQueueCount > 0 ? 'var(--red)' : 'var(--green)' }} />
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`bn-item${isActive ? ' on' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              {badge && (
+                <span className="bn-badge" style={{ background: badge.hot ? 'var(--red)' : 'var(--green)' }} />
               )}
               <item.Icon size={22} />
               <span>{item.label.split(' ')[0]}</span>
