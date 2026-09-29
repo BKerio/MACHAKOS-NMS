@@ -140,8 +140,26 @@ model User {
   inventoryCheckouts         InventoryCheckout[]
   checklistChecksMade        VehicleChecklistCheck[] @relation("VehicleChecklistCheckedBy")
   pushTokens                 PushToken[]
+  biometricKeys              BiometricKey[]
 
   @@map("users")
+}
+
+// Lets field crew sign in with their phone's fingerprint instead of an SMS
+// code. The phone keeps the random secret behind its biometric prompt; only
+// its SHA-256 is stored here. One row per phone the crew member enabled it on;
+// deleted when they turn it off (or with the user).
+model BiometricKey {
+  id         String    @id @default(uuid())
+  secretHash String    @map("secret_hash")
+  deviceName String?   @map("device_name")
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  @@index([userId])
+  @@map("biometric_keys")
 }
 
 // One Firebase Cloud Messaging token per device a user is signed in on - the

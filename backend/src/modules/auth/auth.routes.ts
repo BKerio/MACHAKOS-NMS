@@ -35,6 +35,16 @@ const googleLoginSchema = z.object({
   idToken: z.string().min(20, 'Google ID token is required'),
 });
 
+const biometricEnrollSchema = z.object({
+  deviceName: z.string().max(80).optional(),
+  replaceKeyId: z.string().max(64).optional(),
+});
+
+const biometricLoginSchema = z.object({
+  keyId: z.string().min(1).max(64),
+  secret: z.string().min(32).max(128),
+});
+
 const updateMeSchema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters').optional(),
@@ -100,6 +110,32 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     const result = await authService.loginWithGoogle(parsed.data.idToken);
     return reply.send({ ok: true, data: result });
+  });
+
+  // Field crew: fingerprint sign-in with a device key set up from Settings.
+  app.post('/biometric/login', async (request, reply) => {
+    const parsed = biometricLoginSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new BadRequestError('Fingerprint sign-in is not set up correctly. Sign in with an SMS code.');
+    }
+
+    const result = await authService.loginWithBiometric(parsed.data.keyId, parsed.data.secret);
+    return reply.send({ ok: true, data: result });
+  });
+
+  app.post('/biometric/enroll', { preValidation: [app.authenticate] }, async (request, reply) => {
+    const parsed = biometricEnrollSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0].message);
+    }
+
+    const result = await authService.enrollBiometric(request.user.userId, parsed.data.deviceName, parsed.data.replaceKeyId);
+    return reply.status(201).send({ ok: true, data: result });
+  });
+
+  app.delete<{ Params: { keyId: string } }>('/biometric/:keyId', { preValidation: [app.authenticate] }, async (request, reply) => {
+    await authService.revokeBiometric(request.user.userId, request.params.keyId);
+    return reply.send({ ok: true, data: null });
   });
 
   app.post('/select-role', { preValidation: [app.authenticatePending] }, async (request, reply) => {

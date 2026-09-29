@@ -13,6 +13,8 @@ const OTP_TTL_SECONDS = 300; // code lifetime
 const OTP_COOLDOWN_SECONDS = 60; // minimum gap between resend requests
 const OTP_MAX_ATTEMPTS = 5; // wrong guesses allowed before the code is invalidated
 
+const sha256 = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
+
 interface OtpRecord {
   codeHash: string;
   userId: string;
@@ -277,6 +279,59 @@ export class AuthService {
     const user = await this.app.prisma.user.findUnique({ where: { id: record.userId } });
     if (!user || !user.isActive) throw new UnauthorizedError('Account is no longer active');
 
+    return this.issueSession(user);
+  }
+
+  /**
+   * Turns on fingerprint sign-in for the signed-in crew member's phone.
+   * Returns a random secret exactly once; only its hash is stored. Passing
+   * [replaceKeyId] drops the phone's previous key so re-enabling doesn't
+   * pile up rows.
+   */
+  async enrollBiometric(userId: string, deviceName?: string, replaceKeyId?: string) {
+    const user = await this.app.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.isActive) throw new UnauthorizedError('Account is no longer active');
+    const roles = user.roles.length ? user.roles : [user.role];
+    if (!roles.some((r) => OTP_ELIGIBLE_ROLES.includes(r))) {
+      throw new BadRequestError('Fingerprint sign-in is only for Drivers, EMTs, and Nurses');
+    }
+
+    const secret = crypto.randomBytes(32).toString('base64url');
+    const [, key] = await this.app.prisma.$transaction([
+      this.app.prisma.biometricKey.deleteMany({ where: { id: replaceKeyId ?? '', userId } }),
+      this.app.prisma.biometricKey.create({
+        data: { userId, secretHash: sha256(secret), deviceName: deviceName?.slice(0, 80) || null },
+      }),
+    ]);
+    return { keyId: key.id, secret };
+  }
+
+  /** Turns fingerprint sign-in off for one of the signed-in user's phones. */
+  async revokeBiometric(userId: string, keyId: string) {
+    await this.app.prisma.biometricKey.deleteMany({ where: { id: keyId, userId } });
+  }
+
+  /**
+   * Fingerprint sign-in: the phone has already checked the fingerprint and
+   * sends the device key it unlocked. Issues the same session as OTP login.
+   */
+  async loginWithBiometric(keyId: string, secret: string) {
+    const failed = new UnauthorizedError(
+      'Fingerprint sign-in is no longer set up for this phone. Sign in with an SMS code.'
+    );
+    const key = await this.app.prisma.biometricKey.findUnique({ where: { id: keyId }, include: { user: true } });
+    if (!key) throw failed;
+
+    const expected = Buffer.from(key.secretHash, 'hex');
+    const given = Buffer.from(sha256(secret), 'hex');
+    if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) throw failed;
+
+    const user = key.user;
+    if (!user.isActive) throw new UnauthorizedError('Account is no longer active');
+    const roles = user.roles.length ? user.roles : [user.role];
+    if (!roles.some((r) => OTP_ELIGIBLE_ROLES.includes(r))) throw failed;
+
+    await this.app.prisma.biometricKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } });
     return this.issueSession(user);
   }
 
