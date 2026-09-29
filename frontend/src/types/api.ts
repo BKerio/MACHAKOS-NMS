@@ -59,6 +59,10 @@ export interface Vehicle {
   lastLat?: number | null;
   lastLng?: number | null;
   lastLocationAt?: string | null;
+  /** Live GPS tracker fix. The ops map uses this, not the crew phone check-in. */
+  trackerLat?: number | null;
+  trackerLng?: number | null;
+  trackerAt?: string | null;
   lastLocationName?: string | null;
   /** Litres, from a real fuel-sensor port on the GPS tracker. Null on units
    * with no probe fitted (not the same as an empty tank) - see backend
@@ -347,6 +351,10 @@ export interface Task {
   handoverReason?: string | null;
   previousTaskId?: string | null;
   handoverVitals?: Record<string, string> | null;
+  /** Straight-line km from the ambulance tracker to the scene, captured on accept. */
+  distanceToSceneKm?: number | null;
+  /** Straight-line km from the scene to the recommended facility, captured on patient pickup. */
+  sceneToFacilityKm?: number | null;
   incidentId: string;
   vehicleId: string;
   vehicle?: Vehicle;

@@ -299,11 +299,18 @@ model Task {
   cancelledAt       DateTime? @map("cancelled_at")
   cancelReason      String?   @map("cancel_reason")
 
-  // Route coordinates
+  // Route coordinates. start* is the ambulance's live tracker fix at accept;
+  // end* is the recommended facility at patient pickup.
   startLat Float? @map("start_lat")
   startLng Float? @map("start_lng")
   endLat   Float? @map("end_lat")
   endLng   Float? @map("end_lng")
+
+  // Straight-line legs, snapped at the moment the crew advances the task:
+  // accept → ambulance tracker to the scene; patient pickup → scene to the
+  // recommended facility. Null when a coordinate was missing at that moment.
+  distanceToSceneKm  Float? @map("distance_to_scene_km")
+  sceneToFacilityKm  Float? @map("scene_to_facility_km")
 
   // Vital signs captured by the crew at hospital handover (Temperature, Pulse,
   // Respiration, BP, SPO2, GCS, etc.) - JSON, same shape convention as Incident.vitals.

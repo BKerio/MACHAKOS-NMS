@@ -37,6 +37,8 @@ interface VehicleLocation {
   agencyId: string;
   isActive: boolean;
   dbStatus: 'READY' | 'BUSY' | 'MAINTENANCE';
+  /** True when a driver is checked in. Drives map colour (ready vs no-driver). */
+  hasDriver: boolean;
   /** Litres, only set when the tracker reports a real fuel-sensor port (see extractFuelLevel). */
   fuelLevelL: number | null;
 }
@@ -313,7 +315,7 @@ export class TrackingService {
 
   private async mapToInternalFormat(rawVehicles: any[]): Promise<VehicleLocation[]> {
     const dbVehicles = await this.app.prisma.vehicle.findMany({
-      select: { id: true, imei: true, registrationNumber: true, agencyId: true, isActive: true, status: true },
+      select: { id: true, imei: true, registrationNumber: true, agencyId: true, isActive: true, status: true, currentDriverId: true },
     });
     const byImei = new Map(dbVehicles.map(v => [v.imei, v]));
     const byReg = new Map(dbVehicles.map(v => [v.registrationNumber?.toUpperCase(), v]));
@@ -352,6 +354,7 @@ export class TrackingService {
         agencyId: dbV.agencyId,
         isActive: dbV.isActive,
         dbStatus: (dbV.status as 'READY' | 'BUSY' | 'MAINTENANCE') ?? 'READY',
+        hasDriver: !!dbV.currentDriverId,
         fuelLevelL: extractFuelLevel(raw),
       });
     }

@@ -267,6 +267,11 @@ class CrewTask with TaskStageTimes {
   @override
   final String? handedOverAt;
 
+  /// Straight-line km, ambulance tracker → scene, captured on accept.
+  final double? distanceToSceneKm;
+  /// Straight-line km, scene → recommended facility, captured on patient pickup.
+  final double? sceneToFacilityKm;
+
   CrewTask({
     required this.id,
     required this.status,
@@ -282,6 +287,8 @@ class CrewTask with TaskStageTimes {
     this.completedAt,
     this.cancelledAt,
     this.handedOverAt,
+    this.distanceToSceneKm,
+    this.sceneToFacilityKm,
   });
 
   factory CrewTask.fromJson(Map<String, dynamic> json) => CrewTask(
@@ -299,6 +306,8 @@ class CrewTask with TaskStageTimes {
     completedAt: json['completedAt'] as String?,
     cancelledAt: json['cancelledAt'] as String?,
     handedOverAt: json['handedOverAt'] as String?,
+    distanceToSceneKm: (json['distanceToSceneKm'] as num?)?.toDouble(),
+    sceneToFacilityKm: (json['sceneToFacilityKm'] as num?)?.toDouble(),
   );
 }
 

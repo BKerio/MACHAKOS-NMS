@@ -54,12 +54,16 @@ export function useVehicleTracking() {
       const next = new Map(prev);
       for (const v of vehicles) {
         const existing = next.get(v.id);
-        const hasCoords = v.lastLat != null && v.lastLng != null;
+        // Live map pin is the ambulance tracker. lastLat can also be a crew
+        // phone, so it is only a fallback when the tracker has never reported.
+        const liveLat = v.trackerLat ?? v.lastLat;
+        const liveLng = v.trackerLng ?? v.lastLng;
+        const hasCoords = liveLat != null && liveLng != null;
         // Can't place a brand-new marker without coordinates, but we can still
         // keep the operational status of an already-tracked vehicle in sync.
         if (!existing && !hasCoords) continue;
 
-        const dbTs = new Date(v.lastLocationAt ?? 0).getTime();
+        const dbTs = new Date((v.trackerAt ?? v.lastLocationAt) ?? 0).getTime();
         const existingTs = existing ? new Date(existing.timestamp).getTime() : 0;
         // Operational status is the DB's source of truth - driver check-ins and
         // BUSY/READY transitions are NOT reliably pushed via the GPS socket, so
@@ -72,12 +76,12 @@ export function useVehicleTracking() {
             vehicleId: v.id,
             imei: v.imei,
             registration: v.registrationNumber,
-            lat: v.lastLat as number,
-            lng: v.lastLng as number,
+            lat: liveLat as number,
+            lng: liveLng as number,
             speed: 0,
             heading: 0,
             ignition: false,
-            timestamp: v.lastLocationAt ?? new Date().toISOString(),
+            timestamp: v.trackerAt ?? v.lastLocationAt ?? new Date().toISOString(),
             dbStatus,
             isActive: v.isActive,
             hasDriver,
@@ -88,7 +92,7 @@ export function useVehicleTracking() {
           next.set(v.id, {
             ...existing,
             ...(positionIsNewer
-              ? { lat: v.lastLat as number, lng: v.lastLng as number, timestamp: v.lastLocationAt ?? existing.timestamp }
+              ? { lat: liveLat as number, lng: liveLng as number, timestamp: v.trackerAt ?? v.lastLocationAt ?? existing.timestamp }
               : {}),
             dbStatus,
             isActive: v.isActive,
@@ -98,7 +102,7 @@ export function useVehicleTracking() {
       }
       return next;
     });
-    if (vehicles.some(v => v.lastLat)) {
+    if (vehicles.some(v => v.trackerLat != null || v.lastLat != null)) {
       setLastUpdatedAt(prev => prev ?? new Date());
     }
   }, [vehicles]);

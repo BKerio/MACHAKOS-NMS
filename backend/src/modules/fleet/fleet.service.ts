@@ -241,44 +241,20 @@ export class FleetService {
       },
     });
 
-    // 4. Set the crew FK. The phone's fix only moves the vehicle on the map
-    // when it can't be wrong about it:
-    //  - MATCHED: phone and tracker agree, so sync them - the tracker's point
-    //    plus the resolved place name.
-    //  - UNVERIFIED: no tracker fix to contradict it, so seed from the phone
-    //    as before (the check-in is flagged for dispatch).
-    //  - MISMATCH: leave the tracker's position alone - otherwise checking in
-    //    from home would drag the ambulance to the crew member's house.
+    // 4. Set the crew FK. The phone GPS is stored on the CheckIn row only -
+    // the live map follows the ambulance tracker (trackerLat / lastLat written
+    // by the Uffizio poller), never the driver's check-in location.
     // A new driver starting a shift resets the equipment checklist - it must
     // be reconfirmed each shift. EMT/nurse checking in joins an already-
     // started shift, so it doesn't reset anything already confirmed.
-    const position =
-      verdict.match === 'MATCHED'
-        ? { lat: vehicle.trackerLat!, lng: vehicle.trackerLng! }
-        : verdict.match === 'UNVERIFIED' && !location.mocked
-          ? { lat: location.lat, lng: location.lng }
-          : null;
-
     const updated = await this.app.prisma.vehicle.update({
       where: { id: vehicleId },
       data: {
         [field]: userId,
-        ...(position
-          ? { lastLat: position.lat, lastLng: position.lng, lastLocationAt: new Date(), lastLocationName: locationName }
-          : {}),
         ...(role === Role.DRIVER ? { checklistResetAt: new Date() } : {}),
       },
       include: crewInclude,
     });
-
-    // Keep Redis + admin live map in sync with the new position
-    if (position) {
-      try {
-        await this.updateVehicleLocation(updated.imei, position.lat, position.lng, locationName);
-      } catch (err) {
-        this.app.log.warn({ err, vehicleId }, 'Failed to cache check-in location');
-      }
-    }
 
     const verification = {
       checkInLocationMatch: verdict.match,

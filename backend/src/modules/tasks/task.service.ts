@@ -16,6 +16,7 @@ import {
   vehicleCrewIds,
 } from '../fleet/crew.js';
 import { PushSenderService } from '../notifications/push-sender.service.js';
+import { haversineDistance } from '../../shared/utils/haversine.js';
 
 /** Mirrors TaskStatus.labels in frontend/src/utils/taskStatus.ts and nccg/lib/models/task.dart. */
 const STATUS_LABELS: Record<string, string> = {
@@ -480,7 +481,17 @@ export class TaskService {
   ) {
     const task = await this.app.prisma.task.findUnique({
       where: { id: taskId },
-      include: { incident: { select: { caseNumber: true } } },
+      include: {
+        incident: {
+          select: {
+            caseNumber: true,
+            lat: true,
+            lng: true,
+            targetFacility: { select: { lat: true, lng: true } },
+          },
+        },
+        vehicle: { select: { trackerLat: true, trackerLng: true, lastLat: true, lastLng: true } },
+      },
     });
     if (!task) throw new NotFoundError('Task not found');
 
@@ -495,20 +506,31 @@ export class TaskService {
     const updateData: any = { status: newStatus };
     const now = new Date();
 
+    // Live ambulance fix (tracker first). Phone check-in coordinates are never used.
+    const vehicleLat = task.vehicle.trackerLat ?? task.vehicle.lastLat;
+    const vehicleLng = task.vehicle.trackerLng ?? task.vehicle.lastLng;
+    const sceneLat = task.incident.lat;
+    const sceneLng = task.incident.lng;
+
     // Map status to timestamp field
     switch (newStatus) {
       case TaskStatus.ACCEPTED:
         updateData.acceptedAt = now;
+        Object.assign(updateData, this.sceneLeg(task, vehicleLat, vehicleLng, sceneLat, sceneLng));
         break;
       case TaskStatus.EN_ROUTE:
         // Assume they accepted it if they jump straight to en_route
         if (!task.acceptedAt) updateData.acceptedAt = now;
+        if (task.distanceToSceneKm == null) {
+          Object.assign(updateData, this.sceneLeg(task, vehicleLat, vehicleLng, sceneLat, sceneLng));
+        }
         break;
       case TaskStatus.AT_SCENE:
         updateData.sceneArrivalAt = now;
         break;
       case TaskStatus.PATIENT_PICKED:
         updateData.patientPickAt = now;
+        Object.assign(updateData, this.facilityLeg(task, sceneLat, sceneLng));
         break;
       case TaskStatus.AT_HOSPITAL:
         updateData.facilityArrivalAt = now;
@@ -559,6 +581,39 @@ export class TaskService {
     );
 
     return updatedTask;
+  }
+
+  /** Ambulance tracker → scene, captured when the crew accepts. */
+  private sceneLeg(
+    task: { distanceToSceneKm: number | null },
+    vehicleLat: number | null,
+    vehicleLng: number | null,
+    sceneLat: number | null,
+    sceneLng: number | null,
+  ) {
+    if (task.distanceToSceneKm != null) return {};
+    if (vehicleLat == null || vehicleLng == null || sceneLat == null || sceneLng == null) return {};
+    return {
+      startLat: vehicleLat,
+      startLng: vehicleLng,
+      distanceToSceneKm: Math.round(haversineDistance(vehicleLat, vehicleLng, sceneLat, sceneLng) * 10) / 10,
+    };
+  }
+
+  /** Scene → recommended facility, captured when the patient is picked up. */
+  private facilityLeg(
+    task: { sceneToFacilityKm: number | null; incident: { targetFacility: { lat: number; lng: number } | null } },
+    sceneLat: number | null,
+    sceneLng: number | null,
+  ) {
+    if (task.sceneToFacilityKm != null) return {};
+    const facility = task.incident.targetFacility;
+    if (sceneLat == null || sceneLng == null || !facility) return {};
+    return {
+      endLat: facility.lat,
+      endLng: facility.lng,
+      sceneToFacilityKm: Math.round(haversineDistance(sceneLat, sceneLng, facility.lat, facility.lng) * 10) / 10,
+    };
   }
 
   /**

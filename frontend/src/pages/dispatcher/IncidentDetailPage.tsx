@@ -1374,6 +1374,27 @@ function IncidentDetailPage() {
               ))}
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className={`rounded-lg p-3 border ${activeTask.distanceToSceneKm != null ? 'bg-brand-green/5 border-brand-green/20' : 'bg-slate-50 border-slate-100'}`}>
+                <p className="text-[10px] font-black tracking-widest mb-1 text-slate-400">Ambulance → scene</p>
+                <p className={`text-sm font-semibold ${activeTask.distanceToSceneKm != null ? 'text-brand-teal' : 'text-slate-300'}`}>
+                  {activeTask.distanceToSceneKm != null
+                    ? `${activeTask.distanceToSceneKm.toFixed(1)} km`
+                    : 'Recorded when the crew accepts'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">Straight-line from the ambulance tracker at accept, not the driver’s check-in.</p>
+              </div>
+              <div className={`rounded-lg p-3 border ${activeTask.sceneToFacilityKm != null ? 'bg-brand-green/5 border-brand-green/20' : 'bg-slate-50 border-slate-100'}`}>
+                <p className="text-[10px] font-black tracking-widest mb-1 text-slate-400">Scene → facility</p>
+                <p className={`text-sm font-semibold ${activeTask.sceneToFacilityKm != null ? 'text-brand-teal' : 'text-slate-300'}`}>
+                  {activeTask.sceneToFacilityKm != null
+                    ? `${activeTask.sceneToFacilityKm.toFixed(1)} km`
+                    : 'Recorded when the patient is picked up'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">Straight-line from the scene to the recommended facility.</p>
+              </div>
+            </div>
+
             {/* Hospital Handover Vitals - captured by crew at handover (#7) */}
             {activeTask.handoverVitals && Object.values(activeTask.handoverVitals).some(Boolean) && (
               <div className="border border-surface-border rounded-xl overflow-hidden">

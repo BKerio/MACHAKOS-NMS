@@ -369,6 +369,22 @@ class _AssignmentTabState extends State<AssignmentTab> {
                 ),
               ),
 
+              if (task.distanceToSceneKm != null || task.sceneToFacilityKm != null) ...[
+                const SizedBox(height: 12),
+                if (task.distanceToSceneKm != null)
+                  _DistanceRow(
+                    label: 'Ambulance to scene',
+                    value: '${task.distanceToSceneKm!.toStringAsFixed(1)} km',
+                  ),
+                if (task.sceneToFacilityKm != null) ...[
+                  const SizedBox(height: 8),
+                  _DistanceRow(
+                    label: 'Scene to facility',
+                    value: '${task.sceneToFacilityKm!.toStringAsFixed(1)} km',
+                  ),
+                ],
+              ],
+
               if (incident.patientName != null && incident.patientName!.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Row(
@@ -651,6 +667,27 @@ class _VitalsBlock extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DistanceRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DistanceRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.straighten, size: 16, color: AppColors.green),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+        ),
+        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      ],
     );
   }
 }
