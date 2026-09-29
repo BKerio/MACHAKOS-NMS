@@ -225,7 +225,8 @@ body {
 /* ── App shell ── */
 .app { display: flex; min-height: 100vh; background: var(--bg); }
 .sidebar {
-  --sb-w: 272px; --sb-rail: 84px;
+  /* Light blue for icons on the navy panel; the solid brand blue (--blue) marks the active tile. */
+  --sb-w: 272px; --sb-rail: 84px; --accent: 96,165,250;
   width: var(--sb-w); flex-shrink: 0;
   position: sticky; top: 0; height: 100vh; z-index: 40;
   transition: width .24s cubic-bezier(.4,0,.2,1);
@@ -233,13 +234,8 @@ body {
 .sidebar.collapsed { width: var(--sb-rail); }
 /* Inner panel carries the visuals; on hover-peek it overlays content without reflowing the page. */
 .sidebar-inner {
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(130% 42% at 50% -8%, rgba(79,180,239,.20), transparent 62%),
-    radial-gradient(90% 30% at 0% 100%, rgba(52,211,153,.07), transparent 70%),
-    linear-gradient(180deg, #0C2138 0%, var(--nav-bg) 38%, #07141F 100%);
+  position: absolute; inset: 0; background: var(--nav-bg);
   border-right: 1px solid var(--nav-border);
-  box-shadow: inset -1px 0 0 rgba(255,255,255,.02);
   display: flex; flex-direction: column; overflow: hidden;
   transition: width .24s cubic-bezier(.4,0,.2,1), box-shadow .24s;
 }
@@ -253,21 +249,13 @@ body {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 26px 18px 18px; position: relative; text-align: center; flex-shrink: 0;
 }
-/* Faint dot-grid "radar" texture behind the crest, fading out downwards. */
-.sidebar-head::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
-  background-size: 14px 14px;
-  -webkit-mask-image: radial-gradient(70% 80% at 50% 30%, #000, transparent 75%);
-          mask-image: radial-gradient(70% 80% at 50% 30%, #000, transparent 75%);
-}
 .sidebar-head::after {
   content: ''; position: absolute; left: 18px; right: 18px; bottom: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+  background: var(--nav-border);
 }
-.brand-crest { position: relative; padding: 4px; border-radius: 999px;
-  background: conic-gradient(from 210deg, #4FB4EF, #34D399, #4FB4EF 55%, rgba(79,180,239,.15) 75%, #4FB4EF);
-  box-shadow: 0 0 0 5px rgba(79,180,239,.07), 0 14px 32px rgba(0,0,0,.4);
+.brand-crest { position: relative; padding: 3px; border-radius: 999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 0 5px rgba(var(--accent),.10), 0 10px 24px rgba(0,0,0,.35);
   transition: padding .2s;
 }
 .brand-logo {
@@ -312,29 +300,20 @@ body {
 .nav-scroll {
   flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 12px 16px;
   scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 22px), transparent);
-          mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 22px), transparent);
 }
 .nav-scroll::-webkit-scrollbar { width: 6px; }
 .nav-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 99px; }
 
-/* Section accents: one hue per area, used by the label, icon tiles and active state. */
-.nav-group { --accent: 79,180,239; margin-top: 16px; display: flex; flex-direction: column; gap: 2px; }
+.nav-group { margin-top: 16px; display: flex; flex-direction: column; gap: 2px; }
 .nav-group:first-child { margin-top: 10px; }
-.nav-group[data-tone="ops"]     { --accent: 255,122,89; }
-.nav-group[data-tone="mgmt"]    { --accent: 110,150,255; }
-.nav-group[data-tone="insight"] { --accent: 167,139,250; }
-.nav-group[data-tone="partner"] { --accent: 45,212,191; }
-.nav-group[data-tone="field"]   { --accent: 52,211,153; }
-.nav-group[data-tone="account"] { --accent: 148,163,184; }
 
 .nav-group-label {
   display: flex; align-items: center; gap: 8px; padding: 4px 10px 8px;
   font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
   color: var(--nav-muted); white-space: nowrap; transition: opacity .15s;
 }
-.nav-group-dot { width: 6px; height: 6px; border-radius: 2px; background: rgb(var(--accent)); box-shadow: 0 0 10px rgba(var(--accent),.7); flex-shrink: 0; }
-.nav-group-label::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(var(--accent),.28), transparent); }
+.nav-group-dot { width: 6px; height: 6px; border-radius: 2px; background: rgb(var(--accent)); flex-shrink: 0; }
+.nav-group-label::after { content: ''; flex: 1; height: 1px; background: rgba(var(--accent),.16); }
 
 .nav-item {
   display: flex; align-items: center; gap: 13px; padding: 4px 10px 4px 4px; min-height: 50px;
@@ -358,19 +337,17 @@ body {
 
 .nav-item.active {
   color: #fff; font-weight: 700;
-  background: linear-gradient(90deg, rgba(var(--accent),.20), rgba(var(--accent),.05) 65%, transparent);
+  background: rgba(var(--accent),.12);
   border-color: rgba(var(--accent),.18);
 }
-/* Luminous rail marking the current page. */
+/* Rail marking the current page. */
 .nav-item.active::before {
   content: ''; position: absolute; left: -12px; top: 12px; bottom: 12px; width: 4px;
   border-radius: 0 4px 4px 0; background: rgb(var(--accent));
-  box-shadow: 0 0 14px rgba(var(--accent),.9);
 }
 .nav-item.active .nav-tile {
-  color: #06121F;
-  background: linear-gradient(145deg, rgb(var(--accent)), rgba(var(--accent),.72));
-  box-shadow: 0 6px 18px rgba(var(--accent),.38), inset 0 1px 0 rgba(255,255,255,.35);
+  color: #fff; background: var(--blue);
+  box-shadow: 0 6px 16px rgba(37,99,235,.35);
 }
 .nav-item.active .nav-tile svg.lucide { stroke-width: 2.15; }
 
@@ -396,8 +373,8 @@ body {
 .sidebar-av {
   position: relative; width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
   display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .02em;
-  background: linear-gradient(145deg, #2B7BD6, var(--green-deep));
-  box-shadow: 0 0 0 1.5px rgba(79,180,239,.45), 0 6px 16px rgba(0,0,0,.35);
+  background: var(--blue);
+  box-shadow: 0 0 0 1.5px rgba(var(--accent),.45), 0 6px 16px rgba(0,0,0,.35);
 }
 .sidebar-av-dot {
   position: absolute; right: -3px; bottom: -3px; width: 12px; height: 12px; border-radius: 99px;

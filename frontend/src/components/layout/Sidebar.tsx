@@ -46,10 +46,8 @@ interface SidebarProps {
   connected: boolean;
 }
 
-/** Each section gets its own accent hue (see `.nav-group[data-tone]` in index.css). */
-type Tone = 'core' | 'ops' | 'mgmt' | 'insight' | 'partner' | 'field' | 'account';
 type NavItem = { label: string; path: string; Icon: LucideIcon; roles: string[] };
-type NavSection = { title?: string; tone: Tone; items: NavItem[] };
+type NavSection = { title?: string; items: NavItem[] };
 
 const ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
 const COMMAND = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'];
@@ -58,7 +56,6 @@ const CREW = ['DRIVER', 'EMT', 'NURSE'];
 
 const menuSections: NavSection[] = [
   {
-    tone: 'core',
     items: [
       { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard, roles: COMMAND },
       { label: 'Wallboard', path: '/wallboard', Icon: MonitorPlay, roles: COMMAND },
@@ -66,7 +63,6 @@ const menuSections: NavSection[] = [
   },
   {
     title: 'Operations',
-    tone: 'ops',
     items: [
       { label: 'Incident Feed', path: '/queue', Icon: Siren, roles: COMMAND },
       { label: 'Fleet Management', path: '/fleet', Icon: MapTrifold, roles: COMMAND },
@@ -79,7 +75,6 @@ const menuSections: NavSection[] = [
   },
   {
     title: 'Management',
-    tone: 'mgmt',
     items: [
       { label: 'Personnel', path: '/admin/users', Icon: Users, roles: ADMINS },
       { label: 'Partners', path: '/admin/partners', Icon: Handshake, roles: ADMINS },
@@ -94,7 +89,6 @@ const menuSections: NavSection[] = [
   },
   {
     title: 'Insights',
-    tone: 'insight',
     items: [
       { label: 'Analytics', path: '/admin/analytics', Icon: ChartLineUp, roles: [...COMMAND, 'PARTNER'] },
       { label: 'System Report', path: '/admin/system-report', Icon: FileBarChart, roles: ADMINS },
@@ -103,14 +97,12 @@ const menuSections: NavSection[] = [
   },
   {
     title: 'Partner',
-    tone: 'partner',
     items: [
       { label: 'Partner Dashboard', path: '/partner/dashboard', Icon: LayoutDashboard, roles: ['PARTNER'] },
     ],
   },
   {
     title: 'Field Operations',
-    tone: 'field',
     items: [
       { label: 'Dashboard', path: '/driver/dashboard', Icon: LayoutDashboard, roles: ['DRIVER'] },
       { label: 'Assignment', path: '/operator/assignment', Icon: Ambulance, roles: CREW },
@@ -123,7 +115,6 @@ const menuSections: NavSection[] = [
   },
   {
     title: 'Account',
-    tone: 'account',
     items: [
       { label: 'My Profile', path: '/profile', Icon: CircleUserRound, roles: ALL_ROLES },
     ],
@@ -236,7 +227,7 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
 
           <nav className="nav-scroll" aria-label="Main">
             {visibleSections.map((section, idx) => (
-              <div className="nav-group" data-tone={section.tone} key={section.title ?? `section-${idx}`}>
+              <div className="nav-group" key={section.title ?? `section-${idx}`}>
                 {section.title && (
                   <div className="nav-group-label">
                     <span className="nav-group-dot" aria-hidden="true" />
