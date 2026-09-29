@@ -46,6 +46,8 @@ enum TaskStatus {
   EN_ROUTE
   AT_SCENE
   PATIENT_PICKED
+  // Left the scene with the patient, heading to the recommended facility.
+  EN_ROUTE_TO_FACILITY
   AT_HOSPITAL
   COMPLETED
   CANCELLED
@@ -141,6 +143,7 @@ model User {
   checklistChecksMade        VehicleChecklistCheck[] @relation("VehicleChecklistCheckedBy")
   pushTokens                 PushToken[]
   biometricKeys              BiometricKey[]
+  facilityRatings            FacilityRating[]
 
   @@map("users")
 }
@@ -293,6 +296,7 @@ model Task {
   acceptedAt        DateTime? @map("accepted_at")
   sceneArrivalAt    DateTime? @map("scene_arrival_at")
   patientPickAt     DateTime? @map("patient_pick_at")
+  sceneDepartureAt  DateTime? @map("scene_departure_at")
   facilityArrivalAt DateTime? @map("facility_arrival_at")
   completedAt       DateTime? @map("completed_at")
   rejectedAt        DateTime? @map("rejected_at")
@@ -346,6 +350,7 @@ model Task {
 
   patientCareReports PatientCareReport[]
   stops              TaskStop[]
+  facilityRatings    FacilityRating[]
 
   @@map("tasks")
 }
@@ -567,8 +572,32 @@ model Facility {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   incidents Incident[]
+  ratings   FacilityRating[]
 
   @@map("facilities")
+}
+
+// A crew member's rating of the receiving facility after a case: 1-5 stars,
+// optional quick tags ("Quick handover", "Long wait", ...) and a comment.
+// One per crew member per case - rating again updates it.
+model FacilityRating {
+  id         String   @id @default(uuid())
+  stars      Int
+  tags       String[] @default([])
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  taskId     String   @map("task_id")
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  facilityId String   @map("facility_id")
+  facility   Facility @relation(fields: [facilityId], references: [id])
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([facilityId])
+  @@map("facility_ratings")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

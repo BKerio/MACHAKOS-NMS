@@ -6,10 +6,15 @@ import { reverseGeocodePlace } from '../../shared/utils/geocode.js';
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { assessCheckInLocation, formatDistance } from './checkin-location.js';
+import { PushSenderService } from '../notifications/push-sender.service.js';
 import { clearedCrew, crewInclude, isCrewComplete, slotsForRole, EMT_SLOTS, NURSE_SLOTS, MEDIC_SLOTS, type CrewSlot } from './crew.js';
 
 export class FleetService {
-  constructor(private app: FastifyInstance) {}
+  private pushSender: PushSenderService;
+
+  constructor(private app: FastifyInstance) {
+    this.pushSender = new PushSenderService(app);
+  }
 
   /**
    * Updates a vehicle's real-time location in Redis + Postgres, and broadcasts
@@ -77,13 +82,21 @@ export class FleetService {
     return payload;
   }
 
-  /** Broadcast crew / check-in changes so the admin console refreshes live. */
-  private emitVehicleCrewUpdate(vehicle: unknown) {
+  /**
+   * Broadcast crew / check-in changes: the admin console refreshes live, and
+   * the crew on board (plus anyone just taken off) see it on their phones -
+   * e.g. a medic the driver has just added.
+   */
+  private emitVehicleCrewUpdate(vehicle: Record<string, unknown>, alsoNotify: (string | null | undefined)[] = []) {
+    const crewIds = [vehicle.currentDriverId, ...MEDIC_SLOTS.map((s) => vehicle[s]), ...alsoNotify].filter(
+      (id): id is string => typeof id === 'string' && id.length > 0,
+    );
     this.app.io
       ?.to(`role:${Role.DISPATCHER}`)
       .to(`role:${Role.WATCHER}`)
       .to(`role:${Role.ADMIN}`)
       .to(`role:${Role.SUPER_ADMIN}`)
+      .to([...new Set(crewIds)].map((id) => `user:${id}`))
       .emit('vehicle:crew', vehicle);
   }
 
@@ -144,12 +157,15 @@ export class FleetService {
   }
 
   /**
-   * Crew member (driver/EMT/nurse) checks in to a vehicle at shift start.
-   * Clears any previous assignment for this user on other vehicles.
-   * Auto-captures GPS and a human place name (e.g. "Kilimani"), and checks
-   * the phone's position against the vehicle's own GPS tracker so a crew
-   * member can't check in from home. The verdict is recorded and shown to
-   * dispatch; it never blocks the check-in or later assignment.
+   * The driver checks in to a vehicle at shift start (EMTs and nurses don't
+   * check in - the driver adds them, see assignCrew). Clears any previous
+   * assignment for this driver on other vehicles.
+   *
+   * The check-in is recorded where the AMBULANCE is - its GPS tracker, else
+   * its last live position - with a place name for that spot. The driver's
+   * phone location is only evidence: it's compared with the tracker so a
+   * driver can't check in from home. The verdict is shown to dispatch and
+   * never blocks the check-in or later assignment.
    */
   async checkInToCrew(
     vehicleId: string,
@@ -165,26 +181,30 @@ export class FleetService {
     },
     selfie: { filename: string; mimetype: string; file: NodeJS.ReadableStream }
   ) {
+    if (role !== Role.DRIVER) {
+      throw new ForbiddenError("Only the driver checks in. Ask your driver to add you to the ambulance's crew.");
+    }
     const slots = this.crewSlots(role);
 
     const vehicle = await this.app.prisma.vehicle.findUnique({ where: { id: vehicleId } });
     if (!vehicle) throw new NotFoundError('Vehicle not found');
+
+    // Where the ambulance is: its own tracker first, else its last live fix.
+    // Never the phone - that only verifies the driver is with the vehicle.
+    const ambulance =
+      vehicle.trackerLat != null && vehicle.trackerLng != null
+        ? { lat: vehicle.trackerLat, lng: vehicle.trackerLng }
+        : vehicle.lastLat != null && vehicle.lastLng != null
+          ? { lat: vehicle.lastLat, lng: vehicle.lastLng }
+          : null;
 
     const verdict = assessCheckInLocation(
       { lat: location.lat, lng: location.lng, accuracyM: location.accuracyM, mocked: location.mocked },
       { lat: vehicle.trackerLat, lng: vehicle.trackerLng, at: vehicle.trackerAt },
     );
 
-    // The driver seat is single, so a new driver takes it over. Medics fill
-    // the first free slot for their role (two per role, see crew.ts) and are
-    // turned away once both are taken rather than bumping a colleague.
-    const field =
-      role === Role.DRIVER
-        ? slots[0]
-        : (slots.find((s) => vehicle[s] === userId) ?? slots.find((s) => !vehicle[s]));
-    if (!field) {
-      throw new BadRequestError(`This ambulance already has two ${role === Role.EMT ? 'EMTs' : 'nurses'} checked in`);
-    }
+    // The driver seat is single, so a new driver takes it over.
+    const field = slots[0];
 
     // 1. Persist the accountability selfie to disk
     await this.ensureCheckinDir();
@@ -201,15 +221,11 @@ export class FleetService {
       selfie.file.on('error', reject);
     });
 
-    // Resolve place name: client-provided first, else Google / OSM reverse geocode
-    let locationName = location.locationName?.trim() || null;
-    if (!locationName || /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(locationName)) {
-      locationName = await reverseGeocodePlace(
-        location.lat,
-        location.lng,
-        this.app.config.GOOGLE_MAPS_KEY,
-      );
-    }
+    // Place name for the ambulance's position (the phone's own guess is
+    // ignored); the vehicle's stored place if it has no position at all.
+    const locationName = ambulance
+      ? await reverseGeocodePlace(ambulance.lat, ambulance.lng, this.app.config.GOOGLE_MAPS_KEY)
+      : vehicle.lastLocationName ?? null;
 
     // 2. Clear user from any vehicle (or other slot) they previously held
     for (const slot of slots) {
@@ -219,8 +235,8 @@ export class FleetService {
       });
     }
 
-    // 3. Record the check-in event (selfie + GPS + place name at shift start,
-    // plus where the tracker had the vehicle and the verdict)
+    // 3. Record the check-in event: selfie, the ambulance's place, the phone
+    // fix (lat/lng - verification evidence only), the tracker fix and verdict
     const checkIn = await this.app.prisma.checkIn.create({
       data: {
         vehicleId,
@@ -295,8 +311,8 @@ export class FleetService {
     return {
       ...updated,
       checkInLocationName: locationName,
-      checkInLat: location.lat,
-      checkInLng: location.lng,
+      checkInLat: ambulance?.lat ?? null,
+      checkInLng: ambulance?.lng ?? null,
       checkedInAt: checkIn.checkedInAt,
       ...verification,
     };
@@ -312,6 +328,11 @@ export class FleetService {
     if (!field) {
       throw new ForbiddenError('You are not checked in to this vehicle');
     }
+    // A driver hands the ambulance back empty: medics are removed first, so
+    // nobody is left "on" a unit without a driver.
+    if (role === Role.DRIVER && MEDIC_SLOTS.some((s) => vehicle[s])) {
+      throw new BadRequestError('Remove your EMTs and nurses from the crew before ending your shift.');
+    }
 
     const updated = await this.app.prisma.vehicle.update({
       where: { id: vehicleId },
@@ -326,6 +347,7 @@ export class FleetService {
    * Clear all live crew slots on a vehicle (used after handover / case termination).
    */
   async clearVehicleCrew(vehicleId: string) {
+    const before = await this.app.prisma.vehicle.findUnique({ where: { id: vehicleId } });
     const updated = await this.app.prisma.vehicle.update({
       where: { id: vehicleId },
       data: {
@@ -334,7 +356,7 @@ export class FleetService {
       },
       include: crewInclude,
     });
-    this.emitVehicleCrewUpdate(updated);
+    this.emitVehicleCrewUpdate(updated, before ? [before.currentDriverId, ...MEDIC_SLOTS.map((s) => before[s])] : []);
     return updated;
   }
 
@@ -445,14 +467,17 @@ export class FleetService {
     const latest = await this.app.prisma.checkIn.findFirst({
       where: { vehicleId: vehicle.id, userId },
       orderBy: { checkedInAt: 'desc' },
-      select: { lat: true, lng: true, locationName: true, checkedInAt: true, locationMatch: true, distanceM: true, mockLocation: true },
+      select: { vehicleLat: true, vehicleLng: true, locationName: true, checkedInAt: true, locationMatch: true, distanceM: true, mockLocation: true },
     });
 
+    // Where the ambulance was at check-in (its tracker), else where it is now.
+    // The phone fix on the CheckIn row is verification evidence only.
+    const atCheckIn = latest?.vehicleLat != null && latest.vehicleLng != null;
     return {
       ...vehicle,
       checkInLocationName: latest?.locationName ?? vehicle.lastLocationName ?? null,
-      checkInLat: latest?.lat ?? vehicle.lastLat ?? null,
-      checkInLng: latest?.lng ?? vehicle.lastLng ?? null,
+      checkInLat: atCheckIn ? latest!.vehicleLat : (vehicle.trackerLat ?? vehicle.lastLat ?? null),
+      checkInLng: atCheckIn ? latest!.vehicleLng : (vehicle.trackerLng ?? vehicle.lastLng ?? null),
       checkedInAt: latest?.checkedInAt ?? null,
       checkInLocationMatch: latest?.locationMatch ?? null,
       checkInDistanceM: latest?.distanceM ?? null,
@@ -598,7 +623,22 @@ export class FleetService {
       data,
       include: crewInclude,
     });
-    this.emitVehicleCrewUpdate(updated);
+    // Medics just taken off this ambulance hear about it too.
+    this.emitVehicleCrewUpdate(updated, MEDIC_SLOTS.map((s) => vehicle[s]));
+
+    // Newly added medics get a push: they're on duty now, and calls can come.
+    const added = [...placed.keys()].filter((id) => !MEDIC_SLOTS.some((s) => vehicle[s] === id));
+    if (added.length > 0) {
+      const driver = updated.currentDriver?.name?.trim().split(/\s+/)[0];
+      this.pushSender
+        .sendToUsers(
+          added,
+          `You're on the crew of ${updated.registrationNumber}`,
+          `${driver ? `${driver} added you` : 'You were added'}. Stay signed in and ready - case alerts for this ambulance now come to you.`,
+          { type: 'CREW_ASSIGNED', vehicleId, registrationNumber: updated.registrationNumber },
+        )
+        .catch((err) => this.app.log.warn({ err }, 'crew assignment push failed'));
+    }
     return updated;
   }
 

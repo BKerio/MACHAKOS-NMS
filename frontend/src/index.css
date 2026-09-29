@@ -456,6 +456,19 @@ body {
 .searchbox input { border: 0; background: transparent; outline: none; font-family: inherit; font-size: 13.5px; color: var(--ink); width: 100%; }
 .searchbox svg { width: 16px; height: 16px; flex-shrink: 0; }
 .content { padding: 24px 22px 80px; max-width: 1480px; width: 100%; margin: 0 auto; }
+.app:has(.incident-wizard),
+.main:has(.incident-wizard) {
+  height: 100dvh; overflow: hidden; min-height: 0;
+}
+.content:has(.incident-wizard) {
+  padding: 0; max-width: none; flex: 1; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+@media (max-width: 859px) {
+  .content:has(.incident-wizard) {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}
 
 /* status chip (clock) */
 .status-chip {

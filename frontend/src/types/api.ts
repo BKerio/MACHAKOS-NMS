@@ -15,6 +15,7 @@ export type TaskStatus =
   | 'EN_ROUTE'
   | 'AT_SCENE'
   | 'PATIENT_PICKED'
+  | 'EN_ROUTE_TO_FACILITY'
   | 'AT_HOSPITAL'
   | 'COMPLETED'
   | 'CANCELLED'
@@ -343,6 +344,8 @@ export interface Task {
   acceptedAt?: string;
   sceneArrivalAt?: string;
   patientPickAt?: string;
+
+  sceneDepartureAt?: string;
   facilityArrivalAt?: string;
   completedAt?: string;
   cancelledAt?: string;
@@ -385,6 +388,8 @@ export interface TaskHistoryItem {
   acceptedAt?: string | null;
   sceneArrivalAt?: string | null;
   patientPickAt?: string | null;
+
+  sceneDepartureAt?: string | null;
   facilityArrivalAt?: string | null;
   completedAt?: string | null;
   cancelledAt?: string | null;

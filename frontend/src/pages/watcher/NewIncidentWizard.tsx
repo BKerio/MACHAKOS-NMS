@@ -41,23 +41,23 @@ const ORIGIN_OPTIONS = [
 // ── Style tokens ─────────────────────────────────────────────────────────────
 
 const inputCls = [
-  'w-full h-11 px-3.5 rounded-xl text-sm font-medium outline-none transition-shadow',
-  'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]',
-  'placeholder:text-[var(--muted-2)] placeholder:font-normal',
-  'focus:border-[var(--ink)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ink)_8%,transparent)]',
+  'w-full h-[42px] px-3 rounded-lg text-sm outline-none transition-[border-color,box-shadow]',
+  'border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--ink)]',
+  'placeholder:text-[var(--muted-2)]',
+  'focus:border-[var(--green)] focus:shadow-[0_0_0_3px_var(--ring)]',
 ].join(' ');
 
 const selectCls = inputCls;
 
 const textareaCls = [
-  'w-full px-3.5 py-3 rounded-xl text-sm font-medium outline-none resize-none transition-shadow',
-  'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]',
-  'placeholder:text-[var(--muted-2)] placeholder:font-normal',
-  'focus:border-[var(--ink)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ink)_8%,transparent)]',
+  'w-full px-3 py-2.5 rounded-lg text-sm outline-none resize-none transition-[border-color,box-shadow]',
+  'border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--ink)]',
+  'placeholder:text-[var(--muted-2)]',
+  'focus:border-[var(--green)] focus:shadow-[0_0_0_3px_var(--ring)]',
 ].join(' ');
 
 const Label = ({ children, required }: { children: ReactNode; required?: boolean }) => (
-  <label className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--ink)' }}>
+  <label className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--ink-2)' }}>
     {children}
     {required && <span className="ml-0.5" style={{ color: 'var(--red)' }}>*</span>}
   </label>
@@ -89,78 +89,74 @@ const STEPS = ['Alert & Location', 'Patient & Incident', 'Review'];
 
 function WizardStepper({ current }: { current: number }) {
   return (
-    <div
-      className="px-5 sm:px-6 py-4 border-b shrink-0"
-      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-    >
-      <ol className="max-w-3xl mx-auto flex items-center">
-        {STEPS.map((label, i) => {
-          const num = i + 1;
-          const done = num < current;
-          const active = num === current;
-          return (
-            <Fragment key={label}>
-              <li className="flex items-center gap-2.5 min-w-0">
-                <span
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold shrink-0"
-                  style={
-                    done
-                      ? { background: 'var(--ink)', color: 'var(--surface)' }
-                      : active
-                        ? { background: 'var(--surface)', color: 'var(--ink)', boxShadow: 'inset 0 0 0 1.5px var(--ink)' }
-                        : { background: 'var(--surface-2)', color: 'var(--muted)' }
-                  }
-                >
-                  {done ? <Check size={13} strokeWidth={2.5} /> : num}
-                </span>
-                <span
-                  className="text-[13px] font-medium truncate hidden sm:block"
-                  style={{ color: active ? 'var(--ink)' : 'var(--muted)' }}
-                >
-                  {label}
-                </span>
-              </li>
-              {i < STEPS.length - 1 && (
-                <li
-                  aria-hidden
-                  className="flex-1 h-px mx-3 sm:mx-4"
-                  style={{ background: done ? 'var(--ink)' : 'var(--border)' }}
-                />
-              )}
-            </Fragment>
-          );
-        })}
-      </ol>
-    </div>
+    <ol className="flex items-center gap-1 sm:gap-2 min-w-0">
+      {STEPS.map((label, i) => {
+        const num = i + 1;
+        const done = num < current;
+        const active = num === current;
+        return (
+          <Fragment key={label}>
+            <li className="flex items-center gap-2 min-w-0">
+              <span
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0"
+                style={
+                  done || active
+                    ? { background: 'var(--green)', color: '#fff' }
+                    : { background: 'var(--surface-3)', color: 'var(--muted)' }
+                }
+              >
+                {done ? <Check size={12} strokeWidth={2.5} /> : num}
+              </span>
+              <span
+                className="text-[13px] truncate hidden md:block"
+                style={{
+                  color: active ? 'var(--ink)' : 'var(--muted)',
+                  fontWeight: active ? 600 : 500,
+                }}
+              >
+                {label}
+              </span>
+            </li>
+            {i < STEPS.length - 1 && (
+              <li aria-hidden className="w-6 sm:w-10 h-px shrink-0" style={{ background: done ? 'var(--green)' : 'var(--border-strong)' }} />
+            )}
+          </Fragment>
+        );
+      })}
+    </ol>
   );
 }
 
 // ── Section card ──────────────────────────────────────────────────────────────
 
 function SectionCard({
-  title, icon: Icon, children,
+  title, description, icon: Icon, children,
 }: {
   title: string;
+  description?: string;
   icon: ElementType;
   children: ReactNode;
 }) {
   return (
     <section
-      className="rounded-2xl border"
+      className="rounded-xl border overflow-hidden"
       style={{
         background: 'var(--surface)',
         borderColor: 'var(--border)',
-        boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+        boxShadow: 'var(--shadow-sm)',
       }}
     >
-      <header className="px-5 pt-5 flex items-center gap-3">
-        <span
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: 'var(--surface-2)', color: 'var(--ink)' }}
-        >
-          <Icon size={16} strokeWidth={1.75} />
-        </span>
-        <h3 className="text-[15px] font-semibold tracking-tight" style={{ color: 'var(--ink)' }}>{title}</h3>
+      <header
+        className="px-5 py-4 flex items-start gap-3"
+        style={{ borderBottom: '1px solid var(--border)' }}
+      >
+        <Icon size={18} strokeWidth={1.75} className="mt-0.5 shrink-0" style={{ color: 'var(--green)' }} />
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-semibold tracking-tight" style={{ color: 'var(--ink)' }}>{title}</h3>
+          {description && (
+            <p className="text-[13px] mt-0.5 leading-snug" style={{ color: 'var(--muted)' }}>{description}</p>
+          )}
+        </div>
       </header>
       <div className="p-5 space-y-4">{children}</div>
     </section>
@@ -179,7 +175,7 @@ function ReviewCard({
 }) {
   return (
     <div
-      className={`rounded-2xl border${className ? ` ${className}` : ''}`}
+      className={`rounded-xl border overflow-hidden${className ? ` ${className}` : ''}`}
       style={{
         background: 'var(--surface)',
         borderColor: 'var(--border)',
@@ -707,13 +703,13 @@ function NewIncidentWizard() {
               }
             </div>
             <div>
-              <h2 className="text-xl font-black tracking-tight" style={{ color: 'var(--ink)' }}>
+              <h2 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--ink)' }}>
                 {ended ? 'Case Ended' : surveillance ? 'Surveillance Alert Sent' : 'Alert Submitted'}
               </h2>
               {submittedCase && (
                 <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--muted)' }}>
                   Case{' '}
-                  <span className="font-black" style={{ color: 'var(--ink)' }}>#{submittedCase}</span>{' '}
+                  <span className="font-semibold" style={{ color: 'var(--ink)' }}>#{submittedCase}</span>{' '}
                   {ended
                     ? 'has been recorded and closed.'
                     : surveillance
@@ -758,45 +754,50 @@ function NewIncidentWizard() {
     : 'Review & Submit';
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: 'var(--bg)' }}>
+    <div className="incident-wizard flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--bg)' }}>
 
       <header
-        className="shrink-0 border-b"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        className="shrink-0"
+        style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
       >
-        <div className="px-5 sm:px-6 py-4 flex items-center gap-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-medium" style={{ color: 'var(--muted)' }}>
-              New incident · Step {step} of {STEPS.length}
+        <div className="px-4 sm:px-6 h-16 flex items-center gap-4">
+          <div className="min-w-0 shrink-0 max-w-[280px]">
+            <p className="text-[12px] font-medium leading-none" style={{ color: 'var(--muted)' }}>
+              New incident
             </p>
-            <h1 className="text-xl font-semibold tracking-tight truncate mt-0.5" style={{ color: 'var(--ink)' }}>
+            <h1 className="text-[17px] font-semibold tracking-tight truncate mt-1" style={{ color: 'var(--ink)' }}>
               {stepTitle}
             </h1>
+          </div>
+          <div className="flex-1 flex justify-center min-w-0 overflow-hidden">
+            <WizardStepper current={step} />
           </div>
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="w-9 h-9 rounded-full border flex items-center justify-center transition-colors"
-            style={{ color: 'var(--muted)', borderColor: 'var(--border)', background: 'var(--surface)' }}
+            className="icon-btn"
             title="Close"
           >
             <X size={16} />
           </button>
         </div>
+        <div className="h-0.5" style={{ background: 'var(--surface-3)' }}>
+          <div
+            className="h-full transition-[width] duration-300"
+            style={{ width: `${(step / STEPS.length) * 100}%`, background: 'var(--ink)' }}
+          />
+        </div>
       </header>
 
-      {/* ── Step indicator ── */}
-      <WizardStepper current={step} />
-
       {/* ── Step content ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 lg:py-6">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6">
 
         {/* ─────────────── STEP 1: Alert ─────────────── */}
         {step === 1 && (
           <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
 
               {/* ── Card 1: Alert ── */}
-              <SectionCard title="Alert" icon={Phone}>
+              <SectionCard title="Alert" description="Who called, and how the alert came in." icon={Phone}>
                 <Field>
                   <Label required>Alert Date &amp; Time</Label>
                   <input
@@ -810,7 +811,10 @@ function NewIncidentWizard() {
 
                 <Field>
                   <Label required>Mode of Alert</Label>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div
+                    className="grid grid-cols-2 sm:grid-cols-4 p-1 rounded-lg"
+                    style={{ background: 'var(--surface-3)' }}
+                  >
                     {ALERT_MODES.map((m) => {
                       const on = form.alertMode === m;
                       return (
@@ -818,14 +822,13 @@ function NewIncidentWizard() {
                           key={m}
                           type="button"
                           onClick={() => set({ alertMode: m })}
-                          className="inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-medium transition-colors"
+                          className="h-9 rounded-md text-[13px] font-medium transition-colors"
                           style={
                             on
-                              ? { background: 'var(--ink)', borderColor: 'var(--ink)', color: 'var(--surface)' }
-                              : { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--muted)' }
+                              ? { background: 'var(--surface)', color: 'var(--ink)', boxShadow: 'var(--shadow-sm)' }
+                              : { background: 'transparent', color: 'var(--muted)' }
                           }
                         >
-                          {on && <Check size={11} strokeWidth={3} />}
                           {m}
                         </button>
                       );
@@ -881,7 +884,7 @@ function NewIncidentWizard() {
               </SectionCard>
 
               {/* ── Card 2: Location ── */}
-              <SectionCard title="Incident Location" icon={MapPin}>
+              <SectionCard title="Incident Location" description="Pin the scene so a unit can be routed." icon={MapPin}>
                 <Field>
                   <Label required>Location of Incident</Label>
                   <div className="relative">
@@ -951,8 +954,8 @@ function NewIncidentWizard() {
                       type="button"
                       onClick={useMyLocation}
                       disabled={gpsBusy}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-black tracking-wide px-3 py-2 rounded-lg border transition-colors disabled:opacity-50"
-                      style={{ borderColor: 'var(--border)', color: 'var(--ink)', background: 'var(--surface-2)' }}
+                      className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 h-9 rounded-lg border transition-colors disabled:opacity-50"
+                      style={{ borderColor: 'var(--border)', color: 'var(--green)', background: 'var(--green-light)' }}
                     >
                       {gpsBusy ? <AppLoader size={17} /> : <MapPin size={13} />}
                       {gpsBusy ? 'Locating...' : 'Use my current location'}
@@ -963,25 +966,16 @@ function NewIncidentWizard() {
 
                 {/* Map */}
                 <div
-                  className="rounded-xl border overflow-hidden"
+                  className="rounded-lg border overflow-hidden"
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  <div
-                    className="px-3 py-2 flex items-center gap-2"
-                    style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}
-                  >
-                    <MapPin size={12} className="shrink-0" style={{ color: 'var(--muted)' }} />
-                    <span className="text-[11px] font-medium" style={{ color: 'var(--muted)' }}>
-                      Click the map to pin the scene. Address fills automatically.
-                    </span>
-                  </div>
                   <Map
                     center={[form.lat, form.lng]}
                     zoom={14}
                     markers={[{ id: 'scene', lat: form.lat, lng: form.lng, title: form.locationName || 'Scene', type: 'incident' }]}
                     onLocationSelect={handleMapClick}
                     layerType="street"
-                    className="h-72 w-full"
+                    className="h-80 w-full"
                   />
                   {form.locationName && !isReverseGeocoding && (
                     <div
@@ -1007,16 +1001,16 @@ function NewIncidentWizard() {
                     <Label required>Sub-County</Label>
                     {form.subCounty && subCountySource === 'AUTO' && (
                       <span
-                        className="text-[9px] font-black tracking-wide px-2 py-0.5 rounded-md"
-                        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--ink)' }}
+                        className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                        style={{ background: 'var(--green-light)', color: 'var(--green)' }}
                       >
                         Auto-filled
                       </span>
                     )}
                     {form.subCounty && subCountySource === 'MANUAL' && (
                       <span
-                        className="text-[9px] font-black tracking-wide px-2 py-0.5 rounded-md"
-                        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--muted)' }}
+                        className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                        style={{ background: 'var(--surface-3)', color: 'var(--muted)' }}
                       >
                         Manual
                       </span>
@@ -1037,7 +1031,7 @@ function NewIncidentWizard() {
         {/* ─────────────── STEP 2: Patient ─────────────── */}
         {step === 2 && (
           <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <SectionCard title="Patient" icon={User}>
+              <SectionCard title="Patient" description="Identity and who to contact." icon={User}>
                 <Field>
                   <Label>Patient Name</Label>
                   <input type="text" placeholder="Full name" className={inputCls} value={form.patientName} onChange={e => set({ patientName: e.target.value })} />
@@ -1162,7 +1156,7 @@ function NewIncidentWizard() {
                 </label>
               </SectionCard>
 
-              <SectionCard title="Incident Details" icon={FirstAid}>
+              <SectionCard title="Incident Details" description="What happened, and the clinical picture." icon={FirstAid}>
                 <div className="grid grid-cols-2 gap-3">
                   {/* Nature of Alert */}
                   <Field>
@@ -1221,7 +1215,7 @@ function NewIncidentWizard() {
 
                 {/* ── Patient Vitals ── */}
                 <div className="rounded-xl border p-3.5" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
-                  <p className="text-[10px] font-black tracking-widest mb-3" style={{ color: 'var(--muted)' }}>Patient Vitals</p>
+                  <p className="text-[12px] font-semibold mb-3" style={{ color: 'var(--muted)' }}>Patient Vitals</p>
                   <div className="grid grid-cols-3 gap-3">
                     <Field>
                       <Label>Temperature</Label>
@@ -1303,7 +1297,7 @@ function NewIncidentWizard() {
                 <SectionCard title="Maternity Vitals" icon={Baby}>
 
                   {/* Mother Information */}
-                  <p className="text-[10px] font-black tracking-widest" style={{ color: 'var(--muted)' }}>Mother Information</p>
+                  <p className="text-[12px] font-semibold" style={{ color: 'var(--muted)' }}>Mother Information</p>
                   <div className="grid grid-cols-2 gap-3">
                     <Field>
                       <Label>Date / Time of Admission</Label>
@@ -1320,7 +1314,7 @@ function NewIncidentWizard() {
                   </div>
 
                   <div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                    <p className="text-[10px] font-black tracking-widest mb-3" style={{ color: 'var(--muted)' }}>Fetal Well-being</p>
+                    <p className="text-[12px] font-semibold mb-3" style={{ color: 'var(--muted)' }}>Fetal Well-being</p>
                     <div className="grid grid-cols-2 gap-3">
                       <Field>
                         <Label>Fetal Heart Rate</Label>
@@ -1358,7 +1352,7 @@ function NewIncidentWizard() {
                   </div>
 
                   <div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                    <p className="text-[10px] font-black tracking-widest mb-3" style={{ color: 'var(--muted)' }}>Maternal Well-being</p>
+                    <p className="text-[12px] font-semibold mb-3" style={{ color: 'var(--muted)' }}>Maternal Well-being</p>
                     <div className="grid grid-cols-3 gap-3">
                       <Field>
                         <Label>BP</Label>
@@ -1400,7 +1394,7 @@ function NewIncidentWizard() {
                   </div>
 
                   <div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                    <p className="text-[10px] font-black tracking-widest mb-3" style={{ color: 'var(--muted)' }}>Newborn</p>
+                    <p className="text-[12px] font-semibold mb-3" style={{ color: 'var(--muted)' }}>Newborn</p>
                     <div className="grid grid-cols-2 gap-3">
                       <Field>
                         <Label>Date &amp; Time of Delivery</Label>
@@ -1583,7 +1577,7 @@ function NewIncidentWizard() {
         >
           <div className="flex items-start gap-3 max-w-2xl mx-auto">
             <div className="flex-1">
-              <p className="text-xs font-bold text-amber-600 tracking-widest mb-2 flex items-center gap-1.5">
+              <p className="text-[13px] font-semibold mb-2 flex items-center gap-1.5" style={{ color: '#B45309' }}>
                 <Eye size={14} /> Surveillance Alert Notes
               </p>
               <textarea
@@ -1626,7 +1620,7 @@ function NewIncidentWizard() {
         >
           <div className="flex items-start gap-3 max-w-2xl mx-auto">
             <div className="flex-1">
-              <p className="text-xs font-bold text-status-danger tracking-widest mb-2">
+              <p className="text-[13px] font-semibold mb-2" style={{ color: 'var(--red)' }}>
                 Reason for Ending Case <span className="text-status-danger">*</span>
               </p>
               <textarea
@@ -1666,18 +1660,16 @@ function NewIncidentWizard() {
 
       {/* ── Sticky footer ── */}
       <div
-        className="px-5 sm:px-6 py-3.5 flex items-center justify-between gap-3 shrink-0"
+        className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3 shrink-0"
         style={{
           background: 'var(--surface)',
           borderTop: '1px solid var(--border)',
-          boxShadow: '0 -8px 24px rgba(15, 23, 42, 0.03)',
         }}
       >
         <button
           type="button"
           onClick={() => step === 1 ? navigate(-1) : setStep((s) => (s - 1) as 1 | 2 | 3)}
-          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold rounded-xl border transition-colors"
-          style={{ borderColor: 'var(--border)', color: 'var(--muted)', background: 'var(--surface)' }}
+          className="btn btn-ghost"
         >
           {step === 1 ? (
             'Cancel'
@@ -1711,8 +1703,8 @@ function NewIncidentWizard() {
                 type="button"
                 onClick={() => { setShowEndReason(v => !v); setShowSurveillance(false); setEndReason(''); }}
                 disabled={!canSubmit}
-                className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-bold rounded-xl border transition-colors disabled:opacity-40"
-                style={{ borderColor: 'var(--border)', color: 'var(--red)', background: 'var(--surface)' }}
+                className="btn btn-ghost disabled:opacity-40"
+                style={{ color: 'var(--red)' }}
               >
                 <XCircle size={15} />
                 <span className="hidden sm:inline">End Case</span>
@@ -1721,8 +1713,8 @@ function NewIncidentWizard() {
                 type="button"
                 onClick={() => { setShowSurveillance(v => !v); setShowEndReason(false); setSurveillanceNote(''); }}
                 disabled={!canSubmit}
-                className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-bold rounded-xl border transition-colors disabled:opacity-40"
-                style={{ borderColor: 'var(--border)', color: '#B45309', background: 'var(--surface)' }}
+                className="btn btn-ghost disabled:opacity-40"
+                style={{ color: '#B45309' }}
               >
                 <Eye size={15} />
                 <span className="hidden sm:inline">Surveillance</span>

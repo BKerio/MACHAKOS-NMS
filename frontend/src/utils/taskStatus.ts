@@ -6,6 +6,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   EN_ROUTE: 'En Route',
   AT_SCENE: 'At Scene',
   PATIENT_PICKED: 'Patient Picked Up',
+  EN_ROUTE_TO_FACILITY: 'En Route to Hospital',
   AT_HOSPITAL: 'At Hospital',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
@@ -19,6 +20,7 @@ export const STATUS_PILL: Record<TaskStatus, string> = {
   EN_ROUTE: 'pill-green',
   AT_SCENE: 'pill-gray',
   PATIENT_PICKED: 'pill-amber',
+  EN_ROUTE_TO_FACILITY: 'pill-green',
   AT_HOSPITAL: 'pill-blue',
   COMPLETED: 'pill-green',
   CANCELLED: 'pill-red',
@@ -30,7 +32,8 @@ export const NEXT_STATUS: Partial<Record<TaskStatus, TaskStatus>> = {
   ACCEPTED: 'EN_ROUTE',
   EN_ROUTE: 'AT_SCENE',
   AT_SCENE: 'PATIENT_PICKED',
-  PATIENT_PICKED: 'AT_HOSPITAL',
+  PATIENT_PICKED: 'EN_ROUTE_TO_FACILITY',
+  EN_ROUTE_TO_FACILITY: 'AT_HOSPITAL',
   AT_HOSPITAL: 'COMPLETED',
 };
 
@@ -39,7 +42,8 @@ export const ACTION_LABELS: Partial<Record<TaskStatus, string>> = {
   ACCEPTED: 'Start En Route',
   EN_ROUTE: 'Arrived at Scene',
   AT_SCENE: 'Patient Picked Up',
-  PATIENT_PICKED: 'Arrived at the hospital',
+  PATIENT_PICKED: 'Start En Route to Hospital',
+  EN_ROUTE_TO_FACILITY: 'Arrived at the hospital',
   AT_HOSPITAL: 'Complete Task',
 };
 
@@ -49,6 +53,7 @@ export const STATUS_ORDER: TaskStatus[] = [
   'EN_ROUTE',
   'AT_SCENE',
   'PATIENT_PICKED',
+  'EN_ROUTE_TO_FACILITY',
   'AT_HOSPITAL',
   'COMPLETED',
 ];

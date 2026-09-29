@@ -40,7 +40,7 @@ export class DispatchService {
       const ts = taskByVehicle.get(v.id);
       if (!ts) { counts.READY++; continue; }
       if (ts === TaskStatus.AT_SCENE) counts.ON_SCENE++;
-      else if (ts === TaskStatus.PATIENT_PICKED || ts === TaskStatus.AT_HOSPITAL) counts.RETURNING++;
+      else if (ts === TaskStatus.PATIENT_PICKED || ts === TaskStatus.EN_ROUTE_TO_FACILITY || ts === TaskStatus.AT_HOSPITAL) counts.RETURNING++;
       else counts.DISPATCHED++; // PENDING / ACCEPTED / EN_ROUTE
     }
 

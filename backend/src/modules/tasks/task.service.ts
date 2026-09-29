@@ -25,6 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
   EN_ROUTE: 'En Route',
   AT_SCENE: 'At Scene',
   PATIENT_PICKED: 'Patient Picked Up',
+  EN_ROUTE_TO_FACILITY: 'En Route to Hospital',
   AT_HOSPITAL: 'At Hospital',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
@@ -197,8 +198,50 @@ export class TaskService {
         mimeType: true,
         fileSize: true,
         createdAt: true,
+        uploader: { select: { id: true, name: true, role: true } },
       },
     });
+  }
+
+  /**
+   * A crew member rates the facility the patient was taken to. Allowed once
+   * the crew is at the hospital or the case is complete; rating again
+   * replaces their earlier rating. Returns the facility's running average.
+   */
+  async rateFacility(
+    taskId: string,
+    user: { userId: string; role: Role },
+    data: { stars: number; tags?: string[]; comment?: string },
+  ) {
+    const task = await this.app.prisma.task.findUnique({
+      where: { id: taskId },
+      include: { incident: { select: { targetFacilityId: true } } },
+    });
+    if (!task) throw new NotFoundError('Task not found');
+    if (!taskCrewIds(task).includes(user.userId)) throw new ForbiddenError('Only the crew on this case can rate the facility');
+    if (task.status !== TaskStatus.AT_HOSPITAL && task.status !== TaskStatus.COMPLETED) {
+      throw new BadRequestError('You can rate the facility once you have arrived there');
+    }
+    const facilityId = task.incident.targetFacilityId;
+    if (!facilityId) throw new BadRequestError('This case has no receiving facility to rate');
+
+    const tags = [...new Set((data.tags ?? []).map((t) => t.trim()).filter(Boolean))].slice(0, 8);
+    const comment = data.comment?.trim() || null;
+    const rating = await this.app.prisma.facilityRating.upsert({
+      where: { taskId_userId: { taskId, userId: user.userId } },
+      create: { taskId, userId: user.userId, facilityId, stars: data.stars, tags, comment },
+      update: { stars: data.stars, tags, comment, facilityId },
+    });
+    const summary = await this.app.prisma.facilityRating.aggregate({
+      where: { facilityId },
+      _avg: { stars: true },
+      _count: { _all: true },
+    });
+    return {
+      ...rating,
+      facilityAverage: summary._avg.stars == null ? null : Math.round(summary._avg.stars * 10) / 10,
+      facilityRatingCount: summary._count._all,
+    };
   }
 
   /**
@@ -530,6 +573,12 @@ export class TaskService {
         break;
       case TaskStatus.PATIENT_PICKED:
         updateData.patientPickAt = now;
+        Object.assign(updateData, this.facilityLeg(task, sceneLat, sceneLng));
+        break;
+      case TaskStatus.EN_ROUTE_TO_FACILITY:
+        updateData.sceneDepartureAt = now;
+        // Picked up without the pickup step (or no facility then): measure now.
+        if (!task.patientPickAt) updateData.patientPickAt = now;
         Object.assign(updateData, this.facilityLeg(task, sceneLat, sceneLng));
         break;
       case TaskStatus.AT_HOSPITAL:

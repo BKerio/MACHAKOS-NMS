@@ -17,6 +17,7 @@ type TimestampSource = {
   acceptedAt?: string | null;
   sceneArrivalAt?: string | null;
   patientPickAt?: string | null;
+  sceneDepartureAt?: string | null;
   facilityArrivalAt?: string | null;
   completedAt?: string | null;
   cancelledAt?: string | null;
@@ -33,6 +34,7 @@ const STAGE_DEFS: Array<{
   { status: 'EN_ROUTE', label: STATUS_LABELS.EN_ROUTE, getTime: (t) => t.acceptedAt },
   { status: 'AT_SCENE', label: 'Arrived at scene', getTime: (t) => t.sceneArrivalAt },
   { status: 'PATIENT_PICKED', label: STATUS_LABELS.PATIENT_PICKED, getTime: (t) => t.patientPickAt },
+  { status: 'EN_ROUTE_TO_FACILITY', label: STATUS_LABELS.EN_ROUTE_TO_FACILITY, getTime: (t) => t.sceneDepartureAt },
   { status: 'AT_HOSPITAL', label: 'Arrived at the hospital', getTime: (t) => t.facilityArrivalAt },
   { status: 'COMPLETED', label: STATUS_LABELS.COMPLETED, getTime: (t) => t.completedAt },
 ];

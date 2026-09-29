@@ -104,7 +104,8 @@ function CheckInPanel({
         </div>
 
         <p className="text-xs" style={{ color: 'var(--muted)' }}>
-          Location and a selfie are required before dispatch can assign cases to you.
+          A selfie and your location are required. Your location is only compared with the ambulance's tracker to
+          confirm you're with it.
         </p>
 
         <div className="flex gap-2 mt-1">
@@ -186,8 +187,9 @@ function ShiftCheckInCard() {
         <div className="flex-1">
           <p className="text-base font-bold" style={{ color: 'var(--ink)' }}>Shift check-in</p>
           <p className="text-sm mt-0.5" style={{ color: 'var(--muted)' }}>
-            Check in with a selfie and your location before dispatch can assign cases. Browser location access is
-            required.
+            {user.role === 'DRIVER'
+              ? "Drivers check in with a selfie at the ambulance. The check-in is recorded at the ambulance's GPS position; your browser location only confirms you're with it."
+              : 'EMTs and nurses are added to an ambulance by its driver.'}
           </p>
         </div>
       </div>
@@ -212,8 +214,8 @@ function ShiftCheckInCard() {
               <p className="text-sm" style={{ color: 'var(--ink)' }}>
                 {(() => {
                   const name = myVehicle.checkInLocationName || myVehicle.lastLocationName;
-                  if (name && !/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(name.trim())) return `Logged in at ${name}`;
-                  return 'Logged in - resolving place name…';
+                  if (name && !/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(name.trim())) return `Ambulance at ${name} at check-in`;
+                  return 'Checked in - ambulance position not yet known';
                 })()}
               </p>
               {myVehicle.checkedInAt && (
@@ -221,6 +223,15 @@ function ShiftCheckInCard() {
               )}
             </div>
           </div>
+        </div>
+      ) : user.role !== 'DRIVER' ? (
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface-2)' }}>
+          <p className="eyebrow">Off shift</p>
+          <p className="text-base font-bold mt-1" style={{ color: 'var(--ink)' }}>Waiting for your driver</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+            {slotLabel(user.role)}s don't check in. Ask the driver of your ambulance to add you to the crew - you'll be
+            on shift as soon as they do.
+          </p>
         </div>
       ) : (
         <>

@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { FleetService } from './fleet.service.js';
 import { requireRole } from '../../shared/guards/requireRole.js';
 import { Role } from '../../shared/types/index.js';
-import { BadRequestError } from '../../shared/errors/AppError.js';
+import { BadRequestError, ForbiddenError } from '../../shared/errors/AppError.js';
 import { TrackingService } from '../tracking/tracking.service.js';
 import { getChecklistDetail, getChecklistSummary, assertChecklistAccess, upsertChecklistCheck } from './checklist.js';
 import { createReadStream, existsSync } from 'node:fs';
@@ -136,14 +136,20 @@ export const fleetRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
    *                              iOS before 15 (optional)
    * - file: image/*       - accountability selfie      (required)
    *
-   * The phone's position is compared with the vehicle's GPS tracker; the
-   * result (checkInLocationMatch / checkInDistanceM) is returned and shown
-   * to dispatch, but never blocks the check-in.
+   * Drivers only - EMTs and nurses are added by the driver (PATCH
+   * /fleet/:vehicleId/crew). The check-in is recorded at the ambulance's GPS
+   * position; the phone's position is only compared with the tracker, and the
+   * result (checkInLocationMatch / checkInDistanceM) is shown to dispatch but
+   * never blocks the check-in.
    */
   app.post<{ Params: { vehicleId: string } }>(
     '/:vehicleId/checkin',
     { preValidation: [requireRole([Role.DRIVER, Role.EMT, Role.NURSE])] },
     async (request, reply) => {
+      // Checked before reading the upload, with a message medics can act on.
+      if (request.user.role !== Role.DRIVER) {
+        throw new ForbiddenError("Only the driver checks in. Ask your driver to add you to the ambulance's crew.");
+      }
       const file = await (request as any).file?.();
       if (!file) throw new BadRequestError('A check-in selfie image (field "file") is required');
       if (!file.mimetype?.startsWith('image/')) {

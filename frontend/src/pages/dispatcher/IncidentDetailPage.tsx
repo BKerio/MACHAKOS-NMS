@@ -1316,7 +1316,7 @@ function IncidentDetailPage() {
               activeTask.status === 'AT_SCENE'       ? 'bg-brand-teal/10 text-brand-teal' :
               activeTask.status === 'AT_HOSPITAL'    ? 'bg-status-info/10 text-status-info' :
               activeTask.status === 'PATIENT_PICKED' ? 'bg-amber-100 text-amber-700' :
-              activeTask.status === 'EN_ROUTE'       ? 'bg-brand-green/10 text-brand-green' :
+              activeTask.status === 'EN_ROUTE' || activeTask.status === 'EN_ROUTE_TO_FACILITY' ? 'bg-brand-green/10 text-brand-green' :
               'bg-slate-100 text-slate-500'
             }`}>{activeTask.status.replace(/_/g, ' ')}</span>
             {activeTask.vehicle && (

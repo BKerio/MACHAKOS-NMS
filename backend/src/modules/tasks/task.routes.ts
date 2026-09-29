@@ -3,8 +3,15 @@ import { TaskService } from './task.service.js';
 import { requireRole } from '../../shared/guards/requireRole.js';
 import { TaskStatus, Role } from '../../shared/types/index.js';
 import { BadRequestError } from '../../shared/errors/AppError.js';
+import { z } from 'zod';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
+
+const facilityRatingSchema = z.object({
+  stars: z.number().int().min(1, 'Choose 1 to 5 stars').max(5, 'Choose 1 to 5 stars'),
+  tags: z.array(z.string().max(40)).max(8).optional(),
+  comment: z.string().max(500).optional(),
+});
 
 const PCR_ALLOWED_MIMES = new Set([
   'image/jpeg',
@@ -213,6 +220,26 @@ export const taskRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       );
 
       return reply.status(201).send({ ok: true, data: report });
+    }
+  );
+
+  /**
+   * POST /tasks/:id/facility-rating
+   * The crew rates the receiving facility after the case: { stars: 1-5,
+   * tags?: string[], comment?: string }. One per crew member per case.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/:id/facility-rating',
+    { preValidation: [requireRole([Role.DRIVER, Role.EMT, Role.NURSE])] },
+    async (request, reply) => {
+      const parsed = facilityRatingSchema.safeParse(request.body);
+      if (!parsed.success) throw new BadRequestError(parsed.error.issues[0].message);
+      const rating = await taskService.rateFacility(
+        request.params.id,
+        { userId: request.user.userId, role: request.user.role },
+        parsed.data,
+      );
+      return reply.status(201).send({ ok: true, data: rating });
     }
   );
 
