@@ -62,10 +62,10 @@ class _AvailableAmbulancesCardState extends State<AvailableAmbulancesCard> {
   }
 
   static Color _statusColor(Vehicle v) {
-    if (v.status == 'BUSY') return AppColors.green;
-    if (v.status == 'MAINTENANCE') return AppColors.muted;
-    if (v.currentDriver != null) return AppColors.green;
-    return AppColors.red;
+    if (v.status == 'BUSY') return const Color(0xFFEF4444);
+    if (v.status == 'MAINTENANCE' || !v.isActive) return const Color(0xFF6B7280);
+    if (v.currentDriver != null) return const Color(0xFF22C55E);
+    return const Color(0xFFEAB308);
   }
 
   static bool _isCoordinateString(String value) =>
@@ -87,16 +87,18 @@ class _AvailableAmbulancesCardState extends State<AvailableAmbulancesCard> {
 
   @override
   Widget build(BuildContext context) {
-    final withCoords = _vehicles.where((v) => v.lastLat != null && v.lastLng != null).toList();
+    final withCoords = _vehicles.where((v) => (v.trackerLat ?? v.lastLat) != null && (v.trackerLng ?? v.lastLng) != null).toList();
     final available = _vehicles
         .where((v) => v.status == 'READY' && v.currentDriver != null && v.isActive)
         .toList();
 
-    final focus = (_myVehicle?.lastLat != null && _myVehicle?.lastLng != null)
+    final focus = ((_myVehicle?.trackerLat ?? _myVehicle?.lastLat) != null)
         ? _myVehicle
         : (withCoords.isNotEmpty ? withCoords.first : null);
-    final centre = focus?.lastLat != null && focus?.lastLng != null
-        ? LatLng(focus!.lastLat!, focus.lastLng!)
+    final focusLat = focus?.trackerLat ?? focus?.lastLat;
+    final focusLng = focus?.trackerLng ?? focus?.lastLng;
+    final centre = focusLat != null && focusLng != null
+        ? LatLng(focusLat, focusLng)
         : _fallbackCentre;
 
     return AppCard(
@@ -206,7 +208,7 @@ class _VehicleMap extends StatelessWidget {
           markers: [
             for (final v in vehicles)
               Marker(
-                point: LatLng(v.lastLat!, v.lastLng!),
+                point: LatLng(v.trackerLat ?? v.lastLat!, v.trackerLng ?? v.lastLng!),
                 width: 34,
                 height: 34,
                 child: Tooltip(

@@ -7,6 +7,7 @@ import 'package:eoc_mcg/models/vehicle.dart';
 import 'package:eoc_mcg/screen/operator/history_screen.dart';
 import 'package:eoc_mcg/screen/operator/profile_screen.dart';
 import 'package:eoc_mcg/screen/operator/widgets/crew_assignment_card.dart';
+import 'package:eoc_mcg/screen/operator/widgets/fleet_status_map.dart';
 import 'package:eoc_mcg/screen/operator/widgets/shift_check_in_card.dart';
 import 'package:eoc_mcg/services/nms_api.dart';
 import 'package:eoc_mcg/theme/tokens.dart';
@@ -112,6 +113,8 @@ class _HomeTabState extends State<HomeTab> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const FleetStatusMap(),
+          const SizedBox(height: 16),
           ShiftCheckInCard(
             key: ValueKey('home-checkin-$_refreshToken'),
             role: _role ?? '',

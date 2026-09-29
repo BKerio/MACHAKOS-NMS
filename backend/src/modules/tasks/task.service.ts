@@ -626,7 +626,8 @@ export class TaskService {
         status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
       },
       include: {
-        incident: true,
+        // The crew app shows the recommended facility on the case and the map.
+        incident: { include: { targetFacility: { select: { id: true, name: true, lat: true, lng: true } } } },
         vehicle: { select: { id: true, registrationNumber: true, imei: true } },
         ...taskCrewInclude,
       },

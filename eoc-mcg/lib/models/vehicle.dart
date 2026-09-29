@@ -25,6 +25,9 @@ class Vehicle {
   final String? status; // READY | BUSY | MAINTENANCE
   final double? lastLat;
   final double? lastLng;
+  /// Live GPS tracker. The fleet map prefers this over a phone check-in fix.
+  final double? trackerLat;
+  final double? trackerLng;
   final String? lastLocationName;
   final String? checkInLocationName;
   final String? checkedInAt;
@@ -49,6 +52,8 @@ class Vehicle {
     this.status,
     this.lastLat,
     this.lastLng,
+    this.trackerLat,
+    this.trackerLng,
     this.lastLocationName,
     this.checkInLocationName,
     this.checkedInAt,
@@ -68,6 +73,8 @@ class Vehicle {
     status: json['status'] as String?,
     lastLat: (json['lastLat'] as num?)?.toDouble(),
     lastLng: (json['lastLng'] as num?)?.toDouble(),
+    trackerLat: (json['trackerLat'] as num?)?.toDouble(),
+    trackerLng: (json['trackerLng'] as num?)?.toDouble(),
     lastLocationName: json['lastLocationName'] as String?,
     checkInLocationName: json['checkInLocationName'] as String?,
     checkedInAt: json['checkedInAt'] as String?,

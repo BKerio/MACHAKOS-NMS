@@ -191,8 +191,8 @@ function DashboardPage() {
           </div>
           <div style={{ position: 'relative', height: isMapExpanded ? '100%' : 'clamp(300px, 48vh, 520px)', flex: isMapExpanded ? 1 : undefined }}>
             <Map
-              center={[-1.2921, 36.8219]}
-              zoom={isMapExpanded ? 14 : 12}
+              center={[-1.52, 37.26]}
+              zoom={isMapExpanded ? 11 : 10}
               markers={incidentMarkers}
               vehicleMarkers={liveVehicles}
               layerType={mapLayer}

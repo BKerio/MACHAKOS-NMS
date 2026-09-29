@@ -113,9 +113,14 @@ function vehicleSvg(status: VehicleTrackingStatus, speed: number): string {
     </svg>`;
 }
 
-function createVehicleIcon(status: VehicleTrackingStatus, speed: number): L.DivIcon {
+/** SVG faces east; GPS heading 0 is north, so rotate by heading − 90. */
+function headingRotation(heading: number): number {
+  return heading - 90;
+}
+
+function createVehicleIcon(status: VehicleTrackingStatus, speed: number, heading = 0): L.DivIcon {
   return L.divIcon({
-    html: vehicleSvg(status, speed),
+    html: `<div style="transform:rotate(${headingRotation(heading)}deg);transform-origin:center center">${vehicleSvg(status, speed)}</div>`,
     className: '',
     iconSize: [52, 31],
     iconAnchor: [26, 25],
@@ -151,6 +156,7 @@ interface VehicleEntry {
   marker: google.maps.marker.AdvancedMarkerElement;
   status: VehicleTrackingStatus;
   speed: number;
+  heading: number;
   vehicle: LiveVehicle;
 }
 
@@ -185,6 +191,7 @@ function GoogleCanvas({
   const staticPool = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const staticSigRef = useRef('');
   const routeLineRef = useRef<google.maps.Polyline | null>(null);
+  const fittedRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [traffic, setTraffic] = useState(false);
 
@@ -205,6 +212,7 @@ function GoogleCanvas({
           center: { lat, lng },
           zoom,
           mapId: MAP_ID,
+          mapTypeId: 'roadmap',
           colorScheme: (layerType === 'dark' ? 'DARK' : 'LIGHT') as google.maps.ColorScheme,
           disableDefaultUI: true,
           zoomControl: true,
@@ -316,6 +324,16 @@ function GoogleCanvas({
     }
   }, [ready, routePath]);
 
+  // Once vehicles arrive, frame them the way the ops map does — don't stay
+  // locked on the default city centre if the fleet is elsewhere.
+  useEffect(() => {
+    if (!ready || !mapRef.current || fittedRef.current || vehicleMarkers.length === 0) return;
+    const bounds = new google.maps.LatLngBounds();
+    vehicleMarkers.forEach(v => bounds.extend({ lat: v.lat, lng: v.lng }));
+    mapRef.current.fitBounds(bounds, 64);
+    fittedRef.current = true;
+  }, [ready, vehicleMarkers]);
+
   // Vehicle markers - pooled by vehicleId so positions update in place without
   // recreating DOM (keeps the pulse animation smooth on live updates)
   useEffect(() => {
@@ -326,25 +344,27 @@ function GoogleCanvas({
     vehicleMarkers.forEach(v => {
       const status = getVehicleTrackingStatus(v);
       const speed = Math.round(v.speed);
+      const heading = Math.round(v.heading);
       seen.add(v.vehicleId);
       const existing = pool[v.vehicleId];
 
       if (existing) {
         existing.vehicle = v;
         existing.marker.position = { lat: v.lat, lng: v.lng };
-        if (existing.status !== status || existing.speed !== speed) {
+        if (existing.status !== status || existing.speed !== speed || existing.heading !== heading) {
           const el = document.createElement('div');
-          el.style.cssText = 'cursor:pointer;transform:translateY(28%)';
+          el.style.cssText = `cursor:pointer;transform:translateY(28%) rotate(${headingRotation(v.heading)}deg)`;
           el.innerHTML = vehicleSvg(status, v.speed);
           existing.marker.content = el;
           existing.status = status;
           existing.speed = speed;
+          existing.heading = heading;
         }
         return;
       }
 
       const el = document.createElement('div');
-      el.style.cssText = 'cursor:pointer;transform:translateY(28%)';
+      el.style.cssText = `cursor:pointer;transform:translateY(28%) rotate(${headingRotation(v.heading)}deg)`;
       el.innerHTML = vehicleSvg(status, v.speed);
       const marker = new google.maps.marker.AdvancedMarkerElement({
         map: mapRef.current,
@@ -353,7 +373,7 @@ function GoogleCanvas({
         title: v.registration,
         zIndex: 20,
       });
-      const entry: VehicleEntry = { marker, status, speed, vehicle: v };
+      const entry: VehicleEntry = { marker, status, speed, heading, vehicle: v };
       marker.addListener('click', () => {
         onVehicleMarkerClick(entry.vehicle);
         if (!suppressVehiclePopup) {
@@ -487,9 +507,9 @@ function LeafletCanvas({
         const status = getVehicleTrackingStatus(v);
         return (
           <Marker
-            key={`${v.vehicleId}-${status}`}
+            key={`${v.vehicleId}-${status}-${Math.round(v.heading)}`}
             position={[v.lat, v.lng]}
-            icon={createVehicleIcon(status, v.speed)}
+            icon={createVehicleIcon(status, v.speed, v.heading)}
             eventHandlers={{ click: () => onVehicleMarkerClick(v) }}
           >
             {/* Suppress default popup when a click handler is wired - parent shows dispatch panel */}
