@@ -450,6 +450,22 @@ function IncidentDetailPage() {
     ?.filter(t => t.status !== 'CANCELLED' && t.status !== 'HANDED_OVER')
     ?.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())?.[0] ?? null;
 
+  // Replacement options for a reassign: every READY unit (crew, checklist, no
+  // open case), ordered by distance to where it must go - never "the nearest
+  // few, then filter", which hides ready units behind broken-down ones.
+  const { data: transferOptions, isFetching: transferOptionsLoading } = useQuery({
+    queryKey: ['transfer-candidates', activeTask?.id],
+    queryFn: async () => {
+      const res = await api.get(`/tasks/${activeTask!.id}/transfer-candidates`);
+      return res.data.data as {
+        target: { label: string; patientOnBoard: boolean };
+        vehicles: { id: string; registrationNumber: string; distanceKm: number | null; locationName: string | null; currentDriver: { name: string } | null; medicCount: number }[];
+      };
+    },
+    enabled: showReassignModal && !!activeTask,
+    staleTime: 0,
+  });
+
   const { data: pcrReports = [] } = useQuery({
     queryKey: ['tasks', activeTask?.id, 'pcr-reports'],
     queryFn: async () => {
@@ -1816,17 +1832,22 @@ function IncidentDetailPage() {
                 onChange={(e) => setReassignVehicleId(e.target.value)}
               >
                 <option value="">- Terminate only (no replacement) -</option>
-                {(nearestVehicles || [])
-                  .filter(v => v.id !== activeTask.vehicleId && v.currentDriver)
-                  .map(v => {
-                    const km = (v as { distanceKm?: number }).distanceKm;
-                    return (
-                      <option key={v.id} value={v.id}>
-                        {v.registrationNumber}{km != null ? ` · ~${km.toFixed(1)} km` : ''}
-                      </option>
-                    );
-                  })}
+                {(transferOptions?.vehicles ?? []).map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.registrationNumber}
+                    {v.distanceKm != null ? ` · ~${v.distanceKm.toFixed(1)} km` : ' · no GPS position'}
+                    {v.currentDriver ? ` · ${v.currentDriver.name.split(' ')[0]}` : ''}
+                    {v.locationName ? ` · ${v.locationName}` : ''}
+                  </option>
+                ))}
               </select>
+              <p className="text-xs text-slate-400 mt-1">
+                {transferOptionsLoading
+                  ? 'Finding ready ambulances…'
+                  : transferOptions && transferOptions.vehicles.length === 0
+                    ? 'No ambulance is ready right now (all busy, under maintenance, or not fully crewed). Terminate to return the case to dispatch.'
+                    : `Only ready ambulances are listed (full crew, checklist done, not on a case), nearest to ${transferOptions?.target.label ?? 'the scene'} first.`}
+              </p>
             </div>
             <div className="flex gap-3 justify-end">
               <button

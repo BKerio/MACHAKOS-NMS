@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Ambulance, MapPin, Navigation as NavigationIcon, Users,
   History as HistoryIcon, ArrowRight, CircleCheck as CheckCircle, UserCog, Package, Fuel,
+  SquareCheck, SquareX, ArrowLeftRight,
 } from 'lucide-react';
 import { getActiveTask, getMyCheckIn, getTaskHistory } from '@/api/responder';
 import { useAuthStore } from '@/stores/authStore';
@@ -11,7 +12,7 @@ import { socket } from '@/lib/socket';
 import ShiftCheckInCard from '@/components/operator/ShiftCheckInCard';
 import StatusBadge from '@/components/operator/StatusBadge';
 import { inAppNavigateUrl } from '@/utils/navigateUrl';
-import type { Vehicle } from '@/types/api';
+import type { TaskHistoryItem, Vehicle } from '@/types/api';
 
 // The GPS poller refreshes fuel about every minute; a much older reading
 // usually means the tracker is offline, not that the level is still current.
@@ -25,6 +26,66 @@ function timeAgo(iso: string): string {
   if (hours < 24) return `${hours} hr${hours === 1 ? '' : 's'} ago`;
   const days = Math.round(hours / 24);
   return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+/**
+ * The last few cases, as on the crew app's Home: a 30 px ink icon (same size
+ * as the nav icons), the complaint, "Case 042 · place", the time, and a small
+ * coloured word only when something needs attention.
+ */
+function RecentCases({ items, onOpen }: { items: TaskHistoryItem[]; onOpen: () => void }) {
+  return (
+    <div>
+      <div className="flex items-center mb-2">
+        <p className="label flex-1">Recent cases</p>
+        {items.length > 0 && (
+          <button onClick={onOpen} className="text-sm font-bold" style={{ color: 'var(--green)' }}>See all</button>
+        )}
+      </div>
+      {items.length === 0 ? (
+        <div className="card card-pad text-center">
+          <HistoryIcon size={28} className="mx-auto" style={{ color: 'var(--muted)' }} />
+          <p className="text-sm font-bold mt-2" style={{ color: 'var(--ink)' }}>No cases yet</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+            Each case you complete, transfer or have cancelled lands here with its timings and PCR.
+          </p>
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          {items.map((t, i) => {
+            const Icon = t.status === 'CANCELLED' ? SquareX : t.status === 'HANDED_OVER' ? ArrowLeftRight : SquareCheck;
+            const flag =
+              t.status === 'CANCELLED' ? { text: 'Cancelled', color: 'var(--red)' }
+                : t.status === 'HANDED_OVER' ? { text: 'Transferred', color: 'var(--muted)' }
+                  : t.status === 'COMPLETED' && !t.pcrCount ? { text: 'PCR due', color: 'var(--amber)' }
+                    : null;
+            const when = t.completedAt ?? t.cancelledAt ?? t.handedOverAt ?? t.receivedAt;
+            const place = t.incident.locationName?.trim() || t.incident.subCounty?.trim() || '';
+            return (
+              <button
+                key={t.id}
+                onClick={onOpen}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                style={i > 0 ? { borderTop: '1px solid var(--border)' } : undefined}
+              >
+                <Icon size={30} strokeWidth={1.75} className="flex-shrink-0" style={{ color: 'var(--ink)' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{t.incident.chiefComplaint}</p>
+                  <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--muted)' }}>
+                    {[t.incident.caseNumber, place].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>{timeAgo(when)}</p>
+                  {flag && <p className="text-xs font-bold mt-0.5" style={{ color: flag.color }}>{flag.text}</p>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function FuelCard({ vehicle }: { vehicle: Vehicle }) {
@@ -186,6 +247,8 @@ function DriverDashboardPage() {
           </p>
         </div>
       )}
+
+      <RecentCases items={(recentHistory?.data ?? []).slice(0, 5)} onOpen={() => navigate('/operator/history')} />
 
       {/* Quick links */}
       <div>

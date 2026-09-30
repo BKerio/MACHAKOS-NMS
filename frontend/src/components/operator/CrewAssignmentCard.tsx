@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Check, AlertTriangle } from 'lucide-react';
+import { UserPlus, Check, AlertTriangle, Lock } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import { getAssignableCrew, assignVehicleCrew, getErrorMessage } from '@/api/responder';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -90,13 +90,23 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
     setSlotMutation.mutate({ role, slot: free.key, userId: personId });
   };
 
-  const renderPicker = (role: 'EMT' | 'NURSE', options: AssignableCrewMember[]) => {
+  // On the crew of a different ambulance: shown, but locked - one medic, one
+  // ambulance (the server refuses it too).
+  const elsewhere = (p: AssignableCrewMember) => p.assignedVehicleId != null && p.assignedVehicleId !== myVehicle.id;
+
+  const renderPicker = (role: 'EMT' | 'NURSE', unsorted: AssignableCrewMember[]) => {
     const assignedIds = slotsFor(role).map((s) => s.id).filter(Boolean);
     const busy = setSlotMutation.isPending && setSlotMutation.variables?.role === role;
+    // Free medics first; those locked to another ambulance sink to the end.
+    const options = [...unsorted].sort((a, b) => Number(elsewhere(a)) - Number(elsewhere(b)));
+    const lockedCount = options.filter(elsewhere).length;
     return (
       <div className="mb-4">
         <p className="label mb-2">
           {role === 'EMT' ? 'EMTs' : 'Nurses'} <span style={{ color: 'var(--muted)', fontWeight: 500 }}>({assignedIds.length} of 2)</span>
+          {lockedCount > 0 && (
+            <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · {lockedCount} on another ambulance</span>
+          )}
         </p>
         {isLoading ? (
           <div className="skel" style={{ height: 40 }} />
@@ -108,31 +118,29 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
           <div className="flex flex-col gap-2">
             {options.map((person) => {
               const active = assignedIds.includes(person.id);
-              const takenElsewhere = !active && person.status === 'TAKEN' && person.assignedVehicleId != null && person.assignedVehicleId !== myVehicle.id;
+              const takenElsewhere = !active && elsewhere(person);
               const otherAmbulance = person.assignedVehicleRegistration ?? 'another ambulance';
               return (
                 <button
                   key={person.id}
                   onClick={() => {
-                    if (takenElsewhere) {
-                      addNotification({ type: 'info', title: `${person.name} is already assigned`, message: `They’re with ${otherAmbulance} right now.` });
-                      return;
-                    }
-                    if (setSlotMutation.isPending) return;
+                    if (takenElsewhere || setSlotMutation.isPending) return;
                     toggle(role, person.id);
                   }}
-                  disabled={setSlotMutation.isPending && !takenElsewhere}
+                  disabled={takenElsewhere || setSlotMutation.isPending}
+                  aria-disabled={takenElsewhere}
+                  title={takenElsewhere ? `On the crew of ${otherAmbulance}. Their driver must remove them first.` : undefined}
                   className="flex items-center gap-2.5 text-left px-3.5 py-2.5 rounded-xl border-2 transition-all"
                   style={{
                     borderColor: active ? 'var(--green)' : 'var(--border)',
-                    background: active ? 'var(--green-light)' : 'var(--surface)',
-                    opacity: takenElsewhere ? 0.75 : 1,
+                    background: active ? 'var(--green-light)' : takenElsewhere ? 'var(--surface-2)' : 'var(--surface)',
+                    opacity: takenElsewhere ? 0.6 : 1,
+                    cursor: takenElsewhere ? 'not-allowed' : undefined,
                   }}
                 >
                   <div className="flex-1">
                     <p className={`text-sm ${active ? 'font-bold' : ''}`} style={{ color: 'var(--ink)' }}>{person.name}</p>
                     {person.phone && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{person.phone}</p>}
-                    {takenElsewhere && <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>With {otherAmbulance}</p>}
                     {active && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Tap to remove - they stay on shift</p>}
                   </div>
                   {busy && active ? (
@@ -140,7 +148,12 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
                   ) : active ? (
                     <Check size={18} style={{ color: 'var(--green)' }} />
                   ) : takenElsewhere ? (
-                    <span className="text-[11px] font-bold px-2 py-1 rounded-md text-white" style={{ background: 'var(--red)' }}>Taken</span>
+                    <span className="flex items-center gap-1.5 flex-shrink-0">
+                      <Lock size={14} style={{ color: 'var(--muted)' }} />
+                      <span className="text-[11px] font-bold px-2 py-1 rounded-full border" style={{ borderColor: 'var(--border)', color: 'var(--muted)', background: 'var(--surface)' }}>
+                        On {otherAmbulance}
+                      </span>
+                    </span>
                   ) : null}
                 </button>
               );
@@ -161,7 +174,7 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
           <p className="text-base font-bold" style={{ color: 'var(--ink)' }}>Assign crew</p>
           <p className="text-sm mt-0.5" style={{ color: 'var(--muted)' }}>
             {myVehicle.registrationNumber} needs two medics to take calls: an EMT and a nurse, two EMTs, or two
-            nurses. If someone shows Taken, they’re already helping another ambulance.
+            nurses. Medics already on another ambulance are locked until their driver removes them.
           </p>
         </div>
       </div>

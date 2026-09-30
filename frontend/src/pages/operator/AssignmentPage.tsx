@@ -90,16 +90,20 @@ function AssignmentPage() {
   });
 
   const handoverMutation = useMutation({
-    mutationFn: (payload: { reason: string; autoAssign: boolean; newVehicleId?: string }) => handoverTask(task!.id, payload),
-    onSuccess: (result) => {
+    mutationFn: (payload: { reason: string; autoAssign: boolean; newVehicleId?: string; breakdown?: boolean }) =>
+      handoverTask(task!.id, payload),
+    onSuccess: (result, payload) => {
       setShowHandover(false);
       queryClient.invalidateQueries({ queryKey: ['operator', 'active-task'] });
       queryClient.invalidateQueries({ queryKey: ['operator', 'my-checkin'] });
       const receiver = result.newTask?.vehicle?.registrationNumber;
+      const after = payload.breakdown
+        ? 'This ambulance is marked unavailable; your crew stays checked in with it.'
+        : "You're checked out.";
       addNotification({
         type: 'success',
-        title: 'Case transferred',
-        message: receiver ? `Passed to ${receiver}. You're checked out - the case stays open for them.` : "Case returned to dispatch. You're checked out.",
+        title: receiver ? 'Case transferred' : 'Case handed back',
+        message: receiver ? `Passed to ${receiver}. ${after}` : `Dispatch will find another ambulance. ${after}`,
       });
     },
     onError: (err) => addNotification({ type: 'error', title: 'Couldn’t transfer the case', message: getErrorMessage(err) }),
@@ -288,7 +292,7 @@ function AssignmentPage() {
 
           {user?.role === 'DRIVER' && (
             <button onClick={() => setShowHandover(true)} disabled={handoverMutation.isPending} className="btn btn-soft btn-block">
-              <ArrowLeftRight size={18} /> Transfer case to nearby unit
+              <ArrowLeftRight size={18} /> Transfer case
             </button>
           )}
         </>
@@ -305,10 +309,9 @@ function AssignmentPage() {
 
       {task && showHandover && (
         <HandoverModal
+          taskId={task.id}
           caseNumber={task.incident.caseNumber}
-          currentVehicleId={task.vehicleId}
-          referenceLat={myVehicle?.lastLat ?? task.incident.lat}
-          referenceLng={myVehicle?.lastLng ?? task.incident.lng}
+          registrationNumber={task.vehicle?.registrationNumber ?? myVehicle?.registrationNumber}
           isSubmitting={handoverMutation.isPending}
           onClose={() => setShowHandover(false)}
           onConfirm={(payload) => handoverMutation.mutate(payload)}

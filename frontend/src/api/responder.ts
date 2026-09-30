@@ -52,9 +52,32 @@ export async function closeIncident(incidentId: string, reason: string): Promise
 
 export async function handoverTask(
   taskId: string,
-  data: { reason: string; newVehicleId?: string; autoAssign?: boolean }
+  data: { reason: string; newVehicleId?: string; autoAssign?: boolean; breakdown?: boolean }
 ): Promise<{ cancelled: Task; newTask: Task | null; checkedOutVehicleId: string }> {
   const res = await api.post(`/tasks/${taskId}/reassign`, data);
+  return res.data.data;
+}
+
+export interface TransferCandidate {
+  id: string;
+  registrationNumber: string;
+  distanceKm: number | null;
+  positionAt: string | null;
+  locationName: string | null;
+  currentDriver: { id: string; name: string; phone?: string | null } | null;
+  medicCount: number;
+}
+
+/**
+ * Ambulances that can take over this case: only READY units (full crew,
+ * checklist done, not on another case), closest to where they must go first -
+ * the same list the crew app's Transfer screen shows.
+ */
+export async function getTransferCandidates(taskId: string): Promise<{
+  target: { label: string; patientOnBoard: boolean };
+  vehicles: TransferCandidate[];
+}> {
+  const res = await api.get(`/tasks/${taskId}/transfer-candidates`);
   return res.data.data;
 }
 
@@ -129,7 +152,15 @@ export async function checkOutFromVehicle(vehicleId: string): Promise<Vehicle> {
 
 export async function getAssignableCrew(): Promise<AssignableCrewMember[]> {
   const res = await api.get('/fleet/crew-members');
-  return res.data.data as AssignableCrewMember[];
+  // The server reports the ambulance a medic already crews as `onVehicle`
+  // (one medic, one ambulance); fold it into the fields the picker reads.
+  type Row = Omit<AssignableCrewMember, 'status'> & { onVehicle?: { id: string; registrationNumber: string } | null };
+  return (res.data.data as Row[]).map(({ onVehicle, ...m }) => ({
+    ...m,
+    status: onVehicle ? 'TAKEN' : 'AVAILABLE',
+    assignedVehicleId: onVehicle?.id ?? null,
+    assignedVehicleRegistration: onVehicle?.registrationNumber ?? null,
+  }));
 }
 
 export async function assignVehicleCrew(

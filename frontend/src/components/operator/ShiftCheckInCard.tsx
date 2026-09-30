@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ClipboardCheck, MapPin, Camera, X as XIcon, Check, ChevronDown, ChevronUp,
+  ClipboardCheck, MapPin, Camera, X as XIcon, Check, ChevronDown, ChevronUp, Lock, Phone,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import { useAuthStore } from '@/stores/authStore';
@@ -29,6 +29,76 @@ function formatCheckInTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+const MIN_MEDICS = 2;
+
+/**
+ * An ambulance another driver is already checked in to - the web twin of the
+ * crew app's locked card: plate and state, who's on it (with a call link),
+ * medic cover, and a footer saying why it can't be picked. No button.
+ */
+function CrewedVehicleCard({ vehicle }: { vehicle: Vehicle }) {
+  const driver = vehicle.currentDriver!;
+  const medics = [vehicle.currentEmt, vehicle.currentEmt2, vehicle.currentNurse, vehicle.currentNurse2].filter(Boolean).length;
+  const complete = medics >= MIN_MEDICS;
+  const [state, tone] =
+    vehicle.status === 'BUSY' ? ['On a case', 'blue']
+      : vehicle.status === 'MAINTENANCE' ? ['Maintenance', 'muted']
+        : complete ? ['Ready', 'status-success'] : ['Crewing up', 'amber'];
+  const toneColor = tone === 'muted' ? 'var(--muted)' : tone === 'status-success' ? 'var(--color-status-success)' : `var(--${tone})`;
+  const initials = driver.name.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  const phone = (driver as { phone?: string | null }).phone;
+
+  return (
+    <div
+      className="rounded-xl border mb-2 overflow-hidden"
+      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+      aria-label={`${vehicle.registrationNumber}, ${state}, driver ${driver.name}. Already crewed, not available.`}
+    >
+      <div className="px-3.5 pt-3 pb-2.5">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="text-sm font-black tracking-wider px-2.5 py-0.5 rounded-md"
+            style={{ background: '#F7D23E', color: '#111', border: '2px solid #111' }}
+          >
+            {vehicle.registrationNumber.toUpperCase()}
+          </span>
+          <span
+            className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+            style={{ color: toneColor, background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+          >
+            {state}
+          </span>
+        </div>
+        {vehicle.lastLocationName && (
+          <p className="text-xs mt-1.5 flex items-center gap-1 truncate" style={{ color: 'var(--muted)' }}>
+            <MapPin size={12} className="flex-shrink-0" /> {vehicle.lastLocationName}
+          </p>
+        )}
+      </div>
+      <div className="px-3.5 py-2.5 border-t flex items-center gap-3" style={{ borderColor: 'var(--border)' }}>
+        <span className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: 'var(--surface-2)', color: 'var(--ink)' }}>
+          {initials}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{driver.name}</p>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>Driver on shift</p>
+        </div>
+        <span className="text-xs font-bold flex-shrink-0" style={{ color: complete ? 'var(--color-status-success)' : 'var(--amber)' }}>
+          {medics}/{MIN_MEDICS} medics
+        </span>
+        {phone && (
+          <a href={`tel:${phone}`} className="icon-btn flex-shrink-0" title={`Call ${driver.name.split(' ')[0]}`} aria-label={`Call ${driver.name}`}>
+            <Phone size={16} style={{ color: 'var(--green)' }} />
+          </a>
+        )}
+      </div>
+      <div className="px-3.5 py-1.5 flex items-center gap-1.5 text-xs" style={{ background: 'var(--surface-2)', color: 'var(--muted)' }}>
+        <Lock size={12} /> Crewed · not available to check in
+      </div>
+    </div>
+  );
 }
 
 /** Inline check-in panel: capture GPS + a selfie, then submit. */
@@ -178,6 +248,9 @@ function ShiftCheckInCard() {
 
   if (!user) return null;
 
+  // Another driver holds this ambulance: never offered as a choice.
+  const isCrewedByOther = (v: Vehicle) => !!v.currentDriver && v.currentDriver.id !== user.id;
+
   return (
     <div className="card card-pad">
       <div className="flex gap-3.5 mb-4">
@@ -253,7 +326,8 @@ function ShiftCheckInCard() {
               ) : vehicles.length === 0 ? (
                 <p className="text-sm" style={{ color: 'var(--muted)' }}>No active GPS vehicles found for your agency.</p>
               ) : (
-                vehicles.map((vehicle) => {
+                <>
+                {vehicles.filter((v) => !isCrewedByOther(v)).map((vehicle) => {
                   const slots = ROLE_SLOTS[user.role as keyof typeof ROLE_SLOTS] ?? [];
                   const occupants = slots
                     .map((s) => vehicle[s] as { id: string; name: string } | null | undefined)
@@ -300,7 +374,17 @@ function ShiftCheckInCard() {
                       )}
                     </div>
                   );
-                })
+                })}
+                {vehicles.some(isCrewedByOther) && (
+                  <>
+                    <p className="label mt-4 mb-1">Already crewed</p>
+                    <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
+                      {vehicles.filter(isCrewedByOther).length} with a driver on shift · not available
+                    </p>
+                    {vehicles.filter(isCrewedByOther).map((v) => <CrewedVehicleCard key={v.id} vehicle={v} />)}
+                  </>
+                )}
+                </>
               )}
               {isRefetching && <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Refreshing…</p>}
             </div>
