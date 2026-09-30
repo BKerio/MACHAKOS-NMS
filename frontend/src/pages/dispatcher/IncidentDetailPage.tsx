@@ -31,6 +31,7 @@ import {
   Upload as UploadSimple,
 } from 'lucide-react';
 import { FacilityRatingPanel } from '@/components/shared/FacilityRating';
+import TransferHistory from '@/components/shared/TransferHistory';
 import AppLoader from '@/components/shared/AppLoader';
 import { useDirections } from '@/hooks/useDirections';
 import api from '@/api/client';
@@ -446,7 +447,7 @@ function IncidentDetailPage() {
 
   // ── Active task + PCR reports from crew ──────────────────────────────────
   const activeTask = incident?.tasks
-    ?.filter(t => t.status !== 'CANCELLED')
+    ?.filter(t => t.status !== 'CANCELLED' && t.status !== 'HANDED_OVER')
     ?.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())?.[0] ?? null;
 
   const { data: pcrReports = [] } = useQuery({
@@ -1305,6 +1306,11 @@ function IncidentDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Ambulance transfers (e.g. breakdowns) - oldest first */}
+      {(incident.tasks ?? []).some(t => t.status === 'HANDED_OVER') && (
+        <TransferHistory tasks={incident.tasks ?? []} />
+      )}
 
       {/* Crew & Clinical Report - shown after dispatch */}
       {activeTask && (

@@ -142,14 +142,32 @@ export const taskRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   );
 
   /**
+   * GET /tasks/:id/transfer-candidates
+   * Ambulances that could take this case over, nearest first (live GPS to the
+   * scene, or to the patient's ambulance once they're on board).
+   */
+  app.get<{ Params: { id: string } }>(
+    '/:id/transfer-candidates',
+    { preValidation: [requireRole([Role.DRIVER, Role.EMT, Role.NURSE, Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])] },
+    async (request, reply) => {
+      const result = await taskService.listTransferCandidates(request.params.id, {
+        userId: request.user.userId,
+        role: request.user.role,
+      });
+      return reply.send({ ok: true, data: result });
+    }
+  );
+
+  /**
    * POST /tasks/:id/reassign
-   * Handover / case termination with reassignment. Requires a reason. Optional
-   * newVehicleId or autoAssign=true picks a replacement crew. Checks out the
-   * original driver. Drivers may handover their own task; dispatchers any task.
+   * Transfer the case to another ambulance at any stage. Requires a reason.
+   * newVehicleId picks the replacement, or autoAssign=true takes the nearest.
+   * breakdown=true takes this ambulance out of service with its crew kept.
+   * Drivers may transfer their own task; dispatchers any task.
    */
   app.post<{
     Params: { id: string };
-    Body: { reason: string; newVehicleId?: string; autoAssign?: boolean };
+    Body: { reason: string; newVehicleId?: string; autoAssign?: boolean; breakdown?: boolean };
   }>(
     '/:id/reassign',
     {

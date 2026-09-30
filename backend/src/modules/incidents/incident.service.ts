@@ -262,6 +262,7 @@ export class IncidentService {
             emt2:   { select: { name: true, phone: true } },
             nurse:  { select: { name: true, phone: true } },
             nurse2: { select: { name: true, phone: true } },
+            handoverBy: { select: { name: true, role: true } },
             facilityRatings: { select: { id: true, stars: true, tags: true, comment: true, createdAt: true, userId: true, user: { select: { name: true, role: true } } }, orderBy: { createdAt: 'asc' } },
           },
           orderBy: { receivedAt: 'desc' },
@@ -633,7 +634,7 @@ export class IncidentService {
     const activeTasks = await this.app.prisma.task.findMany({
       where: {
         incidentId: id,
-        status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
+        status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.HANDED_OVER] },
       },
     });
 

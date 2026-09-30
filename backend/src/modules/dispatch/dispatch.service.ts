@@ -21,7 +21,7 @@ export class DispatchService {
     const [vehicles, activeTasks] = await Promise.all([
       this.app.prisma.vehicle.findMany({ select: { id: true, isActive: true, status: true } }),
       this.app.prisma.task.findMany({
-        where: { status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] } },
+        where: { status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.HANDED_OVER] } },
         select: { vehicleId: true, status: true },
       }),
     ]);

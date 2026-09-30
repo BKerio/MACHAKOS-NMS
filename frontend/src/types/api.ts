@@ -373,6 +373,12 @@ export interface Task {
   /** Straight-line km from the scene to the recommended facility, captured on patient pickup. */
   sceneToFacilityKm?: number | null;
   facilityRatings?: FacilityRating[];
+  /** Transfer record, on a task that was handed over to another ambulance. */
+  handoverStage?: TaskStatus | null;
+  handoverLat?: number | null;
+  handoverLng?: number | null;
+  handoverBy?: { name: string; role: string } | null;
+  pickupName?: string | null;
   incidentId: string;
   vehicleId: string;
   vehicle?: Vehicle;

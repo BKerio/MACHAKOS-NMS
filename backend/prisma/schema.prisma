@@ -51,6 +51,8 @@ enum TaskStatus {
   AT_HOSPITAL
   COMPLETED
   CANCELLED
+  // Transferred to another ambulance mid-case (see Task.previousTaskId).
+  HANDED_OVER
 }
 
 enum VehicleStatus {
@@ -144,6 +146,7 @@ model User {
   pushTokens                 PushToken[]
   biometricKeys              BiometricKey[]
   facilityRatings            FacilityRating[]
+  handedOverTasks            Task[]              @relation("TaskHandoverBy")
 
   @@map("users")
 }
@@ -319,6 +322,27 @@ model Task {
   // Vital signs captured by the crew at hospital handover (Temperature, Pulse,
   // Respiration, BP, SPO2, GCS, etc.) - JSON, same shape convention as Incident.vitals.
   handoverVitals Json? @map("handover_vitals")
+
+  // Transfer to another ambulance (e.g. mechanical breakdown), recorded on
+  // the task that was handed over: when, why, by whom, at which stage, and
+  // where the ambulance was.
+  handedOverAt   DateTime?   @map("handed_over_at")
+  handoverReason String?     @map("handover_reason")
+  handoverStage  TaskStatus? @map("handover_stage")
+  handoverLat    Float?      @map("handover_lat")
+  handoverLng    Float?      @map("handover_lng")
+  handoverById   String?     @map("handover_by_id")
+  handoverBy     User?       @relation("TaskHandoverBy", fields: [handoverById], references: [id])
+
+  // On the replacement task: the task it continues, and - when the patient
+  // was already on board - where to collect them (the broken-down ambulance)
+  // instead of the incident scene.
+  previousTaskId String? @unique @map("previous_task_id")
+  previousTask   Task?   @relation("TaskTransfer", fields: [previousTaskId], references: [id])
+  nextTask       Task?   @relation("TaskTransfer")
+  pickupLat      Float?  @map("pickup_lat")
+  pickupLng      Float?  @map("pickup_lng")
+  pickupName     String? @map("pickup_name")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

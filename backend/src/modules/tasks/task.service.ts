@@ -10,6 +10,7 @@ import {
   crewInclude,
   crewIncompleteMessage,
   isCrewComplete,
+  MEDIC_SLOTS,
   taskCrewFromVehicle,
   taskCrewIds,
   taskCrewInclude,
@@ -29,6 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
   AT_HOSPITAL: 'At Hospital',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
+  HANDED_OVER: 'Transferred',
 };
 
 type AssignmentIncident = {
@@ -316,28 +318,53 @@ export class TaskService {
     return task;
   }
 
-  /**
-   * Handover / case termination with reassignment. Cancels the current task with a
-   * required reason, checks out the original driver (clears vehicle crew), and -
-   * when a replacement vehicle is given or autoAssign finds one - dispatches a
-   * new task to that crew. Drivers may handover their own active task; dispatchers
-   * may handover any task.
-   */
-  async reassignTask(
-    taskId: string,
-    user: { userId: string; role: Role; agencyId?: string },
-    data: { reason: string; newVehicleId?: string; autoAssign?: boolean },
-  ) {
-    const isDispatch = (<Role[]>[Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN]).includes(user.role);
-    const reason = data.reason?.trim();
-    if (!reason || reason.length < 5) {
-      throw new BadRequestError('A valid reason (at least 5 characters) is required to reassign');
-    }
+  /** Stages where the patient is already in the ambulance. */
+  private static readonly PATIENT_ON_BOARD: TaskStatus[] = [
+    TaskStatus.PATIENT_PICKED,
+    TaskStatus.EN_ROUTE_TO_FACILITY,
+    TaskStatus.AT_HOSPITAL,
+  ];
 
+  /**
+   * Where a replacement ambulance has to go if this task is transferred:
+   * once the patient is on board, to the ambulance they're in (its live GPS);
+   * before that, to the scene (or this task's own pickup point, if it is
+   * itself a transfer).
+   */
+  private transferTarget(task: {
+    status: TaskStatus;
+    pickupLat: number | null;
+    pickupLng: number | null;
+    pickupName: string | null;
+    incident: { lat: number | null; lng: number | null; locationName: string };
+    vehicle: { registrationNumber: string; trackerLat: number | null; trackerLng: number | null; lastLat: number | null; lastLng: number | null };
+  }) {
+    const vehicleLat = task.vehicle.trackerLat ?? task.vehicle.lastLat;
+    const vehicleLng = task.vehicle.trackerLat != null ? task.vehicle.trackerLng : task.vehicle.lastLng;
+    const onBoard = TaskService.PATIENT_ON_BOARD.includes(task.status);
+    if (onBoard && vehicleLat != null && vehicleLng != null) {
+      return {
+        onBoard,
+        lat: vehicleLat,
+        lng: vehicleLng,
+        label: `the patient in ${task.vehicle.registrationNumber}`,
+        pickupName: `${task.vehicle.registrationNumber} (patient on board)`,
+      };
+    }
+    return {
+      onBoard,
+      lat: task.pickupLat ?? task.incident.lat,
+      lng: task.pickupLng ?? task.incident.lng,
+      label: 'the scene',
+      pickupName: task.pickupName,
+    };
+  }
+
+  private async loadTaskForTransfer(taskId: string) {
     const task = await this.app.prisma.task.findUnique({
       where: { id: taskId },
       include: {
-        vehicle: { select: { id: true, agencyId: true } },
+        vehicle: true,
         incident: {
           select: {
             id: true, lat: true, lng: true, caseNumber: true, locationName: true,
@@ -347,7 +374,98 @@ export class TaskService {
       },
     });
     if (!task) throw new NotFoundError('Task not found');
-    if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.CANCELLED) {
+    return task;
+  }
+
+  /**
+   * Ambulances that can take over a case, nearest first. "Near" is measured
+   * from each ambulance's live GPS to where it would have to go (see
+   * transferTarget). Only READY units in the same agency with a driver, a
+   * complete crew and a confirmed checklist are offered - the same bar as
+   * dispatch.
+   */
+  async listTransferCandidates(taskId: string, user: { userId: string; role: Role }) {
+    const task = await this.loadTaskForTransfer(taskId);
+    const isDispatch = (<Role[]>[Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN]).includes(user.role);
+    if (!isDispatch && !taskCrewIds(task).includes(user.userId)) {
+      throw new ForbiddenError('You are not assigned to this task');
+    }
+    const target = this.transferTarget(task);
+    const vehicles = await this.rankedTransferVehicles(task.vehicle.agencyId, task.vehicleId, target.lat, target.lng);
+    return {
+      target: { lat: target.lat, lng: target.lng, label: target.label, patientOnBoard: target.onBoard },
+      vehicles: vehicles.map(({ vehicle, distanceKm }) => ({
+        id: vehicle.id,
+        registrationNumber: vehicle.registrationNumber,
+        distanceKm,
+        positionAt: vehicle.trackerAt ?? vehicle.lastLocationAt,
+        locationName: vehicle.lastLocationName,
+        currentDriver: vehicle.currentDriver,
+        medicCount: MEDIC_SLOTS.filter((s) => vehicle[s]).length,
+      })),
+    };
+  }
+
+  private async rankedTransferVehicles(agencyId: string, excludeVehicleId: string, lat: number | null, lng: number | null) {
+    const ready = (
+      await this.app.prisma.vehicle.findMany({
+        where: {
+          agencyId,
+          isActive: true,
+          status: VehicleStatus.READY,
+          currentDriverId: { not: null },
+          id: { not: excludeVehicleId },
+        },
+        include: { currentDriver: { select: { id: true, name: true, phone: true } } },
+      })
+    ).filter(isCrewComplete);
+
+    const eligible = [];
+    for (const vehicle of ready) {
+      const checklist = await getChecklistSummary(this.app.prisma, vehicle.id);
+      if (!checklist.complete) continue;
+      const vLat = vehicle.trackerLat ?? vehicle.lastLat;
+      const vLng = vehicle.trackerLat != null ? vehicle.trackerLng : vehicle.lastLng;
+      const distanceKm =
+        lat != null && lng != null && vLat != null && vLng != null
+          ? Math.round(haversineDistance(vLat, vLng, lat, lng) * 10) / 10
+          : null;
+      eligible.push({ vehicle, distanceKm });
+    }
+    // Nearest first; units without a GPS position go last.
+    return eligible.sort((a, b) => (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY));
+  }
+
+  /**
+   * Transfers a case to another ambulance at any stage - e.g. after a
+   * mechanical breakdown. The current task is closed as HANDED_OVER with the
+   * full record (when, why, by whom, at which stage, where the ambulance
+   * was), and a new task continues the case on the replacement, linked back
+   * to it. If the patient was already on board, the replacement collects
+   * them from the broken-down ambulance rather than the scene.
+   *
+   * A breakdown takes the ambulance out of service (MAINTENANCE) with its
+   * crew still checked in; any other reason releases the crew and returns
+   * the ambulance to READY, as before. With no replacement the incident goes
+   * back to dispatch.
+   */
+  async reassignTask(
+    taskId: string,
+    user: { userId: string; role: Role; agencyId?: string },
+    data: { reason: string; newVehicleId?: string; autoAssign?: boolean; breakdown?: boolean },
+  ) {
+    const isDispatch = (<Role[]>[Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN]).includes(user.role);
+    const reason = data.reason?.trim();
+    if (!reason || reason.length < 5) {
+      throw new BadRequestError('A valid reason (at least 5 characters) is required to reassign');
+    }
+
+    const task = await this.loadTaskForTransfer(taskId);
+    if (
+      task.status === TaskStatus.COMPLETED ||
+      task.status === TaskStatus.CANCELLED ||
+      task.status === TaskStatus.HANDED_OVER
+    ) {
       throw new BadRequestError('This task is already closed');
     }
 
@@ -356,9 +474,10 @@ export class TaskService {
       throw new ForbiddenError('Only the assigned driver or a dispatcher can handover this task');
     }
 
-    // Resolve replacement vehicle: explicit id, or auto-pick if requested.
-    let newVehicle = null as null | Awaited<ReturnType<typeof this.app.prisma.vehicle.findUnique>>;
+    const target = this.transferTarget(task);
 
+    // Resolve the replacement: an explicit pick, or the nearest eligible one.
+    let newVehicle = null as null | Awaited<ReturnType<typeof this.app.prisma.vehicle.findUnique>>;
     if (data.newVehicleId) {
       if (data.newVehicleId === task.vehicleId) {
         throw new BadRequestError('Choose a different vehicle to reassign to');
@@ -384,64 +503,72 @@ export class TaskService {
         throw new BadRequestError('Replacement vehicle must belong to the same agency');
       }
     } else if (data.autoAssign) {
-      newVehicle = await this.findAvailableVehicleForHandover(
-        task.vehicle.agencyId,
-        task.vehicleId,
-        task.incident.lat,
-        task.incident.lng,
-      );
-      // If none available, fall through - original driver is still checked out and
-      // the incident returns to DISPATCH_HANDLING below.
+      const ranked = await this.rankedTransferVehicles(task.vehicle.agencyId, task.vehicleId, target.lat, target.lng);
+      newVehicle = ranked[0]?.vehicle ?? null;
+      // None available: the incident goes back to dispatch below.
     }
 
     const now = new Date();
+    const brokenLat = task.vehicle.trackerLat ?? task.vehicle.lastLat;
+    const brokenLng = task.vehicle.trackerLat != null ? task.vehicle.trackerLng : task.vehicle.lastLng;
 
-    // Close the original task.
-    const cancelled = await this.app.prisma.task.update({
+    // Close the current task with the full transfer record.
+    const handedOver = await this.app.prisma.task.update({
       where: { id: taskId },
-      data: { status: TaskStatus.CANCELLED, cancelledAt: now, cancelReason: reason },
-    });
-
-    // Check out the original driver and clear all crew slots on their vehicle.
-    await this.app.prisma.vehicle.update({
-      where: { id: task.vehicleId },
       data: {
-        status: VehicleStatus.READY,
-        ...clearedCrew,
+        status: TaskStatus.HANDED_OVER,
+        handedOverAt: now,
+        handoverReason: reason,
+        handoverStage: task.status,
+        handoverLat: brokenLat,
+        handoverLng: brokenLng,
+        handoverById: user.userId,
       },
     });
 
-    // Tell the original crew their task is cancelled so their app clears it.
+    // Broken down: out of service, crew stays with it. Otherwise release the
+    // crew and put the ambulance back in service.
+    const breakdown = data.breakdown === true;
+    await this.app.prisma.vehicle.update({
+      where: { id: task.vehicleId },
+      data: breakdown ? { status: VehicleStatus.MAINTENANCE } : { status: VehicleStatus.READY, ...clearedCrew },
+    });
+
+    // Tell the original crew so their app moves on.
     this.app.io
       .to([...taskCrewIds(task).map((id) => `user:${id}`), `role:${Role.DISPATCHER}`])
-      .emit('task:updated', cancelled);
-    this.notifyCrewOfStatusPush(
-      taskCrewIds(task),
-      user.userId,
-      task.incident.caseNumber,
-      TaskStatus.CANCELLED,
-    );
+      .emit('task:updated', handedOver);
+    this.notifyCrewOfStatusPush(taskCrewIds(task), user.userId, task.incident.caseNumber, TaskStatus.HANDED_OVER);
     this.app.io
       .to(`role:${Role.DISPATCHER}`)
       .to(`role:${Role.ADMIN}`)
       .to(`role:${Role.SUPER_ADMIN}`)
-      .emit('vehicle:crew', { id: task.vehicleId, ...clearedCrew });
+      .to(taskCrewIds(task).map((id) => `user:${id}`))
+      .emit(
+        'vehicle:crew',
+        breakdown
+          ? { id: task.vehicleId, status: VehicleStatus.MAINTENANCE }
+          : { id: task.vehicleId, status: VehicleStatus.READY, ...clearedCrew },
+      );
 
-    // If no replacement was given/found, send the incident back to dispatch handling.
     if (!newVehicle) {
       await this.app.prisma.incident.update({
         where: { id: task.incidentId },
         data: { status: IncidentStatus.DISPATCH_HANDLING },
       });
-      return { cancelled, newTask: null, checkedOutVehicleId: task.vehicleId };
+      return { handedOver, newTask: null, checkedOutVehicleId: task.vehicleId };
     }
 
-    // Dispatch a fresh task to the replacement vehicle's crew.
+    // The replacement continues the case from where it stands.
     const newTask = await this.app.prisma.task.create({
       data: {
         status: TaskStatus.PENDING,
         incidentId: task.incidentId,
         vehicleId: newVehicle.id,
+        previousTaskId: task.id,
+        ...(target.onBoard || task.pickupLat != null
+          ? { pickupLat: target.lat, pickupLng: target.lng, pickupName: target.pickupName }
+          : {}),
         ...taskCrewFromVehicle({ ...newVehicle, currentDriverId: newVehicle.currentDriverId! }),
       },
       include: {
@@ -463,7 +590,6 @@ export class TaskService {
       .to([...vehicleCrewIds(newVehicle).map((id) => `user:${id}`), `role:${Role.DISPATCHER}`])
       .emit('task:assigned', newTask);
 
-    // Notify the replacement crew via SMS + push (fire-and-forget)
     this.notifyCrewOfAssignment(
       [newTask.driver, newTask.emt, newTask.emt2, newTask.nurse, newTask.nurse2],
       newTask.incident,
@@ -471,46 +597,7 @@ export class TaskService {
     );
     this.notifyCrewOfPushAssignment(vehicleCrewIds(newVehicle), newTask.incident, newVehicle.registrationNumber);
 
-    return { cancelled, newTask, checkedOutVehicleId: task.vehicleId };
-  }
-
-  /** Pick the nearest READY vehicle with a complete crew in the agency. */
-  private async findAvailableVehicleForHandover(
-    agencyId: string,
-    excludeVehicleId: string,
-    lat?: number | null,
-    lng?: number | null,
-  ) {
-    const candidates = (
-      await this.app.prisma.vehicle.findMany({
-        where: {
-          agencyId,
-          isActive: true,
-          status: VehicleStatus.READY,
-          currentDriverId: { not: null },
-          id: { not: excludeVehicleId },
-        },
-      })
-    ).filter(isCrewComplete);
-    if (candidates.length === 0) return null;
-    if (lat == null || lng == null) return candidates[0];
-
-    const toRad = (d: number) => (d * Math.PI) / 180;
-    const dist = (aLat: number, aLng: number) => {
-      const R = 6371;
-      const dLat = toRad(aLat - lat);
-      const dLng = toRad(aLng - lng);
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat)) * Math.cos(toRad(aLat)) * Math.sin(dLng / 2) ** 2;
-      return R * 2 * Math.asin(Math.sqrt(a));
-    };
-
-    return [...candidates].sort((a, b) => {
-      const da = a.lastLat != null && a.lastLng != null ? dist(a.lastLat, a.lastLng) : Number.POSITIVE_INFINITY;
-      const db = b.lastLat != null && b.lastLng != null ? dist(b.lastLat, b.lastLng) : Number.POSITIVE_INFINITY;
-      return da - db;
-    })[0];
+    return { handedOver, newTask, checkedOutVehicleId: breakdown ? null : task.vehicleId };
   }
 
   /**
@@ -552,8 +639,10 @@ export class TaskService {
     // Live ambulance fix (tracker first). Phone check-in coordinates are never used.
     const vehicleLat = task.vehicle.trackerLat ?? task.vehicle.lastLat;
     const vehicleLng = task.vehicle.trackerLng ?? task.vehicle.lastLng;
-    const sceneLat = task.incident.lat;
-    const sceneLng = task.incident.lng;
+    // A transferred task collects the patient at its pickup point (the
+    // broken-down ambulance) rather than the incident scene.
+    const sceneLat = task.pickupLat ?? task.incident.lat;
+    const sceneLng = task.pickupLng ?? task.incident.lng;
 
     // Map status to timestamp field
     switch (newStatus) {
@@ -672,11 +761,13 @@ export class TaskService {
     const task = await this.app.prisma.task.findFirst({
       where: {
         OR: [{ driverId: userId }, { emtId: userId }, { emt2Id: userId }, { nurseId: userId }, { nurse2Id: userId }],
-        status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
+        status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.HANDED_OVER] },
       },
       include: {
         // The crew app shows the recommended facility on the case and the map.
         incident: { include: { targetFacility: { select: { id: true, name: true, lat: true, lng: true } } } },
+        // Continuing a transferred case: which ambulance handed it over, and why.
+        previousTask: { select: { id: true, status: true, handedOverAt: true, handoverReason: true, handoverStage: true, vehicle: { select: { id: true, registrationNumber: true } } } },
         vehicle: { select: { id: true, registrationNumber: true, imei: true } },
         ...taskCrewInclude,
       },
@@ -695,7 +786,7 @@ export class TaskService {
       this.app.prisma.task.findMany({
         where: {
           OR: [{ driverId: userId }, { emtId: userId }, { emt2Id: userId }, { nurseId: userId }, { nurse2Id: userId }],
-          status: { in: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
+          status: { in: [TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.HANDED_OVER] },
         },
         orderBy: { receivedAt: 'desc' },
         skip,
@@ -710,13 +801,15 @@ export class TaskService {
           vehicle: { select: { id: true, registrationNumber: true } },
           _count: { select: { patientCareReports: true } },
           facilityRatings: { select: { id: true, stars: true, tags: true, comment: true, createdAt: true, userId: true, user: { select: { name: true, role: true } } }, orderBy: { createdAt: 'asc' } },
+          previousTask: { select: { id: true, status: true, handedOverAt: true, handoverReason: true, handoverStage: true, vehicle: { select: { id: true, registrationNumber: true } } } },
+          nextTask: { select: { id: true, status: true, handedOverAt: true, handoverReason: true, handoverStage: true, vehicle: { select: { id: true, registrationNumber: true } } } },
           patientCareReports: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
         },
       }),
       this.app.prisma.task.count({
         where: {
           OR: [{ driverId: userId }, { emtId: userId }, { emt2Id: userId }, { nurseId: userId }, { nurse2Id: userId }],
-          status: { in: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
+          status: { in: [TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.HANDED_OVER] },
         },
       }),
     ]);
