@@ -644,8 +644,35 @@ export class TaskService {
     const sceneLat = task.pickupLat ?? task.incident.lat;
     const sceneLng = task.pickupLng ?? task.incident.lng;
 
+    // A case transferred with the patient already on board (it has a pickup
+    // point) resumes where it was handed over: accepting it puts the new crew
+    // straight at "patient on board", not back at the start of the scene
+    // run. The earlier stages keep the original crew's times; the crew then
+    // collects the patient and taps "leave for the hospital" as usual.
+    const resumeOnBoard =
+      task.previousTaskId != null &&
+      task.pickupLat != null &&
+      (newStatus === TaskStatus.ACCEPTED || newStatus === TaskStatus.EN_ROUTE) &&
+      (task.status === TaskStatus.PENDING || task.status === TaskStatus.ACCEPTED);
+    if (resumeOnBoard) {
+      const previous = await this.app.prisma.task.findUnique({
+        where: { id: task.previousTaskId! },
+        select: { sceneArrivalAt: true, patientPickAt: true },
+      });
+      newStatus = TaskStatus.PATIENT_PICKED;
+      Object.assign(updateData, {
+        status: TaskStatus.PATIENT_PICKED,
+        acceptedAt: task.acceptedAt ?? now,
+        sceneArrivalAt: task.sceneArrivalAt ?? previous?.sceneArrivalAt ?? null,
+        patientPickAt: task.patientPickAt ?? previous?.patientPickAt ?? now,
+        // This ambulance -> the patient, and the patient -> the hospital.
+        ...this.sceneLeg(task, vehicleLat, vehicleLng, sceneLat, sceneLng),
+        ...this.facilityLeg(task, sceneLat, sceneLng),
+      });
+    }
+
     // Map status to timestamp field
-    switch (newStatus) {
+    switch (resumeOnBoard ? null : newStatus) {
       case TaskStatus.ACCEPTED:
         updateData.acceptedAt = now;
         Object.assign(updateData, this.sceneLeg(task, vehicleLat, vehicleLng, sceneLat, sceneLng));

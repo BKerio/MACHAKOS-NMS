@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { Prisma, type CheckInLocationMatch } from '../../generated/prisma/index.js';
 import { Coordinates, Role, VehicleStatus } from '../../shared/types/index.js';
-import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { reverseGeocodePlace } from '../../shared/utils/geocode.js';
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -203,7 +203,13 @@ export class FleetService {
       { lat: vehicle.trackerLat, lng: vehicle.trackerLng, at: vehicle.trackerAt },
     );
 
-    // The driver seat is single, so a new driver takes it over.
+    // One driver per ambulance: if another driver holds the seat, it's taken.
+    if (vehicle.currentDriverId && vehicle.currentDriverId !== userId) {
+      const holder = await this.app.prisma.user.findUnique({ where: { id: vehicle.currentDriverId }, select: { name: true } });
+      throw new ConflictError(
+        `${vehicle.registrationNumber} already has a driver checked in${holder?.name ? ` (${holder.name})` : ''}. Choose another ambulance.`,
+      );
+    }
     const field = slots[0];
 
     // 1. Persist the accountability selfie to disk
