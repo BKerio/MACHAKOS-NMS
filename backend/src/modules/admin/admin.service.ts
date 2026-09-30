@@ -208,7 +208,20 @@ export class AdminService {
     const where: any = {};
     if (filters.subCounty) where.subCounty = filters.subCounty;
     if (filters.kephLevel) where.kephLevel = filters.kephLevel;
-    return this.app.prisma.facility.findMany({ where, orderBy: { name: 'asc' } });
+    const [facilities, ratings] = await Promise.all([
+      this.app.prisma.facility.findMany({ where, orderBy: { name: 'asc' } }),
+      // Crew ratings after each case (1-5 stars), summarised per facility.
+      this.app.prisma.facilityRating.groupBy({ by: ['facilityId'], _avg: { stars: true }, _count: { _all: true } }),
+    ]);
+    const byFacility = new Map(ratings.map((r) => [r.facilityId, r]));
+    return facilities.map((f) => {
+      const r = byFacility.get(f.id);
+      return {
+        ...f,
+        ratingAverage: r?._avg.stars == null ? null : Math.round(r._avg.stars * 10) / 10,
+        ratingCount: r?._count._all ?? 0,
+      };
+    });
   }
 
   async createFacility(data: {

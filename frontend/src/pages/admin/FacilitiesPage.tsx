@@ -15,6 +15,7 @@ import {
   X as XIcon,
   MapPin,
 } from 'lucide-react';
+import { RatingSummary } from '@/components/shared/FacilityRating';
 import AppLoader from '@/components/shared/AppLoader';
 import type { LucideIcon } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -346,10 +347,10 @@ function FacilitiesPage() {
               <p className="font-black text-xs tracking-widest animate-pulse" style={{ color: 'var(--muted)' }}>Loading facilities…</p>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[700px]">
+            <table className="w-full text-left border-collapse min-w-[820px]">
               <thead>
                 <tr className="border-b" style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}>
-                  {['Facility', 'Type', 'KEPH Level', 'Sub-County', 'Coordinates', 'Status', ''].map(h => (
+                  {['Facility', 'Type', 'KEPH Level', 'Sub-County', 'Crew rating', 'Coordinates', 'Status', ''].map(h => (
                     <th key={h} className="px-6 py-4 font-sans text-[10px] font-black tracking-[0.2em]" style={{ color: 'var(--muted)' }}>
                       {h}
                     </th>
@@ -359,7 +360,7 @@ function FacilitiesPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-20 text-center">
+                    <td colSpan={8} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-4">
                         <Hospital size={48} style={{ color: 'var(--border)' }} />
                         <p className="font-bold text-sm tracking-widest" style={{ color: 'var(--muted)' }}>No facilities found</p>
@@ -398,6 +399,9 @@ function FacilitiesPage() {
                         <MapPin size={13} style={{ color: 'var(--muted-2)' }} />
                         {f.subCounty}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <RatingSummary average={f.ratingAverage} count={f.ratingCount} />
                     </td>
                     <td className="px-6 py-4 font-mono text-xs" style={{ color: 'var(--muted-2)' }}>
                       {f.lat.toFixed(4)}, {f.lng.toFixed(4)}

@@ -262,6 +262,7 @@ export class IncidentService {
             emt2:   { select: { name: true, phone: true } },
             nurse:  { select: { name: true, phone: true } },
             nurse2: { select: { name: true, phone: true } },
+            facilityRatings: { select: { id: true, stars: true, tags: true, comment: true, createdAt: true, userId: true, user: { select: { name: true, role: true } } }, orderBy: { createdAt: 'asc' } },
           },
           orderBy: { receivedAt: 'desc' },
         },

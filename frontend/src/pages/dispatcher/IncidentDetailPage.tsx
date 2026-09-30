@@ -30,6 +30,7 @@ import {
   Building2 as Buildings,
   Upload as UploadSimple,
 } from 'lucide-react';
+import { FacilityRatingPanel } from '@/components/shared/FacilityRating';
 import AppLoader from '@/components/shared/AppLoader';
 import { useDirections } from '@/hooks/useDirections';
 import api from '@/api/client';
@@ -1394,6 +1395,11 @@ function IncidentDetailPage() {
                 <p className="text-[11px] text-slate-400 mt-1">Straight-line from the scene to the recommended facility.</p>
               </div>
             </div>
+
+            {/* How the crew rated the receiving facility (after the case) */}
+            {incident.targetFacility && (activeTask.status === 'COMPLETED' || (activeTask.facilityRatings?.length ?? 0) > 0) && (
+              <FacilityRatingPanel facilityName={incident.targetFacility.name} ratings={activeTask.facilityRatings ?? []} />
+            )}
 
             {/* Hospital Handover Vitals - captured by crew at handover (#7) */}
             {activeTask.handoverVitals && Object.values(activeTask.handoverVitals).some(Boolean) && (

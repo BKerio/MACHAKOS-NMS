@@ -701,9 +701,15 @@ export class TaskService {
         skip,
         take: limit,
         include: {
-          incident: { select: { id: true, caseNumber: true, chiefComplaint: true, locationName: true, subCounty: true } },
+          incident: {
+            select: {
+              id: true, caseNumber: true, chiefComplaint: true, locationName: true, subCounty: true,
+              targetFacility: { select: { id: true, name: true } },
+            },
+          },
           vehicle: { select: { id: true, registrationNumber: true } },
           _count: { select: { patientCareReports: true } },
+          facilityRatings: { select: { id: true, stars: true, tags: true, comment: true, createdAt: true, userId: true, user: { select: { name: true, role: true } } }, orderBy: { createdAt: 'asc' } },
           patientCareReports: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
         },
       }),

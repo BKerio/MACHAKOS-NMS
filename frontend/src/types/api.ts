@@ -125,6 +125,20 @@ export interface Facility {
   lat: number;
   lng: number;
   isActive: boolean;
+  /** Average of crew ratings after cases (1-5), from the admin facilities list. */
+  ratingAverage?: number | null;
+  ratingCount?: number;
+}
+
+/** A crew member's rating of the receiving facility after a case. */
+export interface FacilityRating {
+  id: string;
+  stars: number;
+  tags: string[];
+  comment?: string | null;
+  createdAt: string;
+  userId: string;
+  user?: { name: string; role: string } | null;
 }
 
 export type InventoryCategory =
@@ -358,6 +372,7 @@ export interface Task {
   distanceToSceneKm?: number | null;
   /** Straight-line km from the scene to the recommended facility, captured on patient pickup. */
   sceneToFacilityKm?: number | null;
+  facilityRatings?: FacilityRating[];
   incidentId: string;
   vehicleId: string;
   vehicle?: Vehicle;
