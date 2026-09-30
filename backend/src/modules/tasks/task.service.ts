@@ -3,7 +3,7 @@ import { TaskStatus, IncidentStatus, Role, VehicleStatus } from '../../shared/ty
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
-import { sendAdvantaSms } from '../../services/sms.js';
+import { SmsGatewayService } from '../settings/sms-gateway.service.js';
 import { getChecklistSummary, checklistIncompleteMessage } from '../fleet/checklist.js';
 import {
   clearedCrew,
@@ -46,9 +46,11 @@ type AssignmentIncident = {
 
 export class TaskService {
   private pushSender: PushSenderService;
+  private smsGateway: SmsGatewayService;
 
   constructor(private app: FastifyInstance) {
     this.pushSender = new PushSenderService(app);
+    this.smsGateway = new SmsGatewayService(app);
   }
 
   /** Build the crew SMS text for a new dispatch/reassignment. */
@@ -71,7 +73,7 @@ export class TaskService {
     const message = this.buildAssignmentSms(incident, registrationNumber);
     for (const member of crew) {
       if (!member?.phone) continue;
-      sendAdvantaSms(member.phone, message).catch((err) => {
+      this.smsGateway.sendSystemSms(member.phone, message).catch((err) => {
         this.app.log.warn({ err, phone: member.phone }, 'crew assignment SMS failed');
       });
     }

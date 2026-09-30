@@ -3,6 +3,7 @@ import { SmsProvider } from '../../shared/types/index.js';
 import { BadRequestError, NotFoundError } from '../../shared/errors/AppError.js';
 import { encryptJson, decryptJson } from '../../shared/utils/crypto.js';
 import { AdvantaSmsClient, AdvantaCredentials } from '../sms/advanta.client.js';
+import { isAdvantaSmsConfigured, sendAdvantaSms, sendAdvantaSmsWithCreds, type AdvantaCreds } from '../../services/sms.js';
 import {
   PROVIDER_FIELDS, PROVIDER_LABELS, isProviderImplemented, requiredFieldsPresent, maskFields,
 } from './sms-provider-registry.js';
@@ -183,5 +184,22 @@ export class SmsGatewayService {
 
   async isEnabled(): Promise<boolean> {
     return (await this.getActiveClient()) !== null;
+  }
+
+  /**
+   * System SMS (login codes, crew case alerts): sends through the gateway an
+   * admin activated in Settings, so saving credentials there is enough - the
+   * ADVANTA_* env vars are only a fallback for deployments with no active
+   * gateway row. Throws when neither is usable, so callers can report it.
+   */
+  async sendSystemSms(toPhone: string, message: string): Promise<void> {
+    const active = await this.getActiveClient();
+    if (active) {
+      return sendAdvantaSmsWithCreds(active.fields as unknown as AdvantaCreds, toPhone, message);
+    }
+    if (isAdvantaSmsConfigured()) {
+      return sendAdvantaSms(toPhone, message);
+    }
+    throw new Error('No SMS gateway is active. Activate one under Admin → Notifications → SMS Gateway.');
   }
 }

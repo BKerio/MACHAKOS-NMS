@@ -233,15 +233,31 @@ export class FleetService {
       ? await reverseGeocodePlace(ambulance.lat, ambulance.lng, this.app.config.GOOGLE_MAPS_KEY)
       : vehicle.lastLocationName ?? null;
 
-    // 2. Clear user from any vehicle (or other slot) they previously held
+    // 2. Claim the driver seat atomically: the check above ran before the
+    // selfie upload and geocode, so another driver may have taken the seat in
+    // the meantime. Only one conditional update can win; the loser gets the
+    // same "already has a driver" conflict instead of silently replacing them.
+    const claimed = await this.app.prisma.vehicle.updateMany({
+      where: { id: vehicleId, OR: [{ [field]: null }, { [field]: userId }] },
+      data: {
+        [field]: userId,
+        ...(role === Role.DRIVER ? { checklistResetAt: new Date() } : {}),
+      },
+    });
+    if (claimed.count === 0) {
+      await fs.unlink(storedPath).catch(() => {});
+      throw new ConflictError(`${vehicle.registrationNumber} was just taken by another driver. Choose another ambulance.`);
+    }
+
+    // 3. Clear user from any other vehicle (or other slot) they previously held
     for (const slot of slots) {
       await this.app.prisma.vehicle.updateMany({
-        where: { [slot]: userId },
+        where: { [slot]: userId, id: { not: vehicleId } },
         data: { [slot]: null },
       });
     }
 
-    // 3. Record the check-in event: selfie, the ambulance's place, the phone
+    // 4. Record the check-in event: selfie, the ambulance's place, the phone
     // fix (lat/lng - verification evidence only), the tracker fix and verdict
     const checkIn = await this.app.prisma.checkIn.create({
       data: {
@@ -263,18 +279,12 @@ export class FleetService {
       },
     });
 
-    // 4. Set the crew FK. The phone GPS is stored on the CheckIn row only -
-    // the live map follows the ambulance tracker (trackerLat / lastLat written
-    // by the Uffizio poller), never the driver's check-in location.
-    // A new driver starting a shift resets the equipment checklist - it must
-    // be reconfirmed each shift. EMT/nurse checking in joins an already-
-    // started shift, so it doesn't reset anything already confirmed.
-    const updated = await this.app.prisma.vehicle.update({
+    // The crew FK was set by the claim in step 2 (which also reset the
+    // equipment checklist - it must be reconfirmed each shift). The phone GPS
+    // is stored on the CheckIn row only; the live map follows the ambulance
+    // tracker, never the driver's check-in location.
+    const updated = await this.app.prisma.vehicle.findUniqueOrThrow({
       where: { id: vehicleId },
-      data: {
-        [field]: userId,
-        ...(role === Role.DRIVER ? { checklistResetAt: new Date() } : {}),
-      },
       include: crewInclude,
     });
 

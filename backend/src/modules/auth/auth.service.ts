@@ -3,7 +3,8 @@ import crypto from 'node:crypto';
 import { hashPassword, comparePassword } from '../../shared/utils/hash.js';
 import { Role } from '../../shared/types/index.js';
 import { AppError, UnauthorizedError, ConflictError, BadRequestError, NotFoundError } from '../../shared/errors/AppError.js';
-import { normalizeKenyanMobile, sendAdvantaSms } from '../../services/sms.js';
+import { normalizeKenyanMobile } from '../../services/sms.js';
+import { SmsGatewayService } from '../settings/sms-gateway.service.js';
 import { parseGoogleClientIds, verifyGoogleIdToken } from '../../services/googleAuth.js';
 import { getOtpStore } from './otp.store.js';
 
@@ -235,7 +236,7 @@ export class AuthService {
     await store.set(cooldownKey, '1', OTP_COOLDOWN_SECONDS);
 
     try {
-      await sendAdvantaSms(phone, `Your NMS login code is ${code}. It expires in 5 minutes. Do not share this code.`);
+      await new SmsGatewayService(this.app).sendSystemSms(phone, `Your NMS login code is ${code}. It expires in 5 minutes. Do not share this code.`);
     } catch (err) {
       // The code is worthless if the text never left, and keeping the cooldown
       // would lock them out for a minute over a gateway fault they can't fix.
