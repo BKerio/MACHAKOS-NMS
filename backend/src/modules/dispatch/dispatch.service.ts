@@ -254,7 +254,11 @@ export class DispatchService {
         distanceKm: haversineDistance(lat, lng, v.lat, v.lng),
       }));
 
-      vehiclesWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
+      // Units that can take a case come first, then by distance - so a cluster
+      // of busy or broken-down vehicles near the scene can't push every ready
+      // one past the limit.
+      const notReady = (v: { status?: string }) => (v.status === 'READY' ? 0 : 1);
+      vehiclesWithDistance.sort((a, b) => notReady(a) - notReady(b) || a.distanceKm - b.distanceKm);
       const top = vehiclesWithDistance.slice(0, limit);
 
       // Enrich with crew data from DB
@@ -282,12 +286,16 @@ export class DispatchService {
 
     // Redis empty - fall back to DB vehicles with crew data
     const where = agencyId ? { isActive: true, agencyId } : { isActive: true };
-    const dbVehicles = await this.app.prisma.vehicle.findMany({
-      where,
-      take: limit,
-      orderBy: { registrationNumber: 'asc' },
-      include: crewInclude,
-    });
+    // Ready units first (same reason as above), then by plate.
+    const dbVehicles = (
+      await this.app.prisma.vehicle.findMany({
+        where,
+        orderBy: { registrationNumber: 'asc' },
+        include: crewInclude,
+      })
+    )
+      .sort((a, b) => (a.status === 'READY' ? 0 : 1) - (b.status === 'READY' ? 0 : 1))
+      .slice(0, limit);
     const checkIns = await this.fleetService.driverCheckIns(dbVehicles);
 
     return this.withChecklistSummary(

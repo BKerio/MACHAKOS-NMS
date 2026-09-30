@@ -7,6 +7,7 @@ import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { assessCheckInLocation, formatDistance } from './checkin-location.js';
 import { PushSenderService } from '../notifications/push-sender.service.js';
+import { findReadyUnits } from './readiness.js';
 import { clearedCrew, crewInclude, isCrewComplete, slotsForRole, EMT_SLOTS, NURSE_SLOTS, MEDIC_SLOTS, type CrewSlot } from './crew.js';
 
 export class FleetService {
@@ -562,13 +563,32 @@ export class FleetService {
     });
   }
 
-  /** EMT / nurse users in an agency that a driver can pick from when assigning crew. */
-  listAssignableCrew(agencyId: string) {
-    return this.app.prisma.user.findMany({
-      where: { agencyId, isActive: true, role: { in: [Role.EMT, Role.NURSE] } },
-      select: { id: true, name: true, phone: true, role: true },
-      orderBy: { name: 'asc' },
-    });
+  /**
+   * EMT / nurse users in an agency that a driver can pick from when assigning
+   * crew. `onVehicle` is the ambulance a medic is already crewing (if any) -
+   * the picker shows them locked, and assignCrew refuses them.
+   */
+  async listAssignableCrew(agencyId: string) {
+    const [members, vehicles] = await Promise.all([
+      this.app.prisma.user.findMany({
+        where: { agencyId, isActive: true, role: { in: [Role.EMT, Role.NURSE] } },
+        select: { id: true, name: true, phone: true, role: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.app.prisma.vehicle.findMany({
+        where: { OR: MEDIC_SLOTS.map((slot) => ({ [slot]: { not: null } })) },
+        select: { id: true, registrationNumber: true, currentEmtId: true, currentEmt2Id: true, currentNurseId: true, currentNurse2Id: true },
+      }),
+    ]);
+
+    const onVehicle = new Map<string, { id: string; registrationNumber: string }>();
+    for (const v of vehicles) {
+      for (const slot of MEDIC_SLOTS) {
+        const id = v[slot];
+        if (id) onVehicle.set(id, { id: v.id, registrationNumber: v.registrationNumber });
+      }
+    }
+    return members.map((m) => ({ ...m, onVehicle: onVehicle.get(m.id) ?? null }));
   }
 
   /**
@@ -622,23 +642,50 @@ export class FleetService {
       throw new BadRequestError('Provide emtId, emt2Id, nurseId and/or nurse2Id to update');
     }
 
-    // A person sits in one slot on one vehicle: free each newly placed medic
-    // from other vehicles, and from any other slot on this one.
+    // A medic moved between slots on this vehicle vacates the old slot.
     for (const [id, target] of placed) {
       for (const slot of MEDIC_SLOTS) {
-        await this.app.prisma.vehicle.updateMany({
-          where: { [slot]: id, NOT: { id: vehicleId } },
-          data: { [slot]: null },
-        });
         if (slot !== target && vehicle[slot] === id && !(slot in data)) data[slot] = null;
       }
     }
 
-    const updated = await this.app.prisma.vehicle.update({
-      where: { id: vehicleId },
-      data,
-      include: crewInclude,
-    });
+    // A medic already crewing another ambulance can't be taken from it - that
+    // driver would silently lose them. The check and the write share one
+    // serializable transaction, so two drivers picking the same medic at the
+    // same moment can't both succeed.
+    let updated;
+    try {
+      updated = await this.app.prisma.$transaction(
+        async (tx) => {
+          if (placed.size > 0) {
+            const ids = [...placed.keys()];
+            const elsewhere = await tx.vehicle.findFirst({
+              where: {
+                NOT: { id: vehicleId },
+                OR: MEDIC_SLOTS.map((slot) => ({ [slot]: { in: ids } })),
+              },
+              select: { registrationNumber: true, currentEmtId: true, currentEmt2Id: true, currentNurseId: true, currentNurse2Id: true },
+            });
+            if (elsewhere) {
+              const takenId = MEDIC_SLOTS.map((s) => elsewhere[s]).find((id) => id && placed.has(id));
+              const who = takenId ? await tx.user.findUnique({ where: { id: takenId }, select: { name: true } }) : null;
+              throw new ConflictError(
+                `${who?.name ?? 'This medic'} is already on the crew of ${elsewhere.registrationNumber}. ` +
+                  'Their driver must remove them before they can join another ambulance.',
+              );
+            }
+          }
+          return tx.vehicle.update({ where: { id: vehicleId }, data, include: crewInclude });
+        },
+        { isolationLevel: 'Serializable' },
+      );
+    } catch (err) {
+      // P2034: the database aborted one of two overlapping assignments.
+      if ((err as { code?: string }).code === 'P2034') {
+        throw new ConflictError('That medic was just assigned to another ambulance. Refresh and choose someone else.');
+      }
+      throw err;
+    }
     // Medics just taken off this ambulance hear about it too.
     this.emitVehicleCrewUpdate(updated, MEDIC_SLOTS.map((s) => vehicle[s]));
 
@@ -663,18 +710,7 @@ export class FleetService {
    * handover / case reassignment.
    */
   async listAvailableVehiclesForHandover(agencyId: string, excludeVehicleId?: string) {
-    const vehicles = await this.app.prisma.vehicle.findMany({
-      where: {
-        agencyId,
-        isActive: true,
-        status: VehicleStatus.READY,
-        currentDriverId: { not: null },
-        ...(excludeVehicleId ? { id: { not: excludeVehicleId } } : {}),
-      },
-      orderBy: { registrationNumber: 'asc' },
-      include: crewInclude,
-    });
-    // Handover goes through the same crew rule as dispatch.
-    return vehicles.filter(isCrewComplete);
+    // Same bar as transfer and dispatch: crew, checklist, no open task.
+    return findReadyUnits(this.app.prisma, { agencyId, excludeVehicleId });
   }
 }

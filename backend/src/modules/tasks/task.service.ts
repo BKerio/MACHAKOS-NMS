@@ -3,8 +3,8 @@ import { TaskStatus, IncidentStatus, Role, VehicleStatus } from '../../shared/ty
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
-import { SmsGatewayService } from '../settings/sms-gateway.service.js';
 import { getChecklistSummary, checklistIncompleteMessage } from '../fleet/checklist.js';
+import { findReadyUnits } from '../fleet/readiness.js';
 import {
   clearedCrew,
   crewInclude,
@@ -46,38 +46,14 @@ type AssignmentIncident = {
 
 export class TaskService {
   private pushSender: PushSenderService;
-  private smsGateway: SmsGatewayService;
 
   constructor(private app: FastifyInstance) {
     this.pushSender = new PushSenderService(app);
-    this.smsGateway = new SmsGatewayService(app);
   }
 
-  /** Build the crew SMS text for a new dispatch/reassignment. */
-  private buildAssignmentSms(incident: AssignmentIncident, registrationNumber: string): string {
-    const nature = [incident.alertNature, incident.alertNatureDetail].filter(Boolean).join(' – ') || incident.chiefComplaint;
-    const location = [incident.locationName, incident.subCounty].filter(Boolean).join(', ');
-    const maps = incident.lat != null && incident.lng != null ? ` Map: https://maps.google.com/?q=${incident.lat},${incident.lng}` : '';
-    return `EOC DISPATCH ${incident.caseNumber} | Vehicle ${registrationNumber} | ${nature} | Location: ${location} | ${incident.chiefComplaint}.${maps}`;
-  }
-
-  /**
-   * Fire-and-forget SMS to the driver/EMT/nurse just assigned to a task.
-   * Never throws into the dispatch flow - a failed text shouldn't block dispatch.
-   */
-  private notifyCrewOfAssignment(
-    crew: (({ phone: string | null }) | null | undefined)[],
-    incident: AssignmentIncident,
-    registrationNumber: string,
-  ): void {
-    const message = this.buildAssignmentSms(incident, registrationNumber);
-    for (const member of crew) {
-      if (!member?.phone) continue;
-      this.smsGateway.sendSystemSms(member.phone, message).catch((err) => {
-        this.app.log.warn({ err, phone: member.phone }, 'crew assignment SMS failed');
-      });
-    }
-  }
+  // Crew are told about a new case by push notification (plus the live
+  // socket event) only. The per-crew-member assignment SMS was removed on
+  // purpose: it duplicated the push and cost an SMS credit per crew member.
 
   /**
    * Fire-and-forget mobile push to the driver/EMT/nurse just assigned to a
@@ -309,12 +285,7 @@ export class TaskService {
     // Notify crew via socket
     this.app.io.to(vehicleCrewIds(vehicle).map((id) => `user:${id}`)).emit('task:assigned', task);
 
-    // Notify crew via SMS + push (fire-and-forget - never blocks dispatch)
-    this.notifyCrewOfAssignment(
-      [vehicle.currentDriver, vehicle.currentEmt, vehicle.currentEmt2, vehicle.currentNurse, vehicle.currentNurse2],
-      incident,
-      vehicle.registrationNumber,
-    );
+    // Notify crew via push (fire-and-forget - never blocks dispatch)
     this.notifyCrewOfPushAssignment(vehicleCrewIds(vehicle), incident, vehicle.registrationNumber);
 
     return task;
@@ -408,33 +379,23 @@ export class TaskService {
     };
   }
 
+  /**
+   * Every ready ambulance in the agency (see findReadyUnits - readiness first,
+   * never "whatever is nearest"), then ordered by distance to where it would
+   * have to go. Units with no GPS position are still offered, last.
+   */
   private async rankedTransferVehicles(agencyId: string, excludeVehicleId: string, lat: number | null, lng: number | null) {
-    const ready = (
-      await this.app.prisma.vehicle.findMany({
-        where: {
-          agencyId,
-          isActive: true,
-          status: VehicleStatus.READY,
-          currentDriverId: { not: null },
-          id: { not: excludeVehicleId },
-        },
-        include: { currentDriver: { select: { id: true, name: true, phone: true } } },
-      })
-    ).filter(isCrewComplete);
+    const ready = await findReadyUnits(this.app.prisma, { agencyId, excludeVehicleId });
 
-    const eligible = [];
-    for (const vehicle of ready) {
-      const checklist = await getChecklistSummary(this.app.prisma, vehicle.id);
-      if (!checklist.complete) continue;
+    const eligible = ready.map((vehicle) => {
       const vLat = vehicle.trackerLat ?? vehicle.lastLat;
       const vLng = vehicle.trackerLat != null ? vehicle.trackerLng : vehicle.lastLng;
       const distanceKm =
         lat != null && lng != null && vLat != null && vLng != null
           ? Math.round(haversineDistance(vLat, vLng, lat, lng) * 10) / 10
           : null;
-      eligible.push({ vehicle, distanceKm });
-    }
-    // Nearest first; units without a GPS position go last.
+      return { vehicle, distanceKm };
+    });
     return eligible.sort((a, b) => (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY));
   }
 
@@ -503,6 +464,15 @@ export class TaskService {
       }
       if (newVehicle.agencyId !== task.vehicle.agencyId) {
         throw new BadRequestError('Replacement vehicle must belong to the same agency');
+      }
+      const stillOnCase = await this.app.prisma.task.count({
+        where: {
+          vehicleId: newVehicle.id,
+          status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.HANDED_OVER] },
+        },
+      });
+      if (stillOnCase > 0) {
+        throw new BadRequestError(`${newVehicle.registrationNumber} is still on another case`);
       }
     } else if (data.autoAssign) {
       const ranked = await this.rankedTransferVehicles(task.vehicle.agencyId, task.vehicleId, target.lat, target.lng);
@@ -592,11 +562,6 @@ export class TaskService {
       .to([...vehicleCrewIds(newVehicle).map((id) => `user:${id}`), `role:${Role.DISPATCHER}`])
       .emit('task:assigned', newTask);
 
-    this.notifyCrewOfAssignment(
-      [newTask.driver, newTask.emt, newTask.emt2, newTask.nurse, newTask.nurse2],
-      newTask.incident,
-      newVehicle.registrationNumber,
-    );
     this.notifyCrewOfPushAssignment(vehicleCrewIds(newVehicle), newTask.incident, newVehicle.registrationNumber);
 
     return { handedOver, newTask, checkedOutVehicleId: breakdown ? null : task.vehicleId };

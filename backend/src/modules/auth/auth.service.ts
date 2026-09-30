@@ -275,7 +275,10 @@ export class AuthService {
       throw new UnauthorizedError('Incorrect code');
     }
 
-    await store.del(otpKey);
+    // The code is spent, so its resend cooldown goes with it: otherwise a crew
+    // member who logs out within a minute of signing in is told "a code was
+    // already sent" while no usable code exists, and is locked out.
+    await store.del(otpKey, `otp:cooldown:${phone}`);
 
     const user = await this.app.prisma.user.findUnique({ where: { id: record.userId } });
     if (!user || !user.isActive) throw new UnauthorizedError('Account is no longer active');
