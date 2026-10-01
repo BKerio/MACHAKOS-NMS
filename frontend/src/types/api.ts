@@ -379,6 +379,19 @@ export interface Task {
   handoverLng?: number | null;
   handoverBy?: { name: string; role: string } | null;
   pickupName?: string | null;
+  /** On a transferred-in task with the patient already on board: where to
+   *  collect them (the broken-down ambulance), instead of the scene. */
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  /** The task this one continues, when the case was transferred in. */
+  previousTask?: {
+    id: string;
+    status: TaskStatus;
+    handedOverAt?: string | null;
+    handoverReason?: string | null;
+    handoverStage?: TaskStatus | null;
+    vehicle?: { id: string; registrationNumber: string } | null;
+  } | null;
   incidentId: string;
   vehicleId: string;
   vehicle?: Vehicle;

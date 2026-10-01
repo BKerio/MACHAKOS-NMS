@@ -38,13 +38,14 @@ export const NEXT_STATUS: Partial<Record<TaskStatus, TaskStatus>> = {
 };
 
 export const ACTION_LABELS: Partial<Record<TaskStatus, string>> = {
-  PENDING: 'Accept Assignment',
-  ACCEPTED: 'Start En Route',
-  EN_ROUTE: 'Arrived at Scene',
-  AT_SCENE: 'Patient Picked Up',
-  PATIENT_PICKED: 'Start En Route to Hospital',
-  EN_ROUTE_TO_FACILITY: 'Arrived at the hospital',
-  AT_HOSPITAL: 'Complete Task',
+  // Same wording as the crew app's case button (task_screen.dart).
+  PENDING: 'Accept call',
+  ACCEPTED: 'Start en route',
+  EN_ROUTE: 'Arrived at scene',
+  AT_SCENE: 'Patient on board',
+  PATIENT_PICKED: 'Leave for the hospital',
+  EN_ROUTE_TO_FACILITY: 'Arrived at hospital',
+  AT_HOSPITAL: 'Complete case',
 };
 
 export const STATUS_ORDER: TaskStatus[] = [

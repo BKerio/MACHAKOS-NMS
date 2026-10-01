@@ -43,6 +43,7 @@ const OperatorPatientDataPage = lazy(() => import('@/pages/operator/PatientDataP
 const OperatorPatientCareReportPage = lazy(() => import('@/pages/operator/PatientCareReportPage'));
 const OperatorInventoryPage = lazy(() => import('@/pages/operator/InventoryPage'));
 const OperatorChecklistPage = lazy(() => import('@/pages/operator/ChecklistPage'));
+const OperatorTransferCasePage = lazy(() => import('@/pages/operator/TransferCasePage'));
 const ProfilePage = lazy(() => import('@/pages/shared/ProfilePage'));
 // Unauthenticated read-only display for the call-centre TV (token-gated).
 const WallboardDisplayPage = lazy(() => import('@/pages/public/WallboardDisplayPage'));
@@ -360,6 +361,15 @@ export const router = createBrowserRouter([
         element: (
           <RoleGuard allowed={['DRIVER', 'EMT', 'NURSE']}>
             <OperatorChecklistPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        // Only the driver transfers a case - same rule as the crew app (and the server).
+        path: 'operator/tasks/:taskId/transfer',
+        element: (
+          <RoleGuard allowed={['DRIVER']}>
+            <OperatorTransferCasePage />
           </RoleGuard>
         ),
       },

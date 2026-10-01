@@ -6,14 +6,13 @@ import {
   ArrowRight, XCircle, ArrowLeftRight, Ambulance, ShieldAlert,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
-import { getActiveTask, getMyCheckIn, updateTaskStatus, closeIncident, handoverTask, getErrorMessage } from '@/api/responder';
+import { getActiveTask, getMyCheckIn, updateTaskStatus, closeIncident, getErrorMessage } from '@/api/responder';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { socket } from '@/lib/socket';
 import StatusBadge from '@/components/operator/StatusBadge';
 import EndCaseModal from '@/components/operator/EndCaseModal';
-import HandoverModal from '@/components/operator/HandoverModal';
-import { ACTION_LABELS, getNextStatus } from '@/utils/taskStatus';
+import { ACTION_LABELS, STATUS_LABELS, getNextStatus } from '@/utils/taskStatus';
 import { inAppNavigateUrl } from '@/utils/navigateUrl';
 import type { PatientVitals, MaternityVitals } from '@/types/api';
 
@@ -43,7 +42,6 @@ function AssignmentPage() {
   const { addNotification } = useNotificationStore();
   const queryClient = useQueryClient();
   const [showEndCase, setShowEndCase] = useState(false);
-  const [showHandover, setShowHandover] = useState(false);
 
   const { data: task, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['operator', 'active-task'],
@@ -64,9 +62,19 @@ function AssignmentPage() {
 
   const statusMutation = useMutation({
     mutationFn: (status: string) => updateTaskStatus(task!.id, status as any),
-    onSuccess: (_data, status) => {
+    onSuccess: (updated, status) => {
       queryClient.invalidateQueries({ queryKey: ['operator', 'active-task'] });
-      addNotification({ type: 'success', title: 'Status updated', message: ACTION_LABELS[task!.status] ?? '' });
+      if (status === 'ACCEPTED' && collectsFromAmbulance) {
+        // Transfer with the patient on board: the case resumed at "patient on board".
+        const km = updated?.distanceToSceneKm;
+        addNotification({
+          type: 'success',
+          title: 'Transfer accepted',
+          message: `Collect the patient from ${firstStopName}${km != null ? ` · ${km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`} away` : ''}.`,
+        });
+      } else {
+        addNotification({ type: 'success', title: 'Status updated', message: ACTION_LABELS[task!.status] ?? '' });
+      }
       if (status === 'COMPLETED') {
         navigate(`/operator/tasks/${task!.id}/patient-care-report?caseNumber=${encodeURIComponent(task!.incident.caseNumber)}`);
       }
@@ -89,33 +97,20 @@ function AssignmentPage() {
     onError: (err) => addNotification({ type: 'error', title: 'Could not end case', message: getErrorMessage(err) }),
   });
 
-  const handoverMutation = useMutation({
-    mutationFn: (payload: { reason: string; autoAssign: boolean; newVehicleId?: string; breakdown?: boolean }) =>
-      handoverTask(task!.id, payload),
-    onSuccess: (result, payload) => {
-      setShowHandover(false);
-      queryClient.invalidateQueries({ queryKey: ['operator', 'active-task'] });
-      queryClient.invalidateQueries({ queryKey: ['operator', 'my-checkin'] });
-      const receiver = result.newTask?.vehicle?.registrationNumber;
-      const after = payload.breakdown
-        ? 'This ambulance is marked unavailable; your crew stays checked in with it.'
-        : "You're checked out.";
-      addNotification({
-        type: 'success',
-        title: receiver ? 'Case transferred' : 'Case handed back',
-        message: receiver ? `Passed to ${receiver}. ${after}` : `Dispatch will find another ambulance. ${after}`,
-      });
-    },
-    onError: (err) => addNotification({ type: 'error', title: 'Couldn’t transfer the case', message: getErrorMessage(err) }),
-  });
-
   const nextStatus = task ? getNextStatus(task.status) : null;
-  const actionLabel = task ? ACTION_LABELS[task.status] : null;
-  // Drivers get the in-app map (see NavigatePage); other crew still open Google Maps.
-  const inAppMapsUrl = task ? inAppNavigateUrl(task.incident.lat, task.incident.lng, task.incident.locationName) : null;
-  const externalMapsUrl = task?.incident.lat != null && task?.incident.lng != null
-    ? `https://maps.google.com/?q=${task.incident.lat},${task.incident.lng}`
+  const transferredFrom = task?.previousTask ?? null;
+  // A transfer with the patient already on board: the crew collects them from
+  // the broken-down ambulance, not the scene (same as the app).
+  const collectsFromAmbulance = task?.pickupLat != null && task?.pickupLng != null;
+  const firstStopName = collectsFromAmbulance ? (task?.pickupName ?? 'the other ambulance') : (task?.incident.locationName ?? '');
+  const destLat = collectsFromAmbulance ? task!.pickupLat : task?.incident.lat;
+  const destLng = collectsFromAmbulance ? task!.pickupLng : task?.incident.lng;
+  const actionLabel = task
+    ? task.status === 'PENDING' && transferredFrom ? 'Accept transfer' : ACTION_LABELS[task.status]
     : null;
+  // Drivers get the in-app map (see NavigatePage); other crew still open Google Maps.
+  const inAppMapsUrl = task ? inAppNavigateUrl(destLat, destLng, firstStopName) : null;
+  const externalMapsUrl = destLat != null && destLng != null ? `https://maps.google.com/?q=${destLat},${destLng}` : null;
 
   return (
     <div className="col" style={{ gap: 20 }}>
@@ -165,6 +160,24 @@ function AssignmentPage() {
               <StatusBadge status={task.status} />
             </div>
 
+            {transferredFrom && (
+              <div className="flex gap-2.5 rounded-xl p-3 mb-3" style={{ background: 'var(--amber-soft)' }}>
+                <ArrowLeftRight size={18} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--amber)' }} />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold" style={{ color: 'var(--amber)' }}>
+                    Transferred from {transferredFrom.vehicle?.registrationNumber ?? 'another ambulance'}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--ink-2)' }}>
+                    {[
+                      transferredFrom.handoverReason,
+                      transferredFrom.handoverStage ? `at "${STATUS_LABELS[transferredFrom.handoverStage].toLowerCase()}"` : null,
+                      collectsFromAmbulance ? 'Collect the patient from that ambulance' : null,
+                    ].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {(task.incident.alertNature || task.incident.isGbvCase || task.incident.massCasualty) && (
               <div className="flex flex-wrap gap-2 mb-3">
                 {task.incident.isGbvCase && <span className="pill pill-red">GBV case</span>}
@@ -184,7 +197,9 @@ function AssignmentPage() {
             <div className="flex items-center gap-3 rounded-xl p-3.5 mb-3" style={{ background: 'var(--surface-2)' }}>
               <MapPin size={18} style={{ color: 'var(--green)' }} className="flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{task.incident.locationName}</p>
+                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>
+                  {collectsFromAmbulance ? `Collect the patient from ${firstStopName}` : task.incident.locationName}
+                </p>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
                   {task.incident.subCounty}{task.incident.placeOfReferral ? ` · Referral: ${task.incident.placeOfReferral}` : ''}
                 </p>
@@ -280,20 +295,18 @@ function AssignmentPage() {
           </button>
 
           {user?.role === 'DRIVER' && (
-            <button
-              onClick={() => setShowEndCase(true)}
-              disabled={handoverMutation.isPending}
-              className="btn btn-block"
-              style={{ border: '1.5px solid var(--red)', color: 'var(--red)', background: 'var(--red-soft)' }}
-            >
-              <XCircle size={18} /> End case (any stage)
-            </button>
-          )}
-
-          {user?.role === 'DRIVER' && (
-            <button onClick={() => setShowHandover(true)} disabled={handoverMutation.isPending} className="btn btn-soft btn-block">
-              <ArrowLeftRight size={18} /> Transfer case
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => navigate(`/operator/tasks/${task.id}/transfer`)} className="btn btn-ghost" style={{ height: 46, border: '1px solid var(--border-strong)' }}>
+                <ArrowLeftRight size={18} /> Handover
+              </button>
+              <button
+                onClick={() => setShowEndCase(true)}
+                className="btn"
+                style={{ height: 46, border: '1.5px solid var(--red)', color: 'var(--red)', background: 'transparent' }}
+              >
+                <XCircle size={18} /> End case
+              </button>
+            </div>
           )}
         </>
       )}
@@ -307,16 +320,6 @@ function AssignmentPage() {
         />
       )}
 
-      {task && showHandover && (
-        <HandoverModal
-          taskId={task.id}
-          caseNumber={task.incident.caseNumber}
-          registrationNumber={task.vehicle?.registrationNumber ?? myVehicle?.registrationNumber}
-          isSubmitting={handoverMutation.isPending}
-          onClose={() => setShowHandover(false)}
-          onConfirm={(payload) => handoverMutation.mutate(payload)}
-        />
-      )}
     </div>
   );
 }

@@ -42,6 +42,10 @@ function NavigatePage() {
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       return { lat, lng, label: params.get('label') || 'Incident scene' };
     }
+    // Transfer with the patient on board: go to the ambulance holding them.
+    if (task?.pickupLat != null && task?.pickupLng != null) {
+      return { lat: task.pickupLat, lng: task.pickupLng, label: task.pickupName || 'The other ambulance' };
+    }
     if (task?.incident.lat != null && task?.incident.lng != null) {
       return { lat: task.incident.lat, lng: task.incident.lng, label: task.incident.locationName || 'Incident scene' };
     }
