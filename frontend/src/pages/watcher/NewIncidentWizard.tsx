@@ -6,10 +6,8 @@ import {
   MapPin,
   Send as PaperPlaneRight,
   ClipboardList as ClipboardText,
-  X,
   Phone,
   User,
-  CircleAlert as WarningCircle,
   Cross as FirstAid,
   ListChecks,
   CircleX as XCircle,
@@ -17,9 +15,11 @@ import {
   ArrowLeft,
   Pencil as PencilSimple,
   Eye,
-  ShieldAlert as ShieldWarning,
   Baby,
   Check,
+  RadioTower,
+  Footprints,
+  MoreHorizontal,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
@@ -31,8 +31,6 @@ import { toNairobiInput, nairobiInputToISO } from '@/lib/datetime';
 import type { Facility } from '@/types/api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-const ALERT_MODES = ['Phone', 'Radio', 'Walk-in', 'Other'];
 
 const ORIGIN_OPTIONS = [
   'Community', 'Hospital', 'Police', 'Fire Department', 'Other EMS', 'Self-referral', 'Other',
@@ -57,19 +55,92 @@ const textareaCls = [
 ].join(' ');
 
 const Label = ({ children, required }: { children: ReactNode; required?: boolean }) => (
-  <label className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--ink-2)' }}>
+  <label className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--ink)' }}>
     {children}
     {required && <span className="ml-0.5" style={{ color: 'var(--red)' }}>*</span>}
   </label>
 );
 
+/** One form row. Directly inside a section it lays out label-left (see
+ *  .iw-rows in index.css); nested inside a Row it stays stacked. */
 const Field = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <div className={className ?? 'flex flex-col'}>{children}</div>
+  <div className={`iw-field${className ? ` ${className}` : ' flex flex-col'}`}>{children}</div>
 );
 
 const Hint = ({ children }: { children: ReactNode }) => (
-  <p className="text-[11px] mt-1.5 leading-relaxed" style={{ color: 'var(--muted)' }}>{children}</p>
+  <p className="iw-hint text-[11.5px] mt-1.5 leading-relaxed" style={{ color: 'var(--muted)' }}>{children}</p>
 );
+
+/** A row holding several controls on the right (like City / State / Zip):
+ *  one label + helper on the left, compact stacked fields side by side. */
+function Row({
+  label, hint, required, cols = 2, children,
+}: { label: string; hint?: ReactNode; required?: boolean; cols?: 2 | 3; children: ReactNode }) {
+  return (
+    <div className="iw-row">
+      <div className="iw-label">
+        <span className="block text-[13px] font-medium" style={{ color: 'var(--ink)' }}>
+          {label}
+          {required && <span className="ml-0.5" style={{ color: 'var(--red)' }}>*</span>}
+        </span>
+      </div>
+      {hint && <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>{hint}</p>}
+      <div className={`iw-pair grid gap-3 grid-cols-1 ${cols === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>{children}</div>
+    </div>
+  );
+}
+
+/** Pick-one tiles with an icon (the design's "Number of employees" tiles). */
+function TileGroup<T extends string>({
+  options, value, onChange,
+}: { options: { value: T; label: string; Icon: ElementType }[]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div role="radiogroup" className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      {options.map(({ value: v, label, Icon }) => {
+        const on = value === v;
+        return (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(v)}
+            className="h-[74px] rounded-lg border flex flex-col items-center justify-center gap-1.5 text-[13px] font-semibold transition-colors"
+            style={
+              on
+                ? { borderColor: 'var(--green)', background: 'var(--green-light)', color: 'var(--green)', boxShadow: '0 0 0 1px var(--green)' }
+                : { borderColor: 'var(--border-strong)', background: 'var(--surface)', color: 'var(--ink-2)' }
+            }
+          >
+            <Icon size={18} />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Vertical radio list (the design's "Company type"). */
+function RadioList({ name, options, value, onChange }: { name: string; options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div role="radiogroup" className="flex flex-col gap-2.5 pt-2">
+      {options.map((o) => (
+        <label key={o} className="flex items-center gap-2.5 text-[13.5px] cursor-pointer" style={{ color: 'var(--ink)' }}>
+          <input
+            type="radio"
+            name={name}
+            className="w-4 h-4"
+            style={{ accentColor: 'var(--green)' }}
+            checked={value === o}
+            onChange={() => onChange(o)}
+          />
+          {o}
+        </label>
+      ))}
+    </div>
+  );
+}
 
 // ── Review row ────────────────────────────────────────────────────────────────
 
@@ -85,40 +156,40 @@ function ReviewRow({ label, value }: { label: string; value?: string | boolean }
 
 // ── Wizard stepper ────────────────────────────────────────────────────────────
 
-const STEPS = ['Alert & Location', 'Patient & Incident', 'Review'];
+const STEPS = ['Alert & location', 'Patient & incident', 'Review & submit'];
 
+/** Dots joined by a line; done = ticked, current = ringed with its name below. */
 function WizardStepper({ current }: { current: number }) {
   return (
-    <ol className="flex items-center gap-1 sm:gap-2 min-w-0">
+    <ol className="flex items-start justify-center" aria-label={`Step ${current} of ${STEPS.length}: ${STEPS[current - 1]}`}>
       {STEPS.map((label, i) => {
         const num = i + 1;
         const done = num < current;
         const active = num === current;
         return (
           <Fragment key={label}>
-            <li className="flex items-center gap-2 min-w-0">
+            <li className="flex flex-col items-center w-6 relative" aria-current={active ? 'step' : undefined}>
               <span
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0"
+                className="w-[18px] h-[18px] rounded-full flex items-center justify-center shrink-0"
                 style={
-                  done || active
-                    ? { background: 'var(--green)', color: '#fff' }
-                    : { background: 'var(--surface-3)', color: 'var(--muted)' }
+                  done
+                    ? { border: '1.5px solid var(--green)', color: 'var(--green)', background: 'var(--surface)' }
+                    : active
+                      ? { background: 'var(--green)', boxShadow: '0 0 0 4px var(--green-light)' }
+                      : { border: '1.5px solid var(--border-strong)', background: 'var(--surface)' }
                 }
               >
-                {done ? <Check size={12} strokeWidth={2.5} /> : num}
+                {done ? <Check size={11} strokeWidth={3} /> : active ? <span className="w-1.5 h-1.5 rounded-full bg-white" /> : null}
               </span>
               <span
-                className="text-[13px] truncate hidden md:block"
-                style={{
-                  color: active ? 'var(--ink)' : 'var(--muted)',
-                  fontWeight: active ? 600 : 500,
-                }}
+                className={`absolute top-6 whitespace-nowrap text-[11.5px] sm:text-[12px] ${active ? '' : 'hidden sm:block'}`}
+                style={{ color: active ? 'var(--ink)' : 'var(--muted-2)', fontWeight: active ? 700 : 500 }}
               >
                 {label}
               </span>
             </li>
             {i < STEPS.length - 1 && (
-              <li aria-hidden className="w-6 sm:w-10 h-px shrink-0" style={{ background: done ? 'var(--green)' : 'var(--border-strong)' }} />
+              <li aria-hidden className="w-16 sm:w-36 h-[1.5px] mt-[8px]" style={{ background: done ? 'var(--green)' : 'var(--border-strong)' }} />
             )}
           </Fragment>
         );
@@ -127,38 +198,22 @@ function WizardStepper({ current }: { current: number }) {
   );
 }
 
-// ── Section card ──────────────────────────────────────────────────────────────
+// ── Section ───────────────────────────────────────────────────────────────────
 
+/** A titled block of label-left rows (the design's "About your business"). */
 function SectionCard({
-  title, description, icon: Icon, children,
+  title, description, children,
 }: {
   title: string;
   description?: string;
-  icon: ElementType;
+  icon?: ElementType;
   children: ReactNode;
 }) {
   return (
-    <section
-      className="rounded-xl border overflow-hidden"
-      style={{
-        background: 'var(--surface)',
-        borderColor: 'var(--border)',
-        boxShadow: 'var(--shadow-sm)',
-      }}
-    >
-      <header
-        className="px-5 py-4 flex items-start gap-3"
-        style={{ borderBottom: '1px solid var(--border)' }}
-      >
-        <Icon size={18} strokeWidth={1.75} className="mt-0.5 shrink-0" style={{ color: 'var(--green)' }} />
-        <div className="min-w-0">
-          <h3 className="text-[15px] font-semibold tracking-tight" style={{ color: 'var(--ink)' }}>{title}</h3>
-          {description && (
-            <p className="text-[13px] mt-0.5 leading-snug" style={{ color: 'var(--muted)' }}>{description}</p>
-          )}
-        </div>
-      </header>
-      <div className="p-5 space-y-4">{children}</div>
+    <section className="pt-2">
+      <h2 className="text-[20px] font-semibold tracking-tight" style={{ color: 'var(--ink)' }}>{title}</h2>
+      {description && <p className="text-[13px] mt-1" style={{ color: 'var(--muted)' }}>{description}</p>}
+      <div className="iw-rows mt-6">{children}</div>
     </section>
   );
 }
@@ -747,59 +802,42 @@ function NewIncidentWizard() {
     );
   }
 
-  // ── Step titles ────────────────────────────────────────────────────────────
-  const stepTitle =
-    step === 1 ? 'Alert & Location'
-    : step === 2 ? 'Patient & Incident Details'
-    : 'Review & Submit';
-
   return (
-    <div className="incident-wizard flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--bg)' }}>
-
-      <header
-        className="shrink-0"
-        style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
-      >
-        <div className="px-4 sm:px-6 h-16 flex items-center gap-4">
-          <div className="min-w-0 shrink-0 max-w-[280px]">
-            <p className="text-[12px] font-medium leading-none" style={{ color: 'var(--muted)' }}>
-              New incident
-            </p>
-            <h1 className="text-[17px] font-semibold tracking-tight truncate mt-1" style={{ color: 'var(--ink)' }}>
-              {stepTitle}
-            </h1>
+    <div
+      className="incident-wizard flex-1 min-h-0 flex flex-col overflow-hidden"
+      style={{ background: 'linear-gradient(180deg, var(--green-light) 0%, var(--bg) 360px)' }}
+    >
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-5 sm:px-6 sm:pt-8">
+        <div
+          className="mx-auto w-full max-w-[860px] rounded-2xl border flex flex-col mb-5 sm:mb-8"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: '0 12px 40px rgba(16, 33, 26, 0.08)' }}
+        >
+          <div className="px-5 sm:px-10 pt-5">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-2 text-[13px] font-medium hover:underline"
+              style={{ color: 'var(--ink-2)' }}
+            >
+              <ArrowLeft size={15} /> Back to dashboard
+            </button>
           </div>
-          <div className="flex-1 flex justify-center min-w-0 overflow-hidden">
+
+          <div className="px-5 sm:px-10 pt-7 pb-12 flex justify-center">
             <WizardStepper current={step} />
           </div>
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="icon-btn"
-            title="Close"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div className="h-0.5" style={{ background: 'var(--surface-3)' }}>
-          <div
-            className="h-full transition-[width] duration-300"
-            style={{ width: `${(step / STEPS.length) * 100}%`, background: 'var(--ink)' }}
-          />
-        </div>
-      </header>
 
-      {/* ── Step content ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6">
+          {/* ── Step content ── */}
+          <div className="px-5 sm:px-10 pb-8">
 
         {/* ─────────────── STEP 1: Alert ─────────────── */}
         {step === 1 && (
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+          <div className="flex flex-col gap-12">
 
               {/* ── Card 1: Alert ── */}
-              <SectionCard title="Alert" description="Who called, and how the alert came in." icon={Phone}>
+              <SectionCard title="About the alert" description="Who called, and how the alert came in." icon={Phone}>
                 <Field>
-                  <Label required>Alert Date &amp; Time</Label>
+                  <Label required>Alert date &amp; time</Label>
                   <input
                     type="datetime-local"
                     className={inputCls}
@@ -810,53 +848,41 @@ function NewIncidentWizard() {
                 </Field>
 
                 <Field>
-                  <Label required>Mode of Alert</Label>
-                  <div
-                    className="grid grid-cols-2 sm:grid-cols-4 p-1 rounded-lg"
-                    style={{ background: 'var(--surface-3)' }}
-                  >
-                    {ALERT_MODES.map((m) => {
-                      const on = form.alertMode === m;
-                      return (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => set({ alertMode: m })}
-                          className="h-9 rounded-md text-[13px] font-medium transition-colors"
-                          style={
-                            on
-                              ? { background: 'var(--surface)', color: 'var(--ink)', boxShadow: 'var(--shadow-sm)' }
-                              : { background: 'transparent', color: 'var(--muted)' }
-                          }
-                        >
-                          {m}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <Label required>Mode of alert</Label>
+                  <TileGroup
+                    value={form.alertMode}
+                    onChange={(m) => set({ alertMode: m })}
+                    options={[
+                      { value: 'Phone', label: 'Phone', Icon: Phone },
+                      { value: 'Radio', label: 'Radio', Icon: RadioTower },
+                      { value: 'Walk-in', label: 'Walk-in', Icon: Footprints },
+                      { value: 'Other', label: 'Other', Icon: MoreHorizontal },
+                    ]}
+                  />
+                  <Hint>How the alert reached the EOC.</Hint>
                 </Field>
 
                 <Field>
-                  <Label>Origin of Alert</Label>
+                  <Label>Origin of alert</Label>
                   <select className={selectCls} value={form.originOfAlert} onChange={e => set({ originOfAlert: e.target.value })}>
                     <option value="">Select origin...</option>
                     {ORIGIN_OPTIONS.map(o => <option key={o}>{o}</option>)}
                   </select>
                 </Field>
 
-                <div className="grid grid-cols-2 gap-3">
+                <Row label="Notifier" hint="Who reported the emergency.">
                   <Field>
-                    <Label>Notifier Name</Label>
+                    <Label>Name</Label>
                     <input type="text" placeholder="Full name" className={inputCls} value={form.notifierName} onChange={e => set({ notifierName: e.target.value })} />
                   </Field>
                   <Field>
-                    <Label>Notifier Phone</Label>
-                    <input type="tel" placeholder="07XXXXXXXX" className={inputCls} value={form.notifierPhone} onChange={e => set({ notifierPhone: e.target.value })} />
+                    <Label>Phone</Label>
+                    <input type="tel" inputMode="tel" placeholder="0712345678" className={inputCls} value={form.notifierPhone} onChange={e => set({ notifierPhone: e.target.value })} />
                   </Field>
-                </div>
+                </Row>
 
                 <Field>
-                  <Label>Referral Facility</Label>
+                  <Label>Referral facility</Label>
                   <select
                     className={selectCls}
                     value={form.targetFacilityId}
@@ -884,9 +910,9 @@ function NewIncidentWizard() {
               </SectionCard>
 
               {/* ── Card 2: Location ── */}
-              <SectionCard title="Incident Location" description="Pin the scene so a unit can be routed." icon={MapPin}>
+              <SectionCard title="Incident location" description="Pin the scene so a unit can be routed." icon={MapPin}>
                 <Field>
-                  <Label required>Location of Incident</Label>
+                  <Label required>Location of incident</Label>
                   <div className="relative">
                     <input
                       type="text"
@@ -962,11 +988,9 @@ function NewIncidentWizard() {
                     </button>
                     {gpsError && <span className="text-xs" style={{ color: 'var(--red)' }}>{gpsError}</span>}
                   </div>
-                </Field>
-
                 {/* Map */}
                 <div
-                  className="rounded-lg border overflow-hidden"
+                  className="rounded-lg border overflow-hidden mt-3"
                   style={{ borderColor: 'var(--border)' }}
                 >
                   <Map
@@ -996,9 +1020,11 @@ function NewIncidentWizard() {
                   )}
                 </div>
 
+                </Field>
+
                 <Field>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Label required>Sub-County</Label>
+                  <div className="iw-label flex items-center gap-2 flex-wrap">
+                    <Label required>Sub-county</Label>
                     {form.subCounty && subCountySource === 'AUTO' && (
                       <span
                         className="text-[11px] font-medium px-2 py-0.5 rounded-full"
@@ -1030,19 +1056,19 @@ function NewIncidentWizard() {
 
         {/* ─────────────── STEP 2: Patient ─────────────── */}
         {step === 2 && (
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <SectionCard title="Patient" description="Identity and who to contact." icon={User}>
+          <div className="flex flex-col gap-12">
+              <SectionCard title="About the patient" description="Identity and who to contact. All optional." icon={User}>
                 <Field>
-                  <Label>Patient Name</Label>
+                  <Label>Patient name</Label>
                   <input type="text" placeholder="Full name" className={inputCls} value={form.patientName} onChange={e => set({ patientName: e.target.value })} />
                 </Field>
                 <Field>
-                  <Label>Patient Phone Number</Label>
+                  <Label>Patient phone</Label>
                   <input
                     type="tel"
                     inputMode="tel"
                     pattern="[0-9+\-\s]*"
-                    placeholder="07XXXXXXXX"
+                    placeholder="0712345678"
                     className={inputCls}
                     value={form.patientContact}
                     onChange={e => { const v = e.target.value.replace(/[^0-9+\-\s]/g, ''); set({ patientContact: v }); }}
@@ -1060,10 +1086,9 @@ function NewIncidentWizard() {
                   />
                 </Field>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Field>
-                    <Label>Age</Label>
-                    <select className={selectCls} value={form.patientAge} onChange={e => set({ patientAge: e.target.value })}>
+                <Field>
+                  <Label>Age</Label>
+                  <select className={selectCls} value={form.patientAge} onChange={e => set({ patientAge: e.target.value })}>
                       <option value="">Select age...</option>
                       <option value="Below 1 Month">Below 1 Month</option>
                       <option value="1-6 Months">1-6 Months</option>
@@ -1072,95 +1097,90 @@ function NewIncidentWizard() {
                         <option key={yr} value={String(yr)}>{yr}</option>
                       ))}
                     </select>
-                  </Field>
-                  <Field>
-                    <Label>Sex</Label>
-                    <select className={selectCls} value={form.patientGender} onChange={e => set({ patientGender: e.target.value })}>
-                      <option value="">Select...</option>
-                      <option>Male</option>
-                      <option>Female</option>
-                      <option>Other</option>
-                    </select>
-                  </Field>
-                </div>
+                </Field>
 
-                <div className="grid grid-cols-2 gap-3">
+                <Field>
+                  <Label>Sex</Label>
+                  <RadioList
+                    name="patientGender"
+                    options={['Male', 'Female', 'Other']}
+                    value={form.patientGender}
+                    onChange={(v) => set({ patientGender: v })}
+                  />
+                </Field>
+
+                <Row label="Next of kin" hint="Someone to reach for the patient.">
                   <Field>
-                    <Label>Next of Kin</Label>
+                    <Label>Name</Label>
                     <input type="text" placeholder="Full name" className={inputCls} value={form.nextOfKin} onChange={e => set({ nextOfKin: e.target.value })} />
                   </Field>
                   <Field>
-                    <Label>Next of Kin Phone</Label>
+                    <Label>Phone</Label>
                     <input
                       type="tel"
                       inputMode="tel"
                       pattern="[0-9+\-\s]*"
-                      placeholder="07XXXXXXXX"
+                      placeholder="0712345678"
                       className={inputCls}
                       value={form.nextOfKinPhone}
                       onChange={e => { const v = e.target.value.replace(/[^0-9+\-\s]/g, ''); set({ nextOfKinPhone: v }); }}
                     />
                   </Field>
+                </Row>
+
+                <div className="iw-row">
+                  <div className="iw-label">
+                    <span className="block text-[13px] font-medium" style={{ color: 'var(--ink)' }}>Flags</span>
+                  </div>
+                  <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>Tick any that apply.</p>
+                  <div className="flex flex-col gap-3 pt-2">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                        style={{ accentColor: 'var(--red)' }}
+                        checked={form.massCasualty}
+                        onChange={e => set({ massCasualty: e.target.checked })}
+                      />
+                      <span className="text-[13.5px]" style={{ color: 'var(--ink)' }}>
+                        <b style={{ color: form.massCasualty ? 'var(--red)' : undefined }}>Mass casualty incident (MCI)</b>
+                        <span className="block text-[12px]" style={{ color: 'var(--muted)' }}>Several victims needing a heavy response.</span>
+                      </span>
+                    </label>
+                    {form.massCasualty && (
+                      <input
+                        type="number"
+                        min="2"
+                        inputMode="numeric"
+                        placeholder="Approximate number of casualties, e.g. 5"
+                        className={`${inputCls} ml-6 max-w-[340px]`}
+                        value={form.massCasualtyCount}
+                        onKeyDown={e => ['e', 'E', '+', '-', '.'].includes(e.key) && e.preventDefault()}
+                        onChange={e => set({ massCasualtyCount: e.target.value.replace(/[^0-9]/g, '') })}
+                      />
+                    )}
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                        style={{ accentColor: '#7e22ce' }}
+                        checked={form.isGbvCase}
+                        onChange={e => set({ isGbvCase: e.target.checked })}
+                      />
+                      <span className="text-[13.5px]" style={{ color: 'var(--ink)' }}>
+                        <b style={{ color: form.isGbvCase ? '#7e22ce' : undefined }}>Gender-based violence (GBV)</b>
+                        <span className="block text-[12px]" style={{ color: 'var(--muted)' }}>Adds the case to the GBV Register.</span>
+                      </span>
+                    </label>
+                  </div>
                 </div>
-
-                <label
-                  className="flex items-start gap-3 p-3.5 border rounded-xl cursor-pointer transition-colors"
-                  style={{
-                    borderColor: form.massCasualty ? 'var(--red)' : 'var(--border)',
-                    background: form.massCasualty ? 'var(--red-soft)' : 'var(--surface-2)',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 mt-0.5 accent-red-500 shrink-0"
-                    checked={form.massCasualty}
-                    onChange={e => set({ massCasualty: e.target.checked })}
-                  />
-                  <div>
-                    <p className="font-bold text-sm flex items-center gap-1.5" style={{ color: 'var(--red)' }}>
-                      <WarningCircle size={15} /> Mass Casualty Incident (MCI)
-                    </p>
-                    <p className="text-[11px] mt-1" style={{ color: 'var(--muted)' }}>Multiple victims requiring heavy response.</p>
-                  </div>
-                </label>
-
-                {form.massCasualty && (
-                  <Field>
-                    <Label>Approximate Number of Casualties</Label>
-                    <input type="number" min="2" inputMode="numeric" placeholder="e.g. 5" className={inputCls} value={form.massCasualtyCount}
-                      onKeyDown={e => ['e','E','+','-','.'].includes(e.key) && e.preventDefault()}
-                      onChange={e => set({ massCasualtyCount: e.target.value.replace(/[^0-9]/g, '') })} />
-                  </Field>
-                )}
-
-                <label
-                  className="flex items-start gap-3 p-3.5 border rounded-xl cursor-pointer transition-colors"
-                  style={{
-                    borderColor: form.isGbvCase ? '#7e22ce' : 'var(--border)',
-                    background: form.isGbvCase ? 'rgba(147,51,234,0.06)' : 'var(--surface-2)',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 mt-0.5 shrink-0"
-                    style={{ accentColor: '#7e22ce' }}
-                    checked={form.isGbvCase}
-                    onChange={e => set({ isGbvCase: e.target.checked })}
-                  />
-                  <div>
-                    <p className="font-bold text-sm flex items-center gap-1.5" style={{ color: '#7e22ce' }}>
-                      <ShieldWarning size={15} color="#7e22ce" /> Gender-Based Violence (GBV)
-                    </p>
-                    <p className="text-[11px] mt-1" style={{ color: 'var(--muted)' }}>Flag for GBV handling. Appears in the GBV Register.</p>
-                  </div>
-                </label>
               </SectionCard>
 
-              <SectionCard title="Incident Details" description="What happened, and the clinical picture." icon={FirstAid}>
-                <div className="grid grid-cols-2 gap-3">
+              <SectionCard title="Incident details" description="What happened, and the clinical picture." icon={FirstAid}>
+                <Row label="Nature of alert" required hint="Pick the category, then the specific type.">
                   {/* Nature of Alert */}
                   <Field>
-                    <Label required>Nature of Alert</Label>
+                    <Label>Category</Label>
                     <select
                       className={selectCls}
                       value={form.alertNature}
@@ -1175,7 +1195,7 @@ function NewIncidentWizard() {
 
                   {/* Specific Nature - dropdown if DB has details, else free text */}
                   <Field>
-                    <Label>Specific Nature</Label>
+                    <Label>Specific</Label>
                     {detailsForNature.length > 0 ? (
                       <select
                         className={selectCls}
@@ -1199,10 +1219,10 @@ function NewIncidentWizard() {
                       />
                     )}
                   </Field>
-                </div>
+                </Row>
 
                 <Field>
-                  <Label required>Chief Complaint</Label>
+                  <Label required>Chief complaint</Label>
                   <textarea
                     rows={3}
                     placeholder="Describe the primary complaint / reason for call..."
@@ -1214,19 +1234,17 @@ function NewIncidentWizard() {
                 </Field>
 
                 {/* ── Patient Vitals ── */}
-                <div className="rounded-xl border p-3.5" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
-                  <p className="text-[12px] font-semibold mb-3" style={{ color: 'var(--muted)' }}>Patient Vitals</p>
-                  <div className="grid grid-cols-3 gap-3">
+                <Row label="Patient vitals" hint="As reported by the caller, if known." cols={3}>
                     <Field>
                       <Label>Temperature</Label>
                       <input type="text" placeholder="°C" className={inputCls} value={vitals.temperature} onChange={e => setVit({ temperature: e.target.value })} />
                     </Field>
                     <Field>
-                      <Label>Pulse Rate</Label>
+                      <Label>Pulse rate</Label>
                       <input type="text" placeholder="bpm" className={inputCls} value={vitals.pulseRate} onChange={e => setVit({ pulseRate: e.target.value })} />
                     </Field>
                     <Field>
-                      <Label>Respiration Rate</Label>
+                      <Label>Respiration rate</Label>
                       <input type="text" placeholder="/min" className={inputCls} value={vitals.respirationRate} onChange={e => setVit({ respirationRate: e.target.value })} />
                     </Field>
                     <Field>
@@ -1241,11 +1259,10 @@ function NewIncidentWizard() {
                       <Label>GCS</Label>
                       <input type="text" placeholder="/15" className={inputCls} value={vitals.gcs} onChange={e => setVit({ gcs: e.target.value })} />
                     </Field>
-                  </div>
-                </div>
+                </Row>
 
                 <Field>
-                  <Label>Caller / Watcher Notes</Label>
+                  <Label>Caller / watcher notes</Label>
                   <textarea
                     rows={3}
                     placeholder="Any additional observations from the caller..."
@@ -1256,7 +1273,7 @@ function NewIncidentWizard() {
                 </Field>
 
                 <Field>
-                  <Label>Pre-Hospital Management Given</Label>
+                  <Label>Pre-hospital management given</Label>
                   <textarea
                     rows={3}
                     placeholder="e.g. Tourniquet applied, IV access obtained..."
@@ -1266,9 +1283,9 @@ function NewIncidentWizard() {
                   />
                 </Field>
 
-                <div className="grid grid-cols-2 gap-3">
+                <Row label="Healthcare worker contacted" hint="If a clinician was consulted.">
                   <Field>
-                    <Label>Healthcare Worker Contacted</Label>
+                    <Label>Name</Label>
                     <input
                       type="text"
                       placeholder="Name of HCW contacted"
@@ -1278,27 +1295,27 @@ function NewIncidentWizard() {
                     />
                   </Field>
                   <Field>
-                    <Label>HCW Phone</Label>
+                    <Label>Phone</Label>
                     <input
                       type="tel"
-                      placeholder="e.g. 0712 345 678"
+                      inputMode="tel"
+                      placeholder="0712345678"
                       className={inputCls}
                       value={form.healthcareWorkerContact}
                       onChange={e => set({ healthcareWorkerContact: e.target.value })}
                     />
                   </Field>
-                </div>
+                </Row>
 
               </SectionCard>
 
               {/* ── Maternity Vitals - only when nature is Maternity ── */}
               {isMaternity && (
-                <div className="lg:col-span-2">
-                <SectionCard title="Maternity Vitals" icon={Baby}>
+                <div>
+                <SectionCard title="Maternity vitals" description="Mother, labour progress and newborn." icon={Baby}>
 
                   {/* Mother Information */}
-                  <p className="text-[12px] font-semibold" style={{ color: 'var(--muted)' }}>Mother Information</p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <Row label="Mother">
                     <Field>
                       <Label>Date / Time of Admission</Label>
                       <input type="datetime-local" className={inputCls} value={mv.admissionDateTime} onChange={e => setMat({ admissionDateTime: e.target.value })} />
@@ -1311,142 +1328,133 @@ function NewIncidentWizard() {
                       <Label>Gravida</Label>
                       <input type="text" placeholder="e.g. G3" className={inputCls} value={mv.gravid} onChange={e => setMat({ gravid: e.target.value })} />
                     </Field>
-                  </div>
+                  </Row>
 
-                  <div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                    <p className="text-[12px] font-semibold mb-3" style={{ color: 'var(--muted)' }}>Fetal Well-being</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field>
-                        <Label>Fetal Heart Rate</Label>
-                        <input type="text" placeholder="bpm" className={inputCls} value={mv.fetalHeartRate} onChange={e => setMat({ fetalHeartRate: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Membranes</Label>
-                        <input type="text" placeholder="Intact / Ruptured" className={inputCls} value={mv.membranes} onChange={e => setMat({ membranes: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Character of Liquor</Label>
-                        <input type="text" placeholder="Clear / Meconium stained..." className={inputCls} value={mv.characterOfLiquor} onChange={e => setMat({ characterOfLiquor: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Moulding</Label>
-                        <input type="text" placeholder="0 / + / ++ / +++" className={inputCls} value={mv.moulding} onChange={e => setMat({ moulding: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Cervical Dilatation</Label>
-                        <input type="text" placeholder="cm" className={inputCls} value={mv.cervicalDilatation} onChange={e => setMat({ cervicalDilatation: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Descent</Label>
-                        <input type="text" placeholder="Fifths palpable" className={inputCls} value={mv.descent} onChange={e => setMat({ descent: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Uterine Contraction</Label>
-                        <input type="text" placeholder="Frequency / Duration" className={inputCls} value={mv.uterineContraction} onChange={e => setMat({ uterineContraction: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Medications (Fetal)</Label>
-                        <input type="text" placeholder="e.g. Betamethasone..." className={inputCls} value={mv.medicationsFetal} onChange={e => setMat({ medicationsFetal: e.target.value })} />
-                      </Field>
-                    </div>
-                  </div>
+                  <Row label="Fetal well-being" hint="Liquor, moulding, dilatation, contractions.">
+                    <Field>
+                      <Label>Fetal Heart Rate</Label>
+                      <input type="text" placeholder="bpm" className={inputCls} value={mv.fetalHeartRate} onChange={e => setMat({ fetalHeartRate: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Membranes</Label>
+                      <input type="text" placeholder="Intact / Ruptured" className={inputCls} value={mv.membranes} onChange={e => setMat({ membranes: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Character of Liquor</Label>
+                      <input type="text" placeholder="Clear / Meconium stained..." className={inputCls} value={mv.characterOfLiquor} onChange={e => setMat({ characterOfLiquor: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Moulding</Label>
+                      <input type="text" placeholder="0 / + / ++ / +++" className={inputCls} value={mv.moulding} onChange={e => setMat({ moulding: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Cervical Dilatation</Label>
+                      <input type="text" placeholder="cm" className={inputCls} value={mv.cervicalDilatation} onChange={e => setMat({ cervicalDilatation: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Descent</Label>
+                      <input type="text" placeholder="Fifths palpable" className={inputCls} value={mv.descent} onChange={e => setMat({ descent: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Uterine Contraction</Label>
+                      <input type="text" placeholder="Frequency / Duration" className={inputCls} value={mv.uterineContraction} onChange={e => setMat({ uterineContraction: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Medications (Fetal)</Label>
+                      <input type="text" placeholder="e.g. Betamethasone..." className={inputCls} value={mv.medicationsFetal} onChange={e => setMat({ medicationsFetal: e.target.value })} />
+                    </Field>
+                  </Row>
 
-                  <div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                    <p className="text-[12px] font-semibold mb-3" style={{ color: 'var(--muted)' }}>Maternal Well-being</p>
-                    <div className="grid grid-cols-3 gap-3">
-                      <Field>
-                        <Label>BP</Label>
-                        <input type="text" placeholder="mmHg" className={inputCls} value={mv.bp} onChange={e => setMat({ bp: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Pulse</Label>
-                        <input type="text" placeholder="bpm" className={inputCls} value={mv.pulse} onChange={e => setMat({ pulse: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Temperature</Label>
-                        <input type="text" placeholder="°C" className={inputCls} value={mv.temperature} onChange={e => setMat({ temperature: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>RBS</Label>
-                        <input type="text" placeholder="mmol/L" className={inputCls} value={mv.rbs} onChange={e => setMat({ rbs: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>SPO₂</Label>
-                        <input type="text" placeholder="%" className={inputCls} value={mv.spo2} onChange={e => setMat({ spo2: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>GCS</Label>
-                        <input type="text" placeholder="/15" className={inputCls} value={mv.gcs} onChange={e => setMat({ gcs: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Protein / Albumin in Urine</Label>
-                        <input type="text" placeholder="Nil / + / ++" className={inputCls} value={mv.proteinInUrine} onChange={e => setMat({ proteinInUrine: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Glucose in Urine</Label>
-                        <input type="text" placeholder="Nil / +" className={inputCls} value={mv.glucoseInUrine} onChange={e => setMat({ glucoseInUrine: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Urine Output</Label>
-                        <input type="text" placeholder="ml/hr" className={inputCls} value={mv.urineOutput} onChange={e => setMat({ urineOutput: e.target.value })} />
-                      </Field>
-                    </div>
-                  </div>
+                  <Row label="Maternal well-being" hint="Observations and urinalysis." cols={3}>
+                    <Field>
+                      <Label>BP</Label>
+                      <input type="text" placeholder="mmHg" className={inputCls} value={mv.bp} onChange={e => setMat({ bp: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Pulse</Label>
+                      <input type="text" placeholder="bpm" className={inputCls} value={mv.pulse} onChange={e => setMat({ pulse: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Temperature</Label>
+                      <input type="text" placeholder="°C" className={inputCls} value={mv.temperature} onChange={e => setMat({ temperature: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>RBS</Label>
+                      <input type="text" placeholder="mmol/L" className={inputCls} value={mv.rbs} onChange={e => setMat({ rbs: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>SPO₂</Label>
+                      <input type="text" placeholder="%" className={inputCls} value={mv.spo2} onChange={e => setMat({ spo2: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>GCS</Label>
+                      <input type="text" placeholder="/15" className={inputCls} value={mv.gcs} onChange={e => setMat({ gcs: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Protein / Albumin in Urine</Label>
+                      <input type="text" placeholder="Nil / + / ++" className={inputCls} value={mv.proteinInUrine} onChange={e => setMat({ proteinInUrine: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Glucose in Urine</Label>
+                      <input type="text" placeholder="Nil / +" className={inputCls} value={mv.glucoseInUrine} onChange={e => setMat({ glucoseInUrine: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Urine Output</Label>
+                      <input type="text" placeholder="ml/hr" className={inputCls} value={mv.urineOutput} onChange={e => setMat({ urineOutput: e.target.value })} />
+                    </Field>
+                  </Row>
 
-                  <div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                    <p className="text-[12px] font-semibold mb-3" style={{ color: 'var(--muted)' }}>Newborn</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field>
-                        <Label>Date &amp; Time of Delivery</Label>
-                        <input type="datetime-local" className={inputCls} value={mv.deliveryDateTime} onChange={e => setMat({ deliveryDateTime: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Mode of Delivery</Label>
-                        <select className={selectCls} value={mv.modeOfDelivery} onChange={e => setMat({ modeOfDelivery: e.target.value })}>
-                          <option value="">Select...</option>
-                          <option>SVD</option>
-                          <option>Caesarean Section</option>
-                          <option>Assisted Vaginal (Forceps)</option>
-                          <option>Assisted Vaginal (Vacuum)</option>
-                          <option>Breech</option>
-                          <option>Other</option>
-                        </select>
-                      </Field>
-                      <Field>
-                        <Label>Gender</Label>
-                        <select className={selectCls} value={mv.newbornGender} onChange={e => setMat({ newbornGender: e.target.value })}>
-                          <option value="">Select...</option>
-                          <option>Male</option>
-                          <option>Female</option>
-                          <option>Indeterminate</option>
-                        </select>
-                      </Field>
-                      <Field>
-                        <Label>Birth Weight</Label>
-                        <input type="text" placeholder="kg" className={inputCls} value={mv.birthWeight} onChange={e => setMat({ birthWeight: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Condition of Baby</Label>
-                        <input type="text" placeholder="well / distressed..." className={inputCls} value={mv.conditionOfBaby} onChange={e => setMat({ conditionOfBaby: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>APGAR @ 1 min</Label>
-                        <input type="number" min={0} max={10} placeholder="0-10" className={inputCls} value={mv.apgar1Min} onChange={e => setMat({ apgar1Min: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>APGAR @ 5 min</Label>
-                        <input type="number" min={0} max={10} placeholder="0-10" className={inputCls} value={mv.apgar5Min} onChange={e => setMat({ apgar5Min: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>APGAR @ 10 min</Label>
-                        <input type="number" min={0} max={10} placeholder="0-10" className={inputCls} value={mv.apgar10Min} onChange={e => setMat({ apgar10Min: e.target.value })} />
-                      </Field>
-                      <Field>
-                        <Label>Medication (Newborn)</Label>
-                        <input type="text" placeholder="e.g. Vitamin K, BCG..." className={inputCls} value={mv.medicationNewborn} onChange={e => setMat({ medicationNewborn: e.target.value })} />
-                      </Field>
-                    </div>
-                  </div>
+                  <Row label="Newborn" hint="Delivery, condition and APGAR.">
+                    <Field>
+                      <Label>Date &amp; Time of Delivery</Label>
+                      <input type="datetime-local" className={inputCls} value={mv.deliveryDateTime} onChange={e => setMat({ deliveryDateTime: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Mode of Delivery</Label>
+                      <select className={selectCls} value={mv.modeOfDelivery} onChange={e => setMat({ modeOfDelivery: e.target.value })}>
+                        <option value="">Select...</option>
+                        <option>SVD</option>
+                        <option>Caesarean Section</option>
+                        <option>Assisted Vaginal (Forceps)</option>
+                        <option>Assisted Vaginal (Vacuum)</option>
+                        <option>Breech</option>
+                        <option>Other</option>
+                      </select>
+                    </Field>
+                    <Field>
+                      <Label>Gender</Label>
+                      <select className={selectCls} value={mv.newbornGender} onChange={e => setMat({ newbornGender: e.target.value })}>
+                        <option value="">Select...</option>
+                        <option>Male</option>
+                        <option>Female</option>
+                        <option>Indeterminate</option>
+                      </select>
+                    </Field>
+                    <Field>
+                      <Label>Birth Weight</Label>
+                      <input type="text" placeholder="kg" className={inputCls} value={mv.birthWeight} onChange={e => setMat({ birthWeight: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Condition of Baby</Label>
+                      <input type="text" placeholder="well / distressed..." className={inputCls} value={mv.conditionOfBaby} onChange={e => setMat({ conditionOfBaby: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>APGAR @ 1 min</Label>
+                      <input type="number" min={0} max={10} placeholder="0-10" className={inputCls} value={mv.apgar1Min} onChange={e => setMat({ apgar1Min: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>APGAR @ 5 min</Label>
+                      <input type="number" min={0} max={10} placeholder="0-10" className={inputCls} value={mv.apgar5Min} onChange={e => setMat({ apgar5Min: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>APGAR @ 10 min</Label>
+                      <input type="number" min={0} max={10} placeholder="0-10" className={inputCls} value={mv.apgar10Min} onChange={e => setMat({ apgar10Min: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Medication (Newborn)</Label>
+                      <input type="text" placeholder="e.g. Vitamin K, BCG..." className={inputCls} value={mv.medicationNewborn} onChange={e => setMat({ medicationNewborn: e.target.value })} />
+                    </Field>
+                  </Row>
 
                 </SectionCard>
                 </div>
@@ -1457,7 +1465,11 @@ function NewIncidentWizard() {
 
         {/* ─────────────── STEP 5: Review & Submit ─────────────── */}
         {step === 3 && (
-          <div className="max-w-4xl mx-auto space-y-4">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-[20px] font-semibold tracking-tight" style={{ color: 'var(--ink)' }}>Review &amp; submit</h2>
+              <p className="text-[13px] mt-1" style={{ color: 'var(--muted)' }}>Check the details, then send the alert to dispatch.</p>
+            </div>
 
             {/* Bento review grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1660,12 +1672,10 @@ function NewIncidentWizard() {
 
       {/* ── Sticky footer ── */}
       <div
-        className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3 shrink-0"
-        style={{
-          background: 'var(--surface)',
-          borderTop: '1px solid var(--border)',
-        }}
+        className="sticky bottom-0 z-10 px-5 sm:px-10 py-4 rounded-b-2xl"
+        style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}
       >
+        <div className="flex items-center justify-center gap-3">
         <button
           type="button"
           onClick={() => step === 1 ? navigate(-1) : setStep((s) => (s - 1) as 1 | 2 | 3)}
@@ -1678,19 +1688,14 @@ function NewIncidentWizard() {
           )}
         </button>
 
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap justify-center">
           {step < 3 && (
             <>
-              {!stepOk[step] && missingByStep[step].length > 0 && (
-                <p className="text-[11px] max-w-[200px] text-right hidden md:block" style={{ color: 'var(--muted)' }}>
-                  Required: {missingByStep[step].join(', ')}
-                </p>
-              )}
               <button
                 type="button"
                 onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3)}
                 disabled={!stepOk[step]}
-                className="btn btn-primary flex items-center gap-1.5 disabled:opacity-40"
+                className="btn btn-primary flex items-center justify-center gap-1.5 disabled:opacity-40 sm:min-w-[240px]"
               >
                 {step === 2 ? 'Review' : 'Continue'} <ArrowRight size={15} />
               </button>
@@ -1730,6 +1735,14 @@ function NewIncidentWizard() {
               </button>
             </>
           )}
+        </div>
+        </div>
+        {step < 3 && !stepOk[step] && missingByStep[step].length > 0 && (
+          <p className="text-[11.5px] text-center mt-2" style={{ color: 'var(--muted)' }}>
+            Required: {missingByStep[step].join(', ')}
+          </p>
+        )}
+      </div>
         </div>
       </div>
     </div>

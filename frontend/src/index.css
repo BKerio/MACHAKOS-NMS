@@ -470,6 +470,29 @@ body {
   }
 }
 
+/* ── New Incident form: label-left rows in a centred card ──────────────────
+   A Field that sits directly in a section is a row: label + helper text in
+   the left column, the control(s) on the right. Fields nested inside a
+   multi-input row (.iw-pair) stay stacked and compact. */
+.iw-rows { display: flex; flex-direction: column; gap: 22px; }
+.iw-rows > .iw-field,
+.iw-rows > .iw-row {
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  gap: 6px 28px; grid-auto-flow: row dense; align-items: start;
+}
+@media (min-width: 768px) {
+  .iw-rows > .iw-field,
+  .iw-rows > .iw-row { grid-template-columns: 196px minmax(0, 1fr); }
+  .iw-rows > .iw-field > label,
+  .iw-rows > .iw-field > .iw-label,
+  .iw-rows > .iw-row > .iw-label { grid-column: 1; grid-row: 1; padding-top: 9px; margin: 0; }
+  .iw-rows > .iw-field > .iw-hint,
+  .iw-rows > .iw-row > .iw-hint { grid-column: 1; margin-top: 0; }
+  .iw-rows > .iw-field > :not(label):not(.iw-label):not(.iw-hint),
+  .iw-rows > .iw-row > :not(.iw-label):not(.iw-hint) { grid-column: 2; }
+}
+.iw-pair .iw-field > label { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+
 /* status chip (clock) */
 .status-chip {
   display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600;
@@ -725,3 +748,20 @@ body {
 /* ── Connection banners ── */
 .banner-warn { display: flex; align-items: center; gap: 8px; padding: 8px 20px; background: color-mix(in srgb, var(--amber) 12%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--amber) 25%, transparent); color: var(--amber); font-size: 12.5px; font-weight: 600; }
 .banner-ok { display: flex; align-items: center; gap: 8px; padding: 8px 20px; background: var(--green-light); border-bottom: 1px solid color-mix(in srgb, var(--green) 20%, transparent); color: var(--green); font-size: 12.5px; font-weight: 600; }
+
+/* Helper text sits right under its label: the main control spans the first
+   two grid rows so the hint isn't pushed below a tall control. */
+@media (min-width: 768px) {
+  .iw-rows > .iw-field > label + :not(.iw-hint),
+  .iw-rows > .iw-field > .iw-label + :not(.iw-hint),
+  .iw-rows > .iw-row > :last-child { grid-row: 1 / span 2; }
+  /* Row 1 hugs the label; any extra height from the spanning control goes to row 2. */
+  .iw-rows > .iw-field, .iw-rows > .iw-row { grid-template-rows: auto 1fr; }
+}
+
+/* Wallboard fills the whole content area edge to edge (wall screen). */
+.content:has(.wallboard-page) { padding: 0; max-width: none; }
+.wallboard-page { min-height: 100%; flex: 1; }
+@media (max-width: 859px) {
+  .content:has(.wallboard-page) { padding-bottom: calc(72px + env(safe-area-inset-bottom)); background: var(--nav-bg); }
+}

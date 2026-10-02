@@ -1,134 +1,237 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Headphones as Headset,
+  Headphones,
   Siren,
-  Truck,
-  Car as SteeringWheel,
-  BriefcaseMedical as FirstAidKit,
-  Wifi as WifiHigh,
-  WifiOff as WifiSlash,
+  PhoneCall,
+  Inbox,
+  Car,
+  BriefcaseMedical,
+  Wifi,
+  WifiOff,
   MapPin,
-  RadioTower as Broadcast,
+  RadioTower,
+  Wrench,
+  type LucideIcon,
 } from 'lucide-react';
 import api from '@/api/client';
 import { socket } from '@/lib/socket';
 import { Vehicle } from '@/types/api';
-import { usePresence } from '@/hooks/usePresence';
+import { usePresence, type PresenceUser } from '@/hooks/usePresence';
 import { useVehicleTracking } from '@/hooks/useVehicleTracking';
-// Aliased: a bare `Map` import shadows the global Map constructor, which is
-// used below to build the vehicle lookup.
+import { useActiveCalls } from '@/hooks/useActiveCalls';
+import { useIncidentQueueCount } from '@/hooks/useIncidentQueueCount';
+// Aliased: a bare `Map` import shadows the global Map constructor used below.
 import OpsMap from '@/components/shared/Map';
 import { fmtDate, fmtTime } from '@/lib/datetime';
-import { crewShortfall, isCrewComplete, vehicleMedics } from '@/utils/crew';
+import { MIN_MEDICS, vehicleMedics } from '@/utils/crew';
 
-const NAIROBI_CENTER: [number, number] = [-1.2921, 36.8219];
-const TRACKER_STALE_MS = 5 * 60 * 1000; // no fix in 5 min → treat as "no signal"
+/**
+ * Operations wallboard - built for the screen on the ops-room wall: dark, one
+ * viewport, readable from across the room. Header (title, link state, clock),
+ * a strip of headline numbers, the live map beside who's on duty and how the
+ * fleet stands, then every ambulance as a colour-coded tile.
+ */
 
-/** Big centred clock, ticking every second, pinned to Africa/Nairobi like the rest of the app. */
-function LiveClock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <div className="col" style={{ alignItems: 'flex-end' }}>
-      <div className="mono tnum" style={{ fontSize: 40, fontWeight: 700, color: '#fff', lineHeight: 1 }}>
-        {fmtTime(now)}
-      </div>
-      <div className="muted" style={{ fontSize: 13, marginTop: 4, color: 'var(--nav-muted)' }}>
-        {fmtDate(now)} · Africa/Nairobi
-      </div>
-    </div>
-  );
+const MACHAKOS_CENTER: [number, number] = [-1.5177, 37.2634];
+const TRACKER_STALE_MS = 5 * 60 * 1000; // no fix in 5 min -> "no signal"
+
+const C = {
+  bg: 'var(--nav-bg)',
+  panel: 'rgba(255,255,255,0.035)',
+  line: 'var(--nav-border)',
+  ink: '#FFFFFF',
+  soft: '#DCE6F0',
+  muted: 'var(--nav-muted)',
+  green: '#4ADE80',
+  amber: '#FBBF24',
+  red: '#F87171',
+  blue: '#60A5FA',
+  grey: '#94A3B8',
+};
+
+type UnitState = 'ready' | 'crewing' | 'engaged' | 'service' | 'offduty';
+
+const STATE: Record<UnitState, { label: string; color: string }> = {
+  engaged: { label: 'On a case', color: C.red },
+  ready: { label: 'Ready', color: C.green },
+  crewing: { label: 'Crewing up', color: C.amber },
+  service: { label: 'Out of service', color: C.grey },
+  offduty: { label: 'No crew', color: '#64748B' },
+};
+
+function unitState(v: Vehicle): UnitState {
+  if (v.status === 'BUSY') return 'engaged';
+  if (v.status === 'MAINTENANCE') return 'service';
+  if (!v.currentDriver) return 'offduty';
+  return vehicleMedics(v).length >= MIN_MEDICS ? 'ready' : 'crewing';
 }
 
-function timeSince(iso?: string | null): string {
-  if (!iso) return '-';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 0) return 'just now';
-  const mins = Math.floor(ms / 60000);
+const STATE_ORDER: UnitState[] = ['engaged', 'ready', 'crewing', 'service', 'offduty'];
+
+function ago(iso?: string | null): string {
+  if (!iso) return 'never';
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ${mins % 60}m ago`;
-  return fmtDate(iso);
+  return hrs < 24 ? `${hrs}h ${mins % 60}m ago` : fmtDate(iso);
 }
 
-/** One row in a duty-roster card (Watcher / Dispatcher on duty). */
-function DutyRow({ name, since }: { name: string; since: string }) {
+/** Re-renders every second so the clock (and "x min ago" text) stays current. */
+function useNow(ms = 1000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), ms);
+    return () => clearInterval(id);
+  }, [ms]);
+  return now;
+}
+
+function useSocketConnected() {
+  const [connected, setConnected] = useState(socket.connected);
+  useEffect(() => {
+    const on = () => setConnected(true);
+    const off = () => setConnected(false);
+    socket.on('connect', on);
+    socket.on('disconnect', off);
+    return () => { socket.off('connect', on); socket.off('disconnect', off); };
+  }, []);
+  return connected;
+}
+
+function Panel({ title, Icon, right, children, className, style }: {
+  title: string; Icon: LucideIcon; right?: ReactNode; children: ReactNode; className?: string; style?: React.CSSProperties;
+}) {
   return (
-    <div className="row" style={{ justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--nav-border)' }}>
-      <div className="row" style={{ gap: 8 }}>
-        <span className="live-dot" style={{ width: 8, height: 8, borderRadius: 99, background: '#5FD79A', display: 'inline-block' }} />
-        <span style={{ color: '#fff', fontWeight: 600, fontSize: 13.5 }}>{name}</span>
+    <section
+      className={`rounded-2xl flex flex-col min-h-0 ${className ?? ''}`}
+      style={{ background: C.panel, border: `1px solid ${C.line}`, ...style }}
+    >
+      <header className="flex items-center gap-2 px-4 pt-3.5 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+        <Icon size={15} color={C.muted} />
+        <h2 className="text-[11.5px] font-bold tracking-[0.12em]" style={{ color: C.muted }}>{title.toUpperCase()}</h2>
+        <div className="ml-auto">{right}</div>
+      </header>
+      <div className="flex-1 min-h-0">{children}</div>
+    </section>
+  );
+}
+
+/** One headline number. `alert` lights it up when it needs attention. */
+function Stat({ label, value, sub, Icon, alert }: { label: string; value: number; sub: string; Icon: LucideIcon; alert?: string }) {
+  const hot = !!alert && value > 0;
+  return (
+    <div
+      className="rounded-2xl px-4 py-3.5 flex items-center gap-3.5 min-w-0"
+      style={{
+        background: hot ? `color-mix(in srgb, ${alert} 14%, transparent)` : C.panel,
+        border: `1px solid ${hot ? `color-mix(in srgb, ${alert} 45%, transparent)` : C.line}`,
+      }}
+    >
+      <span
+        className="w-10 h-10 rounded-xl grid place-items-center shrink-0"
+        style={{ background: hot ? alert : 'rgba(255,255,255,0.06)' }}
+      >
+        <Icon size={19} color={hot ? C.bg : C.soft} />
+      </span>
+      <div className="min-w-0">
+        <div className="mono tnum text-[30px] leading-none font-bold" style={{ color: hot ? alert : C.ink }}>{value}</div>
+        <div className="text-[12px] font-semibold mt-1 truncate" style={{ color: C.soft }}>{label}</div>
+        <div className="text-[11px] truncate" style={{ color: C.muted }}>{sub}</div>
       </div>
-      <span className="mono tnum" style={{ fontSize: 12, color: 'var(--nav-muted)' }}>since {fmtTime(since, false)}</span>
     </div>
   );
 }
 
-/** One ambulance card: crew, GPS tracker status, last known location. */
-function AmbulanceCard({ vehicle, live }: { vehicle: Vehicle; live?: { timestamp: string } }) {
-  const lastFix = live?.timestamp ?? vehicle.lastLocationAt;
-  const isLive = !!lastFix && Date.now() - new Date(lastFix).getTime() < TRACKER_STALE_MS;
-  const medics = vehicleMedics(vehicle);
-  const hasCrew = !!vehicle.currentDriver || medics.length > 0;
+function DutyList({ people, empty }: { people: PresenceUser[]; empty: string }) {
+  if (people.length === 0) {
+    return <p className="text-[13px] py-2" style={{ color: C.red }}>{empty}</p>;
+  }
+  return (
+    <ul className="flex flex-col">
+      {people.map((p) => (
+        <li key={p.userId} className="flex items-center gap-2.5 py-1.5">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: C.green, boxShadow: `0 0 0 3px color-mix(in srgb, ${C.green} 22%, transparent)` }} />
+          <span className="text-[14px] font-semibold truncate" style={{ color: C.ink }}>{p.name}</span>
+          <span className="ml-auto mono tnum text-[12px] shrink-0" style={{ color: C.muted }}>since {fmtTime(p.connectedAt, false)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
-  const statusPill =
-    vehicle.status === 'BUSY' ? 'pill-red' : vehicle.status === 'MAINTENANCE' ? 'pill-gray' : 'pill-green';
+function UnitTile({ vehicle, lastFix }: { vehicle: Vehicle; lastFix?: string | null }) {
+  const state = unitState(vehicle);
+  const { label, color } = STATE[state];
+  const live = !!lastFix && Date.now() - new Date(lastFix).getTime() < TRACKER_STALE_MS;
+  const medics = vehicleMedics(vehicle);
 
   return (
-    <div className="card card-pad" style={{ background: 'rgba(255,255,255,.04)', border: '1px solid var(--nav-border)' }}>
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
-        <div className="row" style={{ gap: 8 }}>
-          <Truck size={18} color="#5FD79A" />
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: 14.5 }}>{vehicle.registrationNumber}</span>
-        </div>
-        <span className={`pill ${statusPill}`}>{vehicle.status ?? 'READY'}</span>
+    <article
+      className="rounded-xl overflow-hidden flex flex-col"
+      style={{ background: C.panel, border: `1px solid ${C.line}`, borderTop: `3px solid ${color}` }}
+    >
+      <div className="px-3.5 pt-3 pb-2.5 flex items-center gap-2">
+        <span
+          className="text-[13px] font-black tracking-wider px-2 py-0.5 rounded"
+          style={{ background: '#F7D23E', color: '#111', border: '1.5px solid #111' }}
+        >
+          {vehicle.registrationNumber.toUpperCase()}
+        </span>
+        <span className="ml-auto text-[11px] font-bold" style={{ color }}>{label}</span>
       </div>
 
-      <div className="row" style={{ gap: 6, marginBottom: 8, color: isLive ? '#5FD79A' : 'var(--nav-muted)', fontSize: 12 }}>
-        {isLive ? <WifiHigh size={15} /> : <WifiSlash size={15} />}
-        <span>{isLive ? 'Live GPS' : 'No recent signal'}</span>
-        <span style={{ color: 'var(--nav-muted)' }}>· {timeSince(lastFix)}</span>
+      <div className="px-3.5 pb-3 flex flex-col gap-1.5 text-[12.5px]">
+        {vehicle.currentDriver ? (
+          <div className="flex items-center gap-2 min-w-0" style={{ color: C.soft }}>
+            <Car size={13} color={C.muted} className="shrink-0" />
+            <span className="truncate">{vehicle.currentDriver.name}</span>
+          </div>
+        ) : (
+          <div style={{ color: C.muted }}>No driver checked in</div>
+        )}
+        {medics.length > 0 && (
+          <div className="flex items-center gap-2 min-w-0" style={{ color: C.soft }}>
+            <BriefcaseMedical size={13} color={C.muted} className="shrink-0" />
+            <span className="truncate">{medics.map((m) => m.person.name.split(' ')[0]).join(', ')}</span>
+          </div>
+        )}
+        {vehicle.currentDriver && (
+          <div className="flex items-center gap-1.5" aria-label={`${medics.length} of ${MIN_MEDICS} medics`}>
+            {Array.from({ length: MIN_MEDICS }, (_, i) => (
+              <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: i < medics.length ? C.green : 'rgba(255,255,255,0.12)' }} />
+            ))}
+            <span className="mono text-[11px] ml-1" style={{ color: medics.length >= MIN_MEDICS ? C.green : C.amber }}>
+              {medics.length}/{MIN_MEDICS}
+            </span>
+          </div>
+        )}
       </div>
 
-      {vehicle.lastLocationName && (
-        <div className="row" style={{ gap: 6, marginBottom: 10, color: 'var(--nav-muted)', fontSize: 12 }}>
-          <MapPin size={14} />
-          <span>{vehicle.lastLocationName}</span>
-        </div>
-      )}
-
-      {hasCrew ? (
-        <div className="col" style={{ gap: 5 }}>
-          {vehicle.currentDriver && (
-            <div className="row" style={{ gap: 7, fontSize: 12.5, color: '#DCEAE2' }}>
-              <SteeringWheel size={14} /> {vehicle.currentDriver.name} <span className="muted">(driver)</span>
-            </div>
-          )}
-          {medics.map((m, i) => (
-            <div key={i} className="row" style={{ gap: 7, fontSize: 12.5, color: '#DCEAE2' }}>
-              <FirstAidKit size={14} /> {m.person.name} <span className="muted">({m.role === 'EMT' ? 'EMT' : 'nurse'})</span>
-            </div>
-          ))}
-          {vehicle.currentDriver && !isCrewComplete(vehicle) && (
-            <div style={{ fontSize: 12, color: '#F5C26B' }}>Crew incomplete - {crewShortfall(vehicle)}</div>
-          )}
-        </div>
-      ) : (
-        <div style={{ fontSize: 12, color: 'var(--nav-muted)', fontStyle: 'italic' }}>No crew checked in</div>
-      )}
-    </div>
+      <div
+        className="mt-auto px-3.5 py-2 flex items-center gap-1.5 text-[11.5px] min-w-0"
+        style={{ borderTop: `1px solid ${C.line}`, color: C.muted }}
+      >
+        {live ? <Wifi size={12} color={C.green} /> : <WifiOff size={12} />}
+        <span style={{ color: live ? C.green : C.muted }}>{live ? 'Live' : 'No signal'}</span>
+        <span>· {ago(lastFix)}</span>
+        {vehicle.lastLocationName && (
+          <span className="flex items-center gap-1 ml-auto min-w-0 truncate" title={vehicle.lastLocationName}>
+            <MapPin size={11} className="shrink-0" />
+            <span className="truncate">{vehicle.lastLocationName}</span>
+          </span>
+        )}
+      </div>
+    </article>
   );
 }
 
 function WallboardPage() {
   const queryClient = useQueryClient();
+  const now = useNow();
+  const connected = useSocketConnected();
 
-  // All active vehicles + crew - the source of truth for "ambulances / drivers / EMTs on duty".
   const { data: vehicles = [] } = useQuery({
     queryKey: ['dispatch', 'vehicles', 'wallboard'],
     queryFn: async () => {
@@ -138,13 +241,14 @@ function WallboardPage() {
     refetchInterval: 15_000,
   });
 
-  // Live GPS positions for the map panel + "last fix" freshness on each card.
   const { vehicles: liveVehicles, lastUpdatedAt } = useVehicleTracking();
   const liveById = new Map(liveVehicles.map((v) => [v.vehicleId, v]));
 
   const { byRole } = usePresence();
   const watchers = byRole('WATCHER');
   const dispatchers = byRole('DISPATCHER');
+  const waiting = useIncidentQueueCount();
+  const activeCalls = useActiveCalls();
 
   useEffect(() => {
     socket.connect();
@@ -153,99 +257,135 @@ function WallboardPage() {
     return () => { socket.off('vehicle:crew', refresh); };
   }, [queryClient]);
 
-  const activeVehicles = vehicles.filter((v) => v.isActive);
-  const onDuty = activeVehicles.filter((v) => v.currentDriver || vehicleMedics(v).length > 0);
-  const driversOnDuty = activeVehicles.filter((v) => v.currentDriver);
-  // People, not vehicles - an ambulance can carry two EMTs or two nurses.
-  const emtsOnDuty = activeVehicles.flatMap((v) => vehicleMedics(v).filter((m) => m.role === 'EMT'));
-  const nursesOnDuty = activeVehicles.flatMap((v) => vehicleMedics(v).filter((m) => m.role === 'Nurse'));
-  const withTrackers = activeVehicles.filter((v) => !!v.imei);
+  const active = vehicles.filter((v) => v.isActive);
+  const byState = (s: UnitState) => active.filter((v) => unitState(v) === s);
+  const sorted = [...active].sort(
+    (a, b) => STATE_ORDER.indexOf(unitState(a)) - STATE_ORDER.indexOf(unitState(b))
+      || a.registrationNumber.localeCompare(b.registrationNumber),
+  );
+  const crewOnDuty =
+    active.filter((v) => v.currentDriver).length + active.reduce((n, v) => n + vehicleMedics(v).length, 0);
+  const tracking = active.filter((v) => {
+    const fix = liveById.get(v.id)?.timestamp ?? v.lastLocationAt;
+    return !!fix && Date.now() - new Date(fix).getTime() < TRACKER_STALE_MS;
+  }).length;
 
   return (
-    <div style={{ margin: '-24px', minHeight: '100vh', background: 'var(--nav-bg)', padding: 24 }}>
-      {/* Header: title + live clock */}
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 22, flexWrap: 'wrap', gap: 16 }}>
-        <div className="row" style={{ gap: 12 }}>
-          <Broadcast size={26} color="#5FD79A" />
-          <div>
-            <div style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>Operations Wallboard</div>
-            <div style={{ color: 'var(--nav-muted)', fontSize: 12.5 }}>Live call-centre overview · Nairobi EOC</div>
-          </div>
+    <div className="wallboard-page flex flex-col gap-4 p-4 sm:p-6" style={{ background: C.bg }}>
+      {/* Header */}
+      <header className="flex items-center gap-4 flex-wrap">
+        <span className="w-11 h-11 rounded-xl grid place-items-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          <RadioTower size={22} color={C.green} />
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-bold leading-tight" style={{ color: C.ink }}>Operations Wallboard</h1>
+          <p className="text-[12.5px]" style={{ color: C.muted }}>Machakos County Emergency Operations Centre</p>
         </div>
-        <LiveClock />
+        <span
+          className="ml-2 inline-flex items-center gap-2 text-[11.5px] font-bold tracking-[0.1em] px-3 py-1.5 rounded-full"
+          style={{
+            color: connected ? C.green : C.amber,
+            background: `color-mix(in srgb, ${connected ? C.green : C.amber} 12%, transparent)`,
+          }}
+        >
+          <span className={`w-2 h-2 rounded-full ${connected ? 'live-dot' : ''}`} style={{ background: connected ? C.green : C.amber }} />
+          {connected ? 'LIVE' : 'RECONNECTING'}
+        </span>
+        <div className="ml-auto text-right">
+          <div className="mono tnum text-[44px] font-bold leading-none" style={{ color: C.ink }}>{fmtTime(now)}</div>
+          <div className="text-[12.5px] mt-1" style={{ color: C.muted }}>{fmtDate(now)} · Africa/Nairobi</div>
+        </div>
+      </header>
+
+      {/* Headline numbers */}
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 min-[1600px]:grid-cols-6">
+        <Stat label="Waiting for dispatch" value={waiting} sub="cases in the queue" Icon={Inbox} alert={C.red} />
+        <Stat label="Calls in progress" value={activeCalls.length} sub="on the phone lines" Icon={PhoneCall} alert={C.amber} />
+        <Stat label="On a case" value={byState('engaged').length} sub={`of ${active.length} ambulances`} Icon={Siren} />
+        <Stat label="Ready to dispatch" value={byState('ready').length} sub="full crew checked in" Icon={Car} />
+        <Stat label="Crew on duty" value={crewOnDuty} sub="drivers, EMTs & nurses" Icon={BriefcaseMedical} />
+        <Stat label="Out of service" value={byState('service').length} sub="awaiting repair" Icon={Wrench} alert={C.grey} />
       </div>
 
-      {/* Top stat strip */}
-      <div className="wrap-gap" style={{ marginBottom: 22 }}>
-        {[
-          { label: 'Ambulances on duty', value: onDuty.length, sub: `of ${activeVehicles.length} active`, Icon: Siren },
-          { label: 'With GPS tracker', value: withTrackers.length, sub: 'reporting position', Icon: WifiHigh },
-          { label: 'Drivers logged in', value: driversOnDuty.length, sub: 'checked in', Icon: SteeringWheel },
-          { label: 'EMTs in ambulance', value: emtsOnDuty.length, sub: 'checked in', Icon: FirstAidKit },
-          { label: 'Nurses in ambulance', value: nursesOnDuty.length, sub: 'checked in', Icon: FirstAidKit },
-        ].map(({ label, value, sub, Icon }) => (
-          <div key={label} className="card card-pad" style={{ flex: '1 1 170px', background: 'rgba(255,255,255,.04)', border: '1px solid var(--nav-border)' }}>
-            <div className="row" style={{ gap: 8, marginBottom: 8, color: '#5FD79A' }}>
-              <Icon size={17} color="#5FD79A" />
-              <span style={{ fontSize: 11.5, letterSpacing: '.05em', color: 'var(--nav-muted)' }}>{label}</span>
+      {/* Map + duty / fleet status */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <Panel
+          title="Live fleet map"
+          Icon={MapPin}
+          right={<span className="text-[11.5px]" style={{ color: C.muted }}>{tracking} of {active.length} reporting GPS</span>}
+          style={{ minHeight: 420 }}
+        >
+          <div className="h-full min-h-[380px] rounded-b-2xl overflow-hidden">
+            <OpsMap
+              center={MACHAKOS_CENTER}
+              zoom={11}
+              vehicleMarkers={liveVehicles}
+              layerType="dark"
+              showLiveBadge
+              showLegend
+              lastUpdatedAt={lastUpdatedAt}
+              className="h-full w-full"
+            />
+          </div>
+        </Panel>
+
+        <div className="flex flex-col gap-4 min-h-0">
+          <Panel title="On duty" Icon={Headphones}>
+            <div className="px-4 py-3 flex flex-col gap-3">
+              <div>
+                <p className="text-[11px] font-bold tracking-[0.1em] mb-1" style={{ color: C.muted }}>
+                  DISPATCHERS · {dispatchers.length}
+                </p>
+                <DutyList people={dispatchers} empty="No dispatcher logged in" />
+              </div>
+              <div style={{ borderTop: `1px solid ${C.line}` }} className="pt-3">
+                <p className="text-[11px] font-bold tracking-[0.1em] mb-1" style={{ color: C.muted }}>
+                  WATCHERS · {watchers.length}
+                </p>
+                <DutyList people={watchers} empty="No watcher logged in" />
+              </div>
             </div>
-            <div className="mono tnum" style={{ fontSize: 28, fontWeight: 700, color: '#fff' }}>{value}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--nav-muted)' }}>{sub}</div>
-          </div>
-        ))}
-      </div>
+          </Panel>
 
-      {/* Duty roster: Watcher + Dispatcher on duty */}
-      <div className="wrap-gap" style={{ marginBottom: 22, alignItems: 'stretch' }}>
-        <div className="card card-pad" style={{ flex: '1 1 320px', background: 'rgba(255,255,255,.04)', border: '1px solid var(--nav-border)' }}>
-          <div className="row" style={{ gap: 8, marginBottom: 10 }}>
-            <Headset size={17} color="#5FD79A" />
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Watcher on Duty</span>
-            <span className="pill pill-green" style={{ marginLeft: 'auto' }}>{watchers.length} online</span>
-          </div>
-          {watchers.length === 0
-            ? <div style={{ color: 'var(--nav-muted)', fontSize: 12.5, fontStyle: 'italic' }}>No watcher currently logged in</div>
-            : watchers.map((w) => <DutyRow key={w.userId} name={w.name} since={w.connectedAt} />)}
-        </div>
-
-        <div className="card card-pad" style={{ flex: '1 1 320px', background: 'rgba(255,255,255,.04)', border: '1px solid var(--nav-border)' }}>
-          <div className="row" style={{ gap: 8, marginBottom: 10 }}>
-            <Headset size={17} color="#5FD79A" />
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Dispatcher on Duty</span>
-            <span className="pill pill-green" style={{ marginLeft: 'auto' }}>{dispatchers.length} online</span>
-          </div>
-          {dispatchers.length === 0
-            ? <div style={{ color: 'var(--nav-muted)', fontSize: 12.5, fontStyle: 'italic' }}>No dispatcher currently logged in</div>
-            : dispatchers.map((d) => <DutyRow key={d.userId} name={d.name} since={d.connectedAt} />)}
+          <Panel title="Fleet status" Icon={Siren}>
+            <div className="px-4 py-3 flex flex-col gap-2.5">
+              {/* Stacked bar: the whole fleet at a glance */}
+              <div className="flex h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                {STATE_ORDER.map((s) => {
+                  const n = byState(s).length;
+                  return n > 0 ? <span key={s} style={{ width: `${(n / Math.max(active.length, 1)) * 100}%`, background: STATE[s].color }} /> : null;
+                })}
+              </div>
+              {STATE_ORDER.map((s) => (
+                <div key={s} className="flex items-center gap-2.5 text-[13.5px]">
+                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: STATE[s].color }} />
+                  <span style={{ color: C.soft }}>{STATE[s].label}</span>
+                  <span className="ml-auto mono tnum font-bold" style={{ color: C.ink }}>{byState(s).length}</span>
+                </div>
+              ))}
+            </div>
+          </Panel>
         </div>
       </div>
 
-      {/* Live fleet map */}
-      <div className="card" style={{ height: 340, marginBottom: 22, overflow: 'hidden', border: '1px solid var(--nav-border)' }}>
-        <OpsMap
-          center={NAIROBI_CENTER}
-          zoom={12}
-          vehicleMarkers={liveVehicles}
-          layerType="dark"
-          showLiveBadge
-          showLegend
-          lastUpdatedAt={lastUpdatedAt}
-        />
-      </div>
-
-      {/* Ambulance roster grid */}
-      <div className="row" style={{ gap: 8, marginBottom: 12 }}>
-        <Truck size={17} color="#5FD79A" />
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Ambulances on Duty</span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-        {activeVehicles.length === 0 && (
-          <div style={{ color: 'var(--nav-muted)', fontSize: 13 }}>No active ambulances configured.</div>
-        )}
-        {activeVehicles.map((v) => (
-          <AmbulanceCard key={v.id} vehicle={v} live={liveById.get(v.id)} />
-        ))}
-      </div>
+      {/* Every ambulance */}
+      <Panel
+        title="Ambulances"
+        Icon={Car}
+        right={<span className="text-[11.5px]" style={{ color: C.muted }}>{active.length} active · on a case first</span>}
+      >
+        <div className="p-4">
+          {sorted.length === 0 ? (
+            <p className="text-[13px]" style={{ color: C.muted }}>No active ambulances configured.</p>
+          ) : (
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
+              {sorted.map((v) => (
+                <UnitTile key={v.id} vehicle={v} lastFix={liveById.get(v.id)?.timestamp ?? v.lastLocationAt} />
+              ))}
+            </div>
+          )}
+        </div>
+      </Panel>
     </div>
   );
 }
