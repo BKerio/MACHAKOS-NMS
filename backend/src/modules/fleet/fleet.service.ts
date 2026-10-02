@@ -101,6 +101,54 @@ export class FleetService {
       .emit('vehicle:crew', vehicle);
   }
 
+  /**
+   * Takes an ambulance out of service (MAINTENANCE) or returns it (READY) -
+   * the only way back after a crew reports a mechanical breakdown, which
+   * parks the vehicle in MAINTENANCE. Dispatch/admin only (enforced on the
+   * route). Never touches a vehicle that is on a case (BUSY), and logs who
+   * did it and why.
+   */
+  async setInService(vehicleId: string, actorId: string, inService: boolean, note?: string) {
+    const vehicle = await this.app.prisma.vehicle.findUnique({ where: { id: vehicleId } });
+    if (!vehicle) throw new NotFoundError('Vehicle');
+
+    const target = inService ? VehicleStatus.READY : VehicleStatus.MAINTENANCE;
+    if (vehicle.status === target) {
+      throw new BadRequestError(`${vehicle.registrationNumber} is already ${inService ? 'in service' : 'in maintenance'}`);
+    }
+    if (vehicle.status === VehicleStatus.BUSY) {
+      throw new BadRequestError(`${vehicle.registrationNumber} is on a case - finish or transfer it first`);
+    }
+    // A task can outlive a status that drifted; never release a unit still on one.
+    if (inService) {
+      const open = await this.app.prisma.task.count({
+        where: { vehicleId, status: { notIn: ['COMPLETED', 'CANCELLED', 'HANDED_OVER'] } },
+      });
+      if (open > 0) throw new BadRequestError(`${vehicle.registrationNumber} still has an open case`);
+    }
+
+    const updated = await this.app.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { status: target },
+      include: crewInclude,
+    });
+
+    await this.app.prisma.auditLog.create({
+      data: {
+        userId: actorId,
+        action: inService ? 'RETURN_TO_SERVICE' : 'MAINTENANCE',
+        subjectType: 'VEHICLE',
+        subjectId: vehicleId,
+        oldValues: { status: vehicle.status },
+        newValues: { status: target, ...(note?.trim() ? { note: note.trim() } : {}) },
+      },
+    });
+
+    // Dispatch screens and anyone on its crew refresh straight away.
+    this.emitVehicleCrewUpdate(updated);
+    return updated;
+  }
+
   async getVehicleLocation(imei: string): Promise<(Coordinates & { timestamp: string }) | null> {
     if (!this.app.redis) return null;
     const cacheKey = `vehicle:${imei}:location`;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CirclePlus as PlusCircle,
   Search as MagnifyingGlass,
@@ -13,6 +13,7 @@ import {
   User,
   Radio,
   Fuel as GasPump,
+  Wrench,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
@@ -23,6 +24,7 @@ import { useVehicleTracking, getVehicleTrackingStatus, LiveVehicle } from '@/hoo
 import { useNotificationStore } from '@/stores/notificationStore';
 import VehicleDispatchPanel from '@/components/shared/VehicleDispatchPanel';
 import { MIN_MEDICS, vehicleMedics } from '@/utils/crew';
+import { confirmDialog } from '@/lib/alert';
 
 type StatusFilter = 'ALL' | 'ready' | 'no-driver' | 'engaged' | 'unavailable';
 
@@ -63,6 +65,35 @@ function FleetPage() {
     // doesn't sit stale until someone reloads the page.
     refetchInterval: 65_000,
   });
+
+  const queryClient = useQueryClient();
+  const serviceMutation = useMutation({
+    mutationFn: async ({ vehicleId, inService }: { vehicleId: string; inService: boolean }) =>
+      (await api.patch(`/fleet/${vehicleId}/service`, { inService })).data.data as Vehicle,
+    onSuccess: (vehicle, { inService }) => {
+      setSelected((s) => (s && s.id === vehicle.id ? { ...s, status: vehicle.status } : s));
+      queryClient.invalidateQueries({ queryKey: ['admin', 'vehicles'] });
+      addNotification({
+        type: 'success',
+        title: inService ? 'Back in service' : 'Out of service',
+        message: inService
+          ? `${vehicle.registrationNumber} is ready again and can be dispatched once crewed.`
+          : `${vehicle.registrationNumber} won't be offered for dispatch until returned to service.`,
+      });
+    },
+    onError: (err: any) =>
+      addNotification({ type: 'error', title: 'Couldn’t change status', message: err?.response?.data?.message || 'Try again.' }),
+  });
+
+  const changeService = async (inService: boolean) => {
+    if (!selected) return;
+    const ok = await confirmDialog(
+      inService
+        ? { title: `Return ${selected.registrationNumber} to service?`, text: 'Confirm the fault is fixed. Dispatch can assign it again once it has a full crew.', confirmLabel: 'Return to service' }
+        : { title: `Take ${selected.registrationNumber} out of service?`, text: 'Dispatch and handover will stop offering it until it is returned to service.', confirmLabel: 'Take out of service', danger: true },
+    );
+    if (ok) serviceMutation.mutate({ vehicleId: selected.id, inService });
+  };
 
   const total = vehicles.length;
   const readyCount = liveVehicles.filter((v) => getVehicleTrackingStatus(v) === 'ready').length;
@@ -456,6 +487,29 @@ function FleetPage() {
                 <Radio size={12} />
                 Last GPS ping {formatDistanceToNow(new Date(selectedLive?.timestamp ?? selected.lastLocationAt!), { addSuffix: true })}
               </div>
+            )}
+
+            {selected.status === 'MAINTENANCE' ? (
+              <div className="col" style={{ gap: 10, padding: 12, borderRadius: 10, background: 'var(--amber-soft)' }}>
+                <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+                  <Wrench size={16} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div style={{ fontSize: 13, color: 'var(--ink)' }}>
+                    <b>Out of service.</b> Usually after a crew reported a breakdown. Dispatch won't offer it until it's returned.
+                  </div>
+                </div>
+                <button className="btn btn-primary btn-block" disabled={serviceMutation.isPending} onClick={() => changeService(true)}>
+                  <Wrench size={16} /> {serviceMutation.isPending ? 'Saving…' : 'Return to service'}
+                </button>
+              </div>
+            ) : selected.status !== 'BUSY' && (
+              <button
+                className="btn btn-ghost btn-block"
+                disabled={serviceMutation.isPending}
+                onClick={() => changeService(false)}
+                style={{ border: '1px solid var(--border-strong)' }}
+              >
+                <Wrench size={16} /> Take out of service
+              </button>
             )}
 
             <button

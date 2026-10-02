@@ -242,6 +242,23 @@ export const fleetRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   );
 
   /**
+   * PATCH /fleet/:vehicleId/service
+   * Return an ambulance to service after repairs (e.g. once a reported
+   * breakdown is fixed), or take it out for maintenance.
+   * Body: { inService: boolean, note?: string }
+   */
+  app.patch<{ Params: { vehicleId: string }; Body: { inService?: boolean; note?: string } }>(
+    '/:vehicleId/service',
+    { preValidation: [requireRole([Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])] },
+    async (request, reply) => {
+      const { inService, note } = request.body ?? {};
+      if (typeof inService !== 'boolean') throw new BadRequestError('inService (true or false) is required');
+      const vehicle = await fleetService.setInService(request.params.vehicleId, request.user.userId, inService, note);
+      return reply.send({ ok: true, data: vehicle });
+    }
+  );
+
+  /**
    * GET /fleet/crew-members
    * EMT / nurse users in the driver's agency, for the crew-assignment picker.
    */
