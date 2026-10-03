@@ -19,6 +19,7 @@ import { CallLog, CallDirection, CallStatus, ActiveCall } from '@/types/api';
 import { useActiveCalls } from '@/hooks/useActiveCalls';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { socket } from '@/lib/socket';
+import LoadingState from '@/components/shared/LoadingState';
 
 const DIRECTION_ICONS: Record<CallDirection, ReactElement> = {
   INBOUND: <PhoneIncoming size={15} color="var(--green)" />,
@@ -185,7 +186,7 @@ function CallLogPage() {
       {/* Table */}
       <div className="card">
         {isLoading ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--muted)' }}>Loading call logs…</div>
+          <LoadingState minHeight={160} label="Loading call logs…" />
         ) : logs.length === 0 ? (
           <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--muted)' }}>No call records found</div>
         ) : (

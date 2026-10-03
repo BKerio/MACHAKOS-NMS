@@ -6,6 +6,7 @@ import api from '@/api/client';
 import { PartnerAmbulance } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
+import LoadingState from '@/components/shared/LoadingState';
 
 interface PartnerAgency { id: string; name: string }
 
@@ -99,7 +100,7 @@ function PartnerAmbulancesPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={canManage ? 8 : 7} className="px-6 py-16 text-center text-sm" style={{ color: 'var(--muted)' }}>Loading…</td></tr>
+                <tr><td colSpan={canManage ? 8 : 7}><LoadingState minHeight={140} label="Loading ambulances…" /></td></tr>
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={canManage ? 8 : 7} className="px-6 py-16 text-center">

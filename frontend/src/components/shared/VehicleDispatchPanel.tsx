@@ -14,6 +14,7 @@ import { Vehicle, Incident } from '@/types/api';
 import { LiveVehicle, getVehicleTrackingStatus } from '@/hooks/useVehicleTracking';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { crewShortfall, isCrewComplete, MIN_MEDICS, vehicleMedics } from '@/utils/crew';
+import LoadingState from '@/components/shared/LoadingState';
 
 // ── Haversine (km) ────────────────────────────────────────────────────────────
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -177,7 +178,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
           </p>
 
           {isLoading ? (
-            <div className="h-11 rounded-lg bg-slate-100 animate-pulse" />
+            <LoadingState inline size={18} className="h-11" />
           ) : (
             <div className="flex flex-col gap-2">
               {[
@@ -274,11 +275,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
           </div>
 
           {isLoading ? (
-            <div className="flex flex-col gap-2">
-              {[0, 1, 2].map(i => (
-                <div key={i} className="h-20 rounded-xl bg-slate-100 animate-pulse" />
-              ))}
-            </div>
+            <LoadingState minHeight={120} label="Loading open cases…" />
           ) : scoredIncidents.length === 0 ? (
             <div className="text-center py-10 text-slate-300">
               <CheckCircle size={36} className="mx-auto mb-2" />

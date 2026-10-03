@@ -12,6 +12,7 @@ import StatusBadge from '@/components/operator/StatusBadge';
 import ActivityTimeline from '@/components/operator/ActivityTimeline';
 import { buildTaskActivities, formatActivityTime } from '@/utils/taskActivities';
 import type { PatientCareReport, TaskHistoryItem } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 function fileTypeLabel(mimeType: string) {
   if (mimeType.startsWith('image/')) return 'Image';
@@ -187,7 +188,7 @@ function HistoryPage() {
       </div>
 
       {isLoading ? (
-        <div className="skel" style={{ height: 200 }} />
+        <LoadingState minHeight={200} />
       ) : error ? (
         <div className="card card-pad text-center">
           <p className="text-sm" style={{ color: 'var(--red)' }}>{getErrorMessage(error)}</p>

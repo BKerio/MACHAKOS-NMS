@@ -14,6 +14,7 @@ import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { Incident, GbvReport } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
+import LoadingState from '@/components/shared/LoadingState';
 
 const GBV_TYPES = [
   'Physical',
@@ -155,7 +156,7 @@ function GbvCaseDetailPage() {
   });
 
   if (incidentLoading || reportLoading) {
-    return <div className="p-10 text-center text-slate-text font-bold">Loading…</div>;
+    return <LoadingState minHeight={320} label="Loading GBV case…" />;
   }
   if (!incident) {
     return <div className="p-10 text-center text-status-danger font-bold">Case not found.</div>;

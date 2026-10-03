@@ -8,6 +8,7 @@ import { LiveVehicle, VehicleTrackingStatus, getVehicleTrackingStatus } from '@/
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+import LoadingState from '@/components/shared/LoadingState';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({ iconRetinaUrl, iconUrl, shadowUrl });
@@ -398,8 +399,8 @@ function GoogleCanvas({
     <>
       <div ref={divRef} className="h-full w-full" />
       {!ready && (
-        <div className="absolute inset-0 z-[500] flex items-center justify-center bg-slate-100 animate-pulse">
-          <span className="text-xs font-semibold text-slate-400 tracking-wide">Loading map…</span>
+        <div className="absolute inset-0 z-[500] flex items-center justify-center bg-slate-100">
+          <LoadingState label="Loading map…" />
         </div>
       )}
       {ready && !hideTrafficToggle && (

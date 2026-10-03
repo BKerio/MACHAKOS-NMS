@@ -18,6 +18,7 @@ import api from '@/api/client';
 import { Incident } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
 import Map from '@/components/shared/Map';
+import LoadingState from '@/components/shared/LoadingState';
 
 type Urgency = 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -161,7 +162,7 @@ function PartnerDashboardPage() {
               </thead>
               <tbody className="divide-y divide-surface-border/50">
                 {isLoading ? (
-                  <tr><td colSpan={5} className="px-6 py-10 text-center text-sm text-slate-400">Loading cases...</td></tr>
+                  <tr><td colSpan={5}><LoadingState minHeight={120} label="Loading cases…" /></td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={5} className="px-6 py-10 text-center text-sm text-slate-400">No cases match filters</td></tr>
                 ) : filtered.map(c => (

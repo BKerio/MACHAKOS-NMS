@@ -13,6 +13,7 @@ import ShiftCheckInCard from '@/components/operator/ShiftCheckInCard';
 import StatusBadge from '@/components/operator/StatusBadge';
 import { inAppNavigateUrl } from '@/utils/navigateUrl';
 import type { TaskHistoryItem, Vehicle } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 // The GPS poller refreshes fuel about every minute; a much older reading
 // usually means the tracker is offline, not that the level is still current.
@@ -219,7 +220,7 @@ function DriverDashboardPage() {
 
       {/* Active assignment summary */}
       {taskLoading ? (
-        <div className="skel" style={{ height: 140 }} />
+        <LoadingState minHeight={140} />
       ) : task ? (
         <button onClick={() => navigate('/operator/assignment')} className="card card-pad text-left w-full">
           <div className="flex items-center justify-between mb-2">

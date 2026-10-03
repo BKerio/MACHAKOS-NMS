@@ -23,6 +23,7 @@ import api from '@/api/client';
 import { User, Agency, PaginatedResponse, Role } from '@/types/api';
 import AddPersonnelModal from '@/components/shared/AddPersonnelModal';
 import PartnerOnboardingModal from '@/components/shared/PartnerOnboardingModal';
+import LoadingState from '@/components/shared/LoadingState';
 
 const inputCls =
   'w-full border rounded-xl px-4 py-3 text-sm font-semibold outline-none transition-all';
@@ -349,12 +350,7 @@ function UserManagementPage() {
         >
           <div className="overflow-x-auto flex-1 hide-scrollbar">
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4 py-20">
-                <AppLoader size={40} className="text-brand-teal" />
-                <p className="font-bold text-xs tracking-widest" style={{ color: 'var(--muted)' }}>
-                  Loading users...
-                </p>
-              </div>
+              <LoadingState minHeight={240} label="Loading users…" />
             ) : (
               <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead>
@@ -935,12 +931,7 @@ function UserManagementPage() {
             </div>
             <div className="overflow-y-auto flex-1">
               {auditLoading ? (
-                <div className="flex items-center justify-center py-16 gap-3">
-                  <AppLoader size={32} className="text-brand-teal" />
-                  <p className="text-xs font-bold tracking-widest" style={{ color: 'var(--muted)' }}>
-                    Loading audit records...
-                  </p>
-                </div>
+                <LoadingState minHeight={200} label="Loading audit records…" />
               ) : auditLogs.length === 0 ? (
                 <p className="text-center text-sm py-16" style={{ color: 'var(--muted)' }}>
                   No audit records found.

@@ -16,6 +16,7 @@ import AppLoader from '@/components/shared/AppLoader';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
 import type { Vehicle } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 interface FuelSummaryRow {
   imei: string;
@@ -188,7 +189,7 @@ function FuelPage() {
           </div>
         </div>
         {liveLoading ? (
-          <p className="muted" style={{ fontSize: 13 }}>Loading…</p>
+          <LoadingState inline label="Loading…" />
         ) : liveFuel.length === 0 ? (
           <p className="muted" style={{ fontSize: 13 }}>No active ambulances on the fleet.</p>
         ) : (
@@ -303,7 +304,7 @@ function FuelPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center' }} className="muted">Loading fuel data…</td></tr>}
+            {isLoading && <tr><td colSpan={8}><LoadingState minHeight={120} label="Loading fuel data…" /></td></tr>}
             {!isLoading && rows.length === 0 && !error && (
               <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center' }} className="muted">
                 No fuel data returned for this period.
@@ -362,7 +363,7 @@ function FuelPage() {
             </div>
             <p className="muted" style={{ fontSize: 12, marginBottom: 14 }}>{from} → {to}</p>
 
-            {eventsLoading && <p className="muted" style={{ fontSize: 13 }}>Loading events…</p>}
+            {eventsLoading && <LoadingState inline label="Loading events…" />}
             {eventsError != null && (
               <p style={{ fontSize: 13, color: '#C53030' }}>
                 {String((eventsError as any)?.response?.data?.message ?? 'Could not load events.')}

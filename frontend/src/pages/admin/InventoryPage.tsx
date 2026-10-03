@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
 import { InventoryItem, InventoryCategory, InventoryItemType } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 const CATEGORIES: { value: InventoryCategory; label: string }[] = [
   { value: 'VITALS', label: 'Vitals Equipment' },
@@ -374,9 +375,7 @@ function InventoryPage() {
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
         {isLoading ? (
-          <p className="text-center py-16 font-bold" style={{ color: 'var(--muted)' }}>
-            Loading inventory...
-          </p>
+          <LoadingState minHeight={200} label="Loading inventory…" />
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <Package size={40} className="mx-auto mb-3" style={{ color: 'var(--muted-2)' }} />

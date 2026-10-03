@@ -17,6 +17,7 @@ import {
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/api/client';
+import LoadingState from '@/components/shared/LoadingState';
 
 interface AnalyticsData {
   total: number;
@@ -186,7 +187,7 @@ function AnalyticsPage() {
               <input type="date" className="input" style={{ height: 34, width: 150, padding: '0 10px', fontSize: 13 }} value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
             </div>
           )}
-          {isLoading && <div className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>Loading…</div>}
+          {isLoading && <LoadingState inline size={16} label="Loading…" style={{ marginLeft: 'auto' }} />}
         </div>
       </div>
 

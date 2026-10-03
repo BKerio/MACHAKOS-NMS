@@ -2,12 +2,14 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RotateCcw as RefreshIcon, MapPin, Clock, Navigation as NavigationIcon, Hospital, History as HistoryIcon } from 'lucide-react';
+import AppLoader from '@/components/shared/AppLoader';
 import { getActiveTask, getErrorMessage } from '@/api/responder';
 import { useAuthStore } from '@/stores/authStore';
 import StatusBadge from '@/components/operator/StatusBadge';
 import ActivityTimeline from '@/components/operator/ActivityTimeline';
 import { buildTaskActivities, formatActivityTime } from '@/utils/taskActivities';
 import { inAppNavigateUrl } from '@/utils/navigateUrl';
+import LoadingState from '@/components/shared/LoadingState';
 
 function ActivityPage() {
   const navigate = useNavigate();
@@ -40,12 +42,12 @@ function ActivityPage() {
           className="icon-btn"
           title="Refresh"
         >
-          <RefreshIcon size={18} className={isFetching ? 'animate-spin' : ''} />
+          {isFetching ? <AppLoader size={18} color="var(--green)" /> : <RefreshIcon size={18} />}
         </button>
       </div>
 
       {isLoading ? (
-        <div className="skel" style={{ height: 200 }} />
+        <LoadingState minHeight={200} />
       ) : error && !task ? (
         <div className="card card-pad text-center">
           <p className="text-sm" style={{ color: 'var(--red)' }}>{getErrorMessage(error)}</p>

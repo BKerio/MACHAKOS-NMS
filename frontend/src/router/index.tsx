@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import RoleGuard from '@/components/shared/RoleGuard';
 import AppShell from '@/components/layout/AppShell';
 import LoginPage from '@/pages/auth/LoginPage';
+import AppLoader from '@/components/shared/AppLoader';
 
 // Heavy authenticated pages are code-split so they load on demand (keeps the
 // initial bundle small). The Suspense boundary lives in AppShell.
@@ -62,7 +63,13 @@ export const router = createBrowserRouter([
     // Access is gated by ?token= matching the backend's WALLBOARD_TOKEN.
     path: '/display',
     element: (
-      <Suspense fallback={<div style={{ minHeight: '100vh', background: '#0E1A14' }} />}>
+      <Suspense
+        fallback={
+          <div style={{ minHeight: '100vh', background: '#0E1A14', display: 'grid', placeItems: 'center' }}>
+            <AppLoader size={40} color="#5FD79A" label="Loading" />
+          </div>
+        }
+      >
         <WallboardDisplayPage />
       </Suspense>
     ),

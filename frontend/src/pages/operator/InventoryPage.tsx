@@ -16,6 +16,7 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { getAvailableInventory, checkoutInventory, getMyInventory, returnInventory, returnAllInventory } from '@/api/inventory';
 import { getMyCheckIn } from '@/api/responder';
 import type { InventoryCategory, InventoryCheckout, InventoryItem, InventoryItemType } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 const CATEGORIES: { value: InventoryCategory | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All' },
@@ -263,7 +264,7 @@ function InventoryPage() {
 
       {/* Available stock */}
       {isLoading ? (
-        <div className="skel" style={{ height: 200 }} />
+        <LoadingState minHeight={200} />
       ) : filtered.length === 0 ? (
         <div className="card card-pad text-center" style={{ padding: 36 }}>
           <Package size={36} style={{ color: 'var(--muted-2)' }} className="mx-auto mb-3" />

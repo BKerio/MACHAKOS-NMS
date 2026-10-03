@@ -10,6 +10,7 @@ import AppLoader from '@/components/shared/AppLoader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
+import LoadingState from '@/components/shared/LoadingState';
 
 interface SubCounty {
   id: string;
@@ -131,7 +132,7 @@ function SubCountiesPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <AppLoader size={40} color="var(--green)" />
-            <p className="font-black text-xs tracking-widest animate-pulse" style={{ color: 'var(--muted)' }}>Loading sub-counties…</p>
+            <LoadingState label="Loading sub-counties…" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-4 px-6 py-20 text-center">

@@ -23,6 +23,7 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
 import { Facility } from '@/types/api';
 import Map from '@/components/shared/Map';
+import LoadingState from '@/components/shared/LoadingState';
 
 const FACILITY_TYPES = ['Hospital', 'Health Centre', 'Clinic', 'Dispensary', 'Nursing Home', 'Maternity'];
 const KEPH_LEVELS = [1, 2, 3, 4, 5, 6];
@@ -344,7 +345,7 @@ function FacilitiesPage() {
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
               <AppLoader size={40} color="var(--green)" />
-              <p className="font-black text-xs tracking-widest animate-pulse" style={{ color: 'var(--muted)' }}>Loading facilities…</p>
+              <LoadingState label="Loading facilities…" />
             </div>
           ) : (
             <table className="w-full text-left border-collapse min-w-[820px]">

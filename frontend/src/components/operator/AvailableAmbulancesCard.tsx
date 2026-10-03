@@ -4,6 +4,7 @@ import { Ambulance, MapPin, Phone } from 'lucide-react';
 import { getAgencyVehicles, getMyCheckIn, getPartnerAmbulances } from '@/api/responder';
 import Map from '@/components/shared/Map';
 import type { PartnerAmbulance, Vehicle } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 function statusLabel(v: Vehicle) {
   if (v.isActive === false) return 'Offline';
@@ -104,7 +105,7 @@ function AvailableAmbulancesCard() {
       )}
 
       {isLoading ? (
-        <div className="skel" style={{ height: 60 }} />
+        <LoadingState minHeight={60} />
       ) : (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between mt-2">

@@ -5,6 +5,7 @@ import AppLoader from '@/components/shared/AppLoader';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { activateSmsGateway, deactivateSmsGateway, listSmsGateways, testSmsGateway, updateSmsGateway } from '@/api/settings';
 import type { SmsGatewaySummary } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 /** Admin panel for configuring which gateway Bulk SMS actually sends through - one card per known provider. */
 function SmsGatewaySettings() {
@@ -13,8 +14,8 @@ function SmsGatewaySettings() {
   if (isLoading) {
     return (
       <div className="col" style={{ gap: 16 }}>
-        <div className="card card-pad"><div className="skel" style={{ height: 160 }} /></div>
-        <div className="card card-pad"><div className="skel" style={{ height: 160 }} /></div>
+        <div className="card card-pad"><LoadingState minHeight={160} /></div>
+        <div className="card card-pad"><LoadingState minHeight={160} /></div>
       </div>
     );
   }

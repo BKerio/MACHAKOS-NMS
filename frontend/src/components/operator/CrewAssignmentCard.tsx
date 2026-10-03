@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { socket } from '@/lib/socket';
 import { crewShortfall } from '@/utils/crew';
 import type { AssignableCrewMember, Vehicle } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 type SlotKey = 'emtId' | 'emt2Id' | 'nurseId' | 'nurse2Id';
 
@@ -109,7 +110,7 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
           )}
         </p>
         {isLoading ? (
-          <div className="skel" style={{ height: 40 }} />
+          <LoadingState minHeight={40} />
         ) : options.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--muted)' }}>
             No {role === 'EMT' ? 'EMTs' : 'nurses'} in your agency yet. Ask an admin to add them.

@@ -45,6 +45,7 @@ import { socket } from '@/lib/socket';
 import { fmtDateTime, NBO_TZ } from '@/lib/datetime';
 import { confirmDialog } from '@/lib/alert';
 import { checkInLocationWarning, crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
+import LoadingState from '@/components/shared/LoadingState';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -563,7 +564,7 @@ function IncidentDetailPage() {
     !!vehicleOrigin && !!incidentDest
   );
 
-  if (isLoading) return <div className="p-10 font-bold text-center text-slate-text">Loading Incident Details...</div>;
+  if (isLoading) return <LoadingState minHeight={320} label="Loading incident…" />;
   if (!incident) return <div className="p-10 font-bold text-center text-status-danger">Incident Not Found</div>;
 
   const getStatusStep = () => {
@@ -1696,7 +1697,7 @@ function IncidentDetailPage() {
         </div>
         <div className="p-6">
           {!tatData ? (
-            <p className="text-sm text-slate-400 text-center py-4">Loading timeline…</p>
+            <LoadingState inline label="Loading timeline…" className="py-4" />
           ) : (
             <div className="flex flex-col">
               {tatData.steps.map((s, i) => {

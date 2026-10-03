@@ -15,6 +15,7 @@ import EndCaseModal from '@/components/operator/EndCaseModal';
 import { ACTION_LABELS, STATUS_LABELS, getNextStatus } from '@/utils/taskStatus';
 import { inAppNavigateUrl } from '@/utils/navigateUrl';
 import type { PatientVitals, MaternityVitals } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 function hasAnyVitals(v?: PatientVitals | null): boolean {
   if (!v) return false;
@@ -120,12 +121,12 @@ function AssignmentPage() {
           <h2 className="text-2xl font-bold mt-1" style={{ color: 'var(--ink)' }}>Assignment</h2>
         </div>
         <button onClick={() => refetch()} className="icon-btn" title="Refresh">
-          <RefreshIcon size={18} className={isFetching ? 'animate-spin' : ''} />
+          {isFetching ? <AppLoader size={18} color="var(--green)" /> : <RefreshIcon size={18} />}
         </button>
       </div>
 
       {isLoading ? (
-        <div className="skel" style={{ height: 220 }} />
+        <LoadingState minHeight={220} />
       ) : error ? (
         <div className="card card-pad text-center">
           <p className="text-sm" style={{ color: 'var(--red)' }}>{getErrorMessage(error)}</p>

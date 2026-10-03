@@ -11,6 +11,7 @@ import AppLoader from '@/components/shared/AppLoader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
+import LoadingState from '@/components/shared/LoadingState';
 
 interface NatureOption {
   id: string;
@@ -181,7 +182,7 @@ function NatureOptionsPage() {
 
         {/* Rows */}
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>Loading…</div>
+          <LoadingState minHeight={160} label="Loading nature options…" />
         ) : filteredNatures.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
             {search ? 'No results found.' : 'No nature options yet. Add a category above.'}

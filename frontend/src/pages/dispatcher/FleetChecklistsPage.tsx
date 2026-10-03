@@ -4,6 +4,7 @@ import { CheckCircle2, TriangleAlert, ChevronRight, Truck } from 'lucide-react';
 import { getFleetChecklists, getVehicleChecklist } from '@/api/checklist';
 import type { VehicleChecklistItem } from '@/types/api';
 import { crewShortfall, isCrewComplete, medicsInline } from '@/utils/crew';
+import LoadingState from '@/components/shared/LoadingState';
 
 function categoryLabel(value: string) {
   return value
@@ -44,7 +45,7 @@ function VehicleChecklistDetail({ vehicleId }: { vehicleId: string }) {
     queryFn: () => getVehicleChecklist(vehicleId),
   });
 
-  if (isLoading) return <div className="skel" style={{ height: 160 }} />;
+  if (isLoading) return <LoadingState minHeight={160} />;
   if (!checklist) return null;
 
   const vehicleItems = checklist.items.filter((i) => i.itemType === 'VEHICLE');
@@ -111,7 +112,7 @@ function FleetChecklistsPage() {
       </div>
 
       {isLoading ? (
-        <div className="skel" style={{ height: 300 }} />
+        <LoadingState minHeight={300} />
       ) : vehicles.length === 0 ? (
         <div className="card card-pad text-center" style={{ padding: 48 }}>
           <Truck size={40} style={{ color: 'var(--muted-2)' }} className="mx-auto mb-3" />

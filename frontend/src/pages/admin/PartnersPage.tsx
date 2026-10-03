@@ -18,6 +18,7 @@ import api from '@/api/client';
 import { Agency, User } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
 import PartnerOnboardingModal from '@/components/shared/PartnerOnboardingModal';
+import LoadingState from '@/components/shared/LoadingState';
 
 const inputCls = 'w-full border rounded-xl px-4 py-3 text-sm font-semibold outline-none transition-all';
 const inputStyle = { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--ink)' };
@@ -161,7 +162,7 @@ function PartnersPage() {
 
       {/* List */}
       {isLoading ? (
-        <p className="text-center py-10 font-bold" style={{ color: 'var(--muted)' }}>Loading partners…</p>
+        <LoadingState minHeight={140} label="Loading partners…" />
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border p-10 text-center shadow-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <Handshake size={40} className="mx-auto mb-3" style={{ color: 'var(--muted-2)' }} />

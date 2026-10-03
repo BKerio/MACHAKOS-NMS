@@ -6,6 +6,7 @@ import api from '@/api/client';
 import { Vehicle } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { fmtDateTime, toNairobiInput, nairobiInputToISO } from '@/lib/datetime';
+import LoadingState from '@/components/shared/LoadingState';
 
 interface StandbyRow {
   id: string;
@@ -136,7 +137,7 @@ function StandbyPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={7} className="px-6 py-16 text-center text-sm" style={{ color: 'var(--muted)' }}>Loading…</td></tr>
+                <tr><td colSpan={7}><LoadingState minHeight={140} label="Loading standby records…" /></td></tr>
               ) : standbys.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-16 text-center">

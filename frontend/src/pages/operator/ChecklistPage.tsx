@@ -6,6 +6,7 @@ import { getMyCheckIn } from '@/api/responder';
 import { getVehicleChecklist, submitChecklistItem } from '@/api/checklist';
 import { useNotificationStore } from '@/stores/notificationStore';
 import type { VehicleChecklistItem } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 function categoryLabel(value: string) {
   return value
@@ -195,7 +196,7 @@ function ChecklistPage() {
       )}
 
       {isLoading ? (
-        <div className="skel" style={{ height: 200 }} />
+        <LoadingState minHeight={200} />
       ) : (
         <>
           {vehicleItems.length > 0 && (

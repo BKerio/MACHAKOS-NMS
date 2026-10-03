@@ -18,6 +18,7 @@ import AppLoader from '@/components/shared/AppLoader';
 import { getMyProfile, updateMyProfile, getErrorMessage } from '@/api/responder';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import LoadingState from '@/components/shared/LoadingState';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -175,7 +176,7 @@ function ProfilePage() {
 
         <div className="p-5">
           {isLoading ? (
-            <div className="skel" style={{ height: 160 }} />
+            <LoadingState minHeight={160} />
           ) : (
             <form
               className="flex flex-col gap-3.5"

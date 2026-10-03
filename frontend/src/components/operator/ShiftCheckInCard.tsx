@@ -11,6 +11,7 @@ import {
   getAgencyVehicles, getMyCheckIn, checkInToVehicle, checkOutFromVehicle, getCurrentPosition, getErrorMessage,
 } from '@/api/responder';
 import type { Role, Vehicle } from '@/types/api';
+import LoadingState from '@/components/shared/LoadingState';
 
 // Medics have two slots each (a crew can be two EMTs or two nurses).
 const ROLE_SLOTS: Record<'DRIVER' | 'EMT' | 'NURSE', (keyof Vehicle)[]> = {
@@ -268,7 +269,7 @@ function ShiftCheckInCard() {
       </div>
 
       {myLoading ? (
-        <div className="skel" style={{ height: 72 }} />
+        <LoadingState minHeight={72} />
       ) : myVehicle ? (
         <div className="rounded-xl p-4" style={{ background: 'var(--surface-2)' }}>
           <div className="flex items-center gap-3">
@@ -317,7 +318,7 @@ function ShiftCheckInCard() {
             <div className="mt-3 max-h-80 overflow-y-auto scroll-thin">
               <p className="label mb-2">With tracker - check-in</p>
               {vehiclesLoading ? (
-                <div className="skel" style={{ height: 56 }} />
+                <LoadingState minHeight={56} />
               ) : error ? (
                 <div className="flex items-center gap-2">
                   <p className="text-sm" style={{ color: 'var(--red)' }}>{getErrorMessage(error)}</p>

@@ -11,6 +11,7 @@ import api from '@/api/client';
 import { Incident } from '@/types/api';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '@/stores/authStore';
+import LoadingState from '@/components/shared/LoadingState';
 
 const statusLabel: Record<string, string> = {
   DRAFT: 'Draft',
@@ -77,7 +78,7 @@ function GbvDashboardPage() {
         </div>
 
         {isLoading ? (
-          <div className="p-10 text-center text-slate-text">Loading…</div>
+          <LoadingState minHeight={200} label="Loading GBV cases…" />
         ) : cases.length === 0 ? (
           <div className="p-10 text-center text-slate-text">No GBV cases have been flagged yet.</div>
         ) : (
