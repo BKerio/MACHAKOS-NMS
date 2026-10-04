@@ -28,6 +28,28 @@ export class PushSenderService {
     this.pushGateway = new PushGatewayService(app);
   }
 
+  /**
+   * Sends to every active dispatcher, admin and super admin - the people
+   * watching the operation. Includes accounts that hold one of those roles
+   * as their second role. Fire-and-forget friendly: never throws.
+   */
+  async sendToCommand(title: string, body: string, data?: Record<string, string>): Promise<PushSendSummary> {
+    try {
+      const command = ['DISPATCHER', 'ADMIN', 'SUPER_ADMIN'] as const;
+      const users = await this.app.prisma.user.findMany({
+        where: {
+          isActive: true,
+          OR: [{ role: { in: [...command] } }, { roles: { hasSome: [...command] } }],
+        },
+        select: { id: true },
+      });
+      return await this.sendToUsers(users.map((u) => u.id), title, body, data);
+    } catch (err) {
+      this.app.log.warn({ err, title }, 'Command push failed');
+      return { gatewayActive: false, devices: 0, sent: 0, failed: 0, errors: [String(err)] };
+    }
+  }
+
   async sendToUsers(
     userIds: (string | null | undefined)[],
     title: string,

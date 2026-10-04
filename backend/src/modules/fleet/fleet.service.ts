@@ -343,6 +343,21 @@ export class FleetService {
       checkInMockLocation: location.mocked === true,
     };
 
+    // Tell dispatch and admins a unit has come on shift (fire-and-forget).
+    const driverName = updated.currentDriver?.name ?? 'A driver';
+    const away = verdict.match === 'MISMATCH';
+    this.pushSender
+      .sendToCommand(
+        `${updated.registrationNumber} on shift`,
+        [
+          `${driverName} checked in`,
+          locationName ? `at ${locationName}` : null,
+          away ? '⚠ not at the ambulance - check the selfie' : null,
+        ].filter(Boolean).join(' · '),
+        { type: 'DRIVER_CHECKED_IN', vehicleId, registrationNumber: updated.registrationNumber },
+      )
+      .catch(() => {});
+
     if (verdict.match === 'MISMATCH') {
       this.app.log.warn({ vehicleId, userId, role, ...verification, reason: verdict.reason }, 'Check-in away from vehicle tracker');
       this.app.io

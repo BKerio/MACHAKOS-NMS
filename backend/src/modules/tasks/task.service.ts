@@ -584,10 +584,10 @@ export class TaskService {
             caseNumber: true,
             lat: true,
             lng: true,
-            targetFacility: { select: { lat: true, lng: true } },
+            targetFacility: { select: { lat: true, lng: true, name: true } },
           },
         },
-        vehicle: { select: { trackerLat: true, trackerLng: true, lastLat: true, lastLng: true } },
+        vehicle: { select: { registrationNumber: true, trackerLat: true, trackerLng: true, lastLat: true, lastLng: true } },
       },
     });
     if (!task) throw new NotFoundError('Task not found');
@@ -712,7 +712,47 @@ export class TaskService {
       newStatus,
     );
 
+    // Dispatch and admins hear when a crew takes a case and when it closes.
+    // A transfer resumed with the patient on board counts as accepted too.
+    const acceptedNow = !task.acceptedAt && (resumeOnBoard || newStatus === TaskStatus.ACCEPTED || newStatus === TaskStatus.EN_ROUTE);
+    if (acceptedNow || newStatus === TaskStatus.COMPLETED) {
+      this.notifyCommandOfTask(task, updatedTask, user.userId, acceptedNow ? 'ACCEPTED' : 'COMPLETED');
+    }
+
     return updatedTask;
+  }
+
+  /** Fire-and-forget push to dispatchers and admins: a case was accepted or completed. */
+  private notifyCommandOfTask(
+    task: { incident: { caseNumber: string; targetFacility: { name: string } | null }; vehicle: { registrationNumber: string } },
+    updated: { id: string; distanceToSceneKm: number | null },
+    actorId: string,
+    event: 'ACCEPTED' | 'COMPLETED',
+  ): void {
+    void (async () => {
+      const actor = await this.app.prisma.user.findUnique({ where: { id: actorId }, select: { name: true } });
+      const who = actor?.name?.split(' ')[0];
+      const reg = task.vehicle.registrationNumber;
+      const km = updated.distanceToSceneKm;
+      const facility = task.incident.targetFacility?.name;
+      const [title, body] =
+        event === 'ACCEPTED'
+          ? [
+              `${task.incident.caseNumber} accepted`,
+              [`${reg}${who ? ` (${who})` : ''} is responding`, km != null ? `${km} km to scene` : null].filter(Boolean).join(' · '),
+            ]
+          : [
+              `${task.incident.caseNumber} completed`,
+              [`${reg}${who ? ` (${who})` : ''} finished the case`, facility ? `at ${facility}` : null, 'ambulance free again']
+                .filter(Boolean)
+                .join(' · '),
+            ];
+      await this.pushSender.sendToCommand(title, body, {
+        type: event === 'ACCEPTED' ? 'TASK_ACCEPTED' : 'TASK_COMPLETED',
+        caseNumber: task.incident.caseNumber,
+        taskId: updated.id,
+      });
+    })().catch((err) => this.app.log.warn({ err }, 'command task push failed'));
   }
 
   /** Ambulance tracker → scene, captured when the crew accepts. */
