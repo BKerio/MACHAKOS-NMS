@@ -27,6 +27,7 @@ const FacilitiesPage = lazy(() => import('@/pages/admin/FacilitiesPage'));
 const PartnersPage = lazy(() => import('@/pages/admin/PartnersPage'));
 const BulkSmsPage = lazy(() => import('@/pages/admin/BulkSmsPage'));
 const NotificationsPage = lazy(() => import('@/pages/admin/NotificationsPage'));
+const CampaignsPage = lazy(() => import('@/pages/admin/CampaignsPage'));
 const NatureOptionsPage = lazy(() => import('@/pages/admin/NatureOptionsPage'));
 const SubCountiesPage = lazy(() => import('@/pages/admin/SubCountiesPage'));
 const InventoryPage = lazy(() => import('@/pages/admin/InventoryPage'));
@@ -123,6 +124,14 @@ export const router = createBrowserRouter([
         element: (
           <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN']}>
             <NotificationsPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'admin/campaigns',
+        element: (
+          <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN']}>
+            <CampaignsPage />
           </RoleGuard>
         ),
       },

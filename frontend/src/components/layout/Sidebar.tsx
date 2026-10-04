@@ -30,6 +30,7 @@ import {
   Package,
   FileBarChart2 as FileBarChart,
   Bell,
+  Megaphone,
   CircleUserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -84,6 +85,7 @@ const menuSections: NavSection[] = [
       { label: 'Sub-Counties', path: '/admin/sub-counties', Icon: MapPin, roles: ADMINS },
       { label: 'Inventory', path: '/admin/inventory', Icon: Package, roles: ADMINS },
       { label: 'Bulk SMS', path: '/admin/sms', Icon: ChatText, roles: ADMINS },
+      { label: 'Campaigns', path: '/admin/campaigns', Icon: Megaphone, roles: ADMINS },
       { label: 'Notifications', path: '/admin/notifications', Icon: Bell, roles: ADMINS },
     ],
   },

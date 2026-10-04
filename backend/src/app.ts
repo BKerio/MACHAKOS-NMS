@@ -26,6 +26,7 @@ import { inventoryRoutes } from './modules/inventory/inventory.routes.js';
 import { TrackingService } from './modules/tracking/tracking.service.js';
 import { smsRoutes } from './services/sms.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
+import { campaignRoutes } from './modules/campaigns/campaigns.routes.js';
 import { SmsGatewayService } from './modules/settings/sms-gateway.service.js';
 
 /**
@@ -107,6 +108,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.register(fuelRoutes, { prefix: '/fuel' });
   app.register(inventoryRoutes, { prefix: '/inventory' });
   app.register(settingsRoutes, { prefix: '/settings' });
+  app.register(campaignRoutes, { prefix: '/campaigns' });
 
   // ── SMS Gateway settings ─────────────────────────────────────────────────
   // One-time: if this deployment has ADVANTA_* env vars set but no gateway
