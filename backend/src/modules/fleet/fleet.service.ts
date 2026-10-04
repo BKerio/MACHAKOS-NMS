@@ -8,7 +8,10 @@ import path from 'node:path';
 import { assessCheckInLocation, formatDistance } from './checkin-location.js';
 import { PushSenderService } from '../notifications/push-sender.service.js';
 import { findReadyUnits } from './readiness.js';
-import { clearedCrew, crewInclude, isCrewComplete, slotsForRole, EMT_SLOTS, NURSE_SLOTS, MEDIC_SLOTS, type CrewSlot } from './crew.js';
+import { clearedCrew, crewInclude, isCrewComplete, slotsForRole, vehicleCrewIds, EMT_SLOTS, NURSE_SLOTS, MEDIC_SLOTS, type CrewSlot } from './crew.js';
+
+/** The crew-slot ids on a vehicle, for selects that need vehicleCrewIds(). */
+const crewSlotsSelect = { currentDriverId: true, currentEmtId: true, currentEmt2Id: true, currentNurseId: true, currentNurse2Id: true } as const;
 
 export class FleetService {
   private pushSender: PushSenderService;
@@ -567,12 +570,23 @@ export class FleetService {
 
   // ── Standby deployments (fleet standby reporting, #11) ───────────────────────
 
-  /** Put a vehicle on standby for an event/location. */
-  startStandby(
+  /**
+   * Put a vehicle on standby for an event/location, and push the event,
+   * location and start time to the crew checked in to it. Returns how many
+   * crew were told, so the dashboard can confirm it.
+   */
+  async startStandby(
     userId: string,
     data: { vehicleId: string; title: string; location?: string; lat?: number; lng?: number; notes?: string; startedAt?: string },
   ) {
-    return this.app.prisma.standbyDeployment.create({
+    const vehicle = await this.app.prisma.vehicle.findUnique({ where: { id: data.vehicleId } });
+    if (!vehicle) throw new NotFoundError('Vehicle');
+    const running = await this.app.prisma.standbyDeployment.findFirst({ where: { vehicleId: data.vehicleId, endedAt: null } });
+    if (running) {
+      throw new ConflictError(`${vehicle.registrationNumber} is already on standby for "${running.title}". End that first.`);
+    }
+
+    const row = await this.app.prisma.standbyDeployment.create({
       data: {
         vehicleId: data.vehicleId,
         title: data.title,
@@ -585,17 +599,44 @@ export class FleetService {
       },
       include: { vehicle: { select: { id: true, registrationNumber: true } } },
     });
+
+    const crew = vehicleCrewIds(vehicle);
+    const when = row.startedAt.toLocaleString('en-KE', {
+      timeZone: 'Africa/Nairobi', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+    this.pushSender
+      .sendToUsers(
+        crew,
+        `Standby: ${row.title}`,
+        [`${vehicle.registrationNumber} to standby`, row.location ? `at ${row.location}` : null, `from ${when}`, row.notes || null]
+          .filter(Boolean)
+          .join(' · '),
+        { type: 'STANDBY_ASSIGNED', standbyId: row.id, vehicleId: vehicle.id },
+      )
+      .catch((err) => this.app.log.warn({ err }, 'standby push failed'));
+
+    return { ...row, crewNotified: crew.length };
   }
 
-  /** End an active standby (sets endedAt to now, or a provided time). */
+  /** End an active standby (sets endedAt to now, or a provided time) and release the crew. */
   async endStandby(id: string, endedAt?: string) {
     const row = await this.app.prisma.standbyDeployment.findUnique({ where: { id } });
     if (!row) throw new NotFoundError('Standby deployment');
-    return this.app.prisma.standbyDeployment.update({
+    if (row.endedAt) throw new BadRequestError('This standby has already ended');
+    const updated = await this.app.prisma.standbyDeployment.update({
       where: { id },
       data: { endedAt: endedAt ? new Date(endedAt) : new Date() },
-      include: { vehicle: { select: { id: true, registrationNumber: true } } },
+      include: { vehicle: { select: { id: true, registrationNumber: true, ...crewSlotsSelect } } },
     });
+    this.pushSender
+      .sendToUsers(
+        vehicleCrewIds(updated.vehicle),
+        `Standby ended: ${updated.title}`,
+        `${updated.vehicle.registrationNumber} is released from standby. Stay ready for calls.`,
+        { type: 'STANDBY_ENDED', standbyId: updated.id, vehicleId: updated.vehicle.id },
+      )
+      .catch((err) => this.app.log.warn({ err }, 'standby end push failed'));
+    return updated;
   }
 
   /** Standby report: filter by active state, vehicle, and date range (by startedAt). */
