@@ -398,6 +398,12 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.send({ ok: true, data });
   });
 
+  /** GET /admin/system-report/details - record-level rows for the Excel export (contacts masked). */
+  app.get('/system-report/details', async (_request, reply) => {
+    const data = await adminService.getSystemReportDetails();
+    return reply.send({ ok: true, data });
+  });
+
   // ── System Health ──────────────────────────────────────────────────────────
 
   app.get('/system-health', async (_request, reply) => {

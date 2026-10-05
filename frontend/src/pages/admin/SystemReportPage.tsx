@@ -28,7 +28,15 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import api from '@/api/client';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { caseSlices, fmtMinutes, ownershipSlices, pct, type Slice, type SystemReport } from './systemReport/types';
+import {
+  caseSlices,
+  fmtMinutes,
+  ownershipSlices,
+  pct,
+  type Slice,
+  type SystemReport,
+  type SystemReportDetails,
+} from './systemReport/types';
 import { renderPie } from './systemReport/pieImage';
 import { exportSystemReportExcel } from './systemReport/exportExcel';
 
@@ -177,7 +185,9 @@ function SystemReportPage() {
     }
     setExporting(true);
     try {
-      await exportSystemReportExcel(data);
+      // Record-level rows are only needed for the workbook, so fetch them on demand.
+      const res = await api.get('/admin/system-report/details');
+      await exportSystemReportExcel(data, res.data.data as SystemReportDetails);
       addNotification({ type: 'success', title: 'Excel Exported', message: 'System report downloaded as Excel.' });
     } catch (err) {
       console.error(err);

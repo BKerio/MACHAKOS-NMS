@@ -73,6 +73,52 @@ export interface SystemReport {
   tasksByStatus: { status: string; count: number }[];
 }
 
+type Ts = string | null; // ISO timestamp
+
+/** Record-level rows from GET /admin/system-report/details (contacts arrive masked). */
+export interface SystemReportDetails {
+  cases: {
+    caseNumber: string; status: string; createdAt: string; alertAt: Ts; alertMode: string | null;
+    originOfAlert: string | null; nature: string | null; natureDetail: string | null; chiefComplaint: string;
+    location: string; subCounty: string; lat: number | null; lng: number | null;
+    massCasualty: boolean; massCasualtyCount: number | null; gbv: boolean;
+    patientName: string | null; patientAge: string | null; patientGender: string | null;
+    patientContact: string | null; patientNationalId: string | null; patientNhif: string | null;
+    nextOfKin: string | null; nextOfKinPhone: string | null;
+    vitals: string | null; maternityVitals: string | null; preHospitalManagement: string | null;
+    hospitalLevelRequired: number | null; targetFacility: string | null; placeOfReferral: string | null;
+    ambulanceUsed: string | null; latestVehicle: string | null; latestTaskStatus: string | null; taskCount: number;
+    watcher: string; dispatcher: string | null; agency: string; healthcareWorker: string | null;
+    watcherComments: string | null; dispatcherComments: string | null; dispatcherChallenges: string | null;
+    surveillanceNote: string | null; partnerNotes: string | null; closureReason: string | null; updatedAt: string;
+  }[];
+  tasks: {
+    caseNumber: string; vehicle: string; status: string; driver: string; medics: string;
+    receivedAt: string; acceptedAt: Ts; sceneArrivalAt: Ts; patientPickAt: Ts; sceneDepartureAt: Ts;
+    facilityArrivalAt: Ts; completedAt: Ts;
+    minToAccept: number | null; minToScene: number | null; minOnScene: number | null;
+    minToFacility: number | null; minTotal: number | null;
+    kmToScene: number | null; kmToFacility: number | null;
+    cancelledAt: Ts; cancelReason: string | null; handedOverAt: Ts; handoverReason: string | null;
+    handoverBy: string | null; handoverVitals: string | null;
+  }[];
+  users: {
+    name: string; role: string; roles: string; agency: string; email: string | null; phone: string | null;
+    isActive: boolean; createdAt: string; casesLogged: number; casesDispatched: number; crewTasks: number;
+  }[];
+  fleet: {
+    plate: string; agency: string; status: string; isActive: boolean; trackerImei: string | null;
+    currentDriver: string | null; currentMedics: string; lastLocation: string | null; lastSeenAt: Ts;
+    fuelLitres: number | null; tasksTotal: number; tasksCompleted: number; distanceKm: number;
+  }[];
+  facilities: {
+    name: string; type: string; ownership: FacilityOwnership; kephLevel: number; subCounty: string;
+    isActive: boolean; casesReceived: number; ratingAverage: number | null; ratingCount: number;
+    lat: number; lng: number;
+  }[];
+  inventory: { name: string; category: string; quantityStock: number; reorderLevel: number; unit: string }[];
+}
+
 export interface Slice {
   label: string;
   value: number;

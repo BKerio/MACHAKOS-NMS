@@ -337,6 +337,218 @@ export class AdminService {
     });
   }
 
+  // ── System Report: record-level detail for the Excel export ────────────────
+  //
+  // Every case, task, user, vehicle, facility and stock item. Contact and ID
+  // fields are masked here, so full phone numbers, emails and ID numbers never
+  // leave the server in the export. Password hashes are never selected.
+
+  async getSystemReportDetails() {
+    const person = { select: { name: true, role: true } } as const;
+    const [incidents, tasks, users, vehicles, facilities, inventory, distance] = await Promise.all([
+      this.app.prisma.incident.findMany({
+        orderBy: { caseSeq: 'asc' },
+        include: {
+          watcher: person,
+          dispatcher: person,
+          assignedAgency: { select: { name: true } },
+          targetFacility: { select: { name: true } },
+          tasks: {
+            orderBy: { receivedAt: 'desc' },
+            take: 1,
+            select: { status: true, vehicle: { select: { registrationNumber: true } } },
+          },
+          _count: { select: { tasks: true } },
+        },
+      }),
+      this.app.prisma.task.findMany({
+        orderBy: { receivedAt: 'asc' },
+        include: {
+          incident: { select: { caseNumber: true } },
+          vehicle: { select: { registrationNumber: true } },
+          driver: person,
+          emt: person,
+          nurse: person,
+          emt2: person,
+          nurse2: person,
+          handoverBy: person,
+        },
+      }),
+      this.app.prisma.user.findMany({
+        orderBy: [{ role: 'asc' }, { name: 'asc' }],
+        select: {
+          name: true, email: true, phone: true, role: true, roles: true, isActive: true, createdAt: true,
+          agency: { select: { name: true } },
+          _count: {
+            select: {
+              watchedIncidents: true, dispatchedIncidents: true,
+              driverTasks: true, emtTasks: true, nurseTasks: true, emt2Tasks: true, nurse2Tasks: true,
+            },
+          },
+        },
+      }),
+      this.app.prisma.vehicle.findMany({
+        orderBy: { registrationNumber: 'asc' },
+        include: {
+          agency: { select: { name: true } },
+          currentDriver: person,
+          currentEmt: person,
+          currentNurse: person,
+          currentEmt2: person,
+          currentNurse2: person,
+          _count: { select: { tasks: true } },
+        },
+      }),
+      this.app.prisma.facility.findMany({
+        orderBy: [{ ownership: 'asc' }, { name: 'asc' }],
+        include: { _count: { select: { incidents: true } } },
+      }),
+      this.app.prisma.inventoryItem.findMany({
+        where: { isActive: true },
+        orderBy: [{ category: 'asc' }, { name: 'asc' }],
+        select: { name: true, category: true, quantityStock: true, reorderLevel: true, unit: true },
+      }),
+      this.app.prisma.vehicleDistanceHour.groupBy({ by: ['vehicleId'], _sum: { distanceKm: true } }),
+    ]);
+
+    const [taskCounts, ratings] = await Promise.all([
+      this.app.prisma.task.groupBy({ by: ['vehicleId', 'status'], _count: { id: true } }),
+      this.app.prisma.facilityRating.groupBy({ by: ['facilityId'], _avg: { stars: true }, _count: { _all: true } }),
+    ]);
+    const kmByVehicle = new Map(distance.map((d) => [d.vehicleId, d._sum.distanceKm ?? 0]));
+    const completedByVehicle = new Map(
+      taskCounts.filter((t) => t.status === 'COMPLETED').map((t) => [t.vehicleId, t._count.id])
+    );
+    const ratingByFacility = new Map(ratings.map((r) => [r.facilityId, r]));
+
+    const minutes = (from?: Date | null, to?: Date | null) =>
+      from && to ? Math.round(((to.getTime() - from.getTime()) / 60_000) * 10) / 10 : null;
+    const crew = (...people: ({ name: string } | null)[]) => people.filter(Boolean).map((p) => p!.name).join(', ');
+
+    return {
+      cases: incidents.map((i) => ({
+        caseNumber: i.caseNumber,
+        status: i.status,
+        createdAt: i.createdAt,
+        alertAt: i.alertAt,
+        alertMode: i.alertMode,
+        originOfAlert: i.originOfAlert,
+        nature: i.alertNature,
+        natureDetail: i.alertNatureDetail,
+        chiefComplaint: i.chiefComplaint,
+        location: i.locationName,
+        subCounty: i.subCounty,
+        lat: i.lat,
+        lng: i.lng,
+        massCasualty: i.massCasualty,
+        massCasualtyCount: i.massCasualtyCount,
+        gbv: i.isGbvCase,
+        patientName: i.patientName,
+        patientAge: i.patientAge,
+        patientGender: i.patientGender,
+        patientContact: maskPhone(i.patientContact),
+        patientNationalId: maskId(i.patientNationalId),
+        patientNhif: maskId(i.patientNhif),
+        nextOfKin: i.nextOfKin,
+        nextOfKinPhone: maskPhone(i.nextOfKinPhone),
+        vitals: flattenJson(i.vitals),
+        maternityVitals: flattenJson(i.maternityVitals),
+        preHospitalManagement: i.preHospitalManagement,
+        hospitalLevelRequired: i.hospitalLevelRequired,
+        targetFacility: i.targetFacility?.name ?? null,
+        placeOfReferral: i.placeOfReferral,
+        ambulanceUsed: i.ambulanceUsed,
+        latestVehicle: i.tasks[0]?.vehicle.registrationNumber ?? null,
+        latestTaskStatus: i.tasks[0]?.status ?? null,
+        taskCount: i._count.tasks,
+        watcher: i.watcher.name,
+        dispatcher: i.dispatcher?.name ?? null,
+        agency: i.assignedAgency.name,
+        healthcareWorker: i.healthcareWorkerName,
+        watcherComments: i.watcherComments,
+        dispatcherComments: i.dispatcherComments,
+        dispatcherChallenges: i.dispatcherChallenges,
+        surveillanceNote: i.surveillanceNote,
+        partnerNotes: i.partnerNotes,
+        closureReason: i.closureReason,
+        updatedAt: i.updatedAt,
+      })),
+      tasks: tasks.map((t) => ({
+        caseNumber: t.incident.caseNumber,
+        vehicle: t.vehicle.registrationNumber,
+        status: t.status,
+        driver: t.driver.name,
+        medics: crew(t.emt, t.nurse, t.emt2, t.nurse2),
+        receivedAt: t.receivedAt,
+        acceptedAt: t.acceptedAt,
+        sceneArrivalAt: t.sceneArrivalAt,
+        patientPickAt: t.patientPickAt,
+        sceneDepartureAt: t.sceneDepartureAt,
+        facilityArrivalAt: t.facilityArrivalAt,
+        completedAt: t.completedAt,
+        minToAccept: minutes(t.receivedAt, t.acceptedAt),
+        minToScene: minutes(t.receivedAt, t.sceneArrivalAt),
+        minOnScene: minutes(t.sceneArrivalAt, t.sceneDepartureAt),
+        minToFacility: minutes(t.sceneDepartureAt, t.facilityArrivalAt),
+        minTotal: minutes(t.receivedAt, t.completedAt),
+        kmToScene: t.distanceToSceneKm,
+        kmToFacility: t.sceneToFacilityKm,
+        cancelledAt: t.cancelledAt,
+        cancelReason: t.cancelReason,
+        handedOverAt: t.handedOverAt,
+        handoverReason: t.handoverReason,
+        handoverBy: t.handoverBy?.name ?? null,
+        handoverVitals: flattenJson(t.handoverVitals),
+      })),
+      users: users.map((u) => ({
+        name: u.name,
+        role: u.role,
+        roles: u.roles.length ? u.roles.join(', ') : u.role,
+        agency: u.agency.name,
+        email: maskEmail(u.email),
+        phone: maskPhone(u.phone),
+        isActive: u.isActive,
+        createdAt: u.createdAt,
+        casesLogged: u._count.watchedIncidents,
+        casesDispatched: u._count.dispatchedIncidents,
+        crewTasks:
+          u._count.driverTasks + u._count.emtTasks + u._count.nurseTasks + u._count.emt2Tasks + u._count.nurse2Tasks,
+      })),
+      fleet: vehicles.map((v) => ({
+        plate: v.registrationNumber,
+        agency: v.agency.name,
+        status: v.status,
+        isActive: v.isActive,
+        trackerImei: maskId(v.imei),
+        currentDriver: v.currentDriver?.name ?? null,
+        currentMedics: crew(v.currentEmt, v.currentNurse, v.currentEmt2, v.currentNurse2),
+        lastLocation: v.lastLocationName,
+        lastSeenAt: v.lastLocationAt,
+        fuelLitres: v.lastFuelLevelL,
+        tasksTotal: v._count.tasks,
+        tasksCompleted: completedByVehicle.get(v.id) ?? 0,
+        distanceKm: Math.round((kmByVehicle.get(v.id) ?? 0) * 10) / 10,
+      })),
+      facilities: facilities.map((f) => {
+        const r = ratingByFacility.get(f.id);
+        return {
+          name: f.name,
+          type: f.type,
+          ownership: f.ownership,
+          kephLevel: f.kephLevel,
+          subCounty: f.subCounty,
+          isActive: f.isActive,
+          casesReceived: f._count.incidents,
+          ratingAverage: r?._avg.stars == null ? null : Math.round(r._avg.stars * 10) / 10,
+          ratingCount: r?._count._all ?? 0,
+          lat: f.lat,
+          lng: f.lng,
+        };
+      }),
+      inventory,
+    };
+  }
+
   // ── System Report (cross-module snapshot) ───────────────────────────────────
 
   async getSystemReport() {
@@ -607,4 +819,50 @@ export class AdminService {
       })),
     };
   }
+}
+
+// ── Masking for exported reports ─────────────────────────────────────────────
+// Enough is kept to recognise a record ("07*****123", "ja***@gmail.com") without
+// the export carrying a usable phone number, email or ID number.
+
+function maskPhone(v?: string | null) {
+  if (!v) return null;
+  const d = v.replace(/\s+/g, '');
+  if (d.length <= 5) return '*'.repeat(d.length);
+  return `${d.slice(0, 2)}${'*'.repeat(d.length - 5)}${d.slice(-3)}`;
+}
+
+function maskEmail(v?: string | null) {
+  if (!v) return null;
+  const [user, domain] = v.split('@');
+  if (!domain) return maskId(v);
+  return `${user.slice(0, 2)}${'*'.repeat(Math.max(3, user.length - 2))}@${domain}`;
+}
+
+function maskId(v?: string | null) {
+  if (!v) return null;
+  if (v.length <= 4) return '*'.repeat(v.length);
+  return `${'*'.repeat(v.length - 4)}${v.slice(-4)}`;
+}
+
+/** {"Pulse":"88","BP":"120/80"} -> "Pulse: 88; BP: 120/80" for a single readable cell. */
+function flattenJson(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v !== 'object') return String(v);
+  const parts = Object.entries(v as Record<string, unknown>)
+    .filter(([, x]) => x !== null && x !== undefined && x !== '')
+    .map(([k, x]) => `${prettyKey(k)}: ${typeof x === 'object' ? JSON.stringify(x) : String(x)}`);
+  return parts.length ? parts.join('; ') : null;
+}
+
+const VITAL_LABELS: Record<string, string> = {
+  bp: 'BP', gcs: 'GCS', spo2: 'SpO2', fh: 'FH', fhr: 'FHR', rbs: 'RBS',
+  pulseRate: 'Pulse', respirationRate: 'Resp', temperature: 'Temp',
+};
+
+/** pulseRate -> "Pulse", bloodSugar -> "Blood sugar". */
+function prettyKey(k: string) {
+  if (VITAL_LABELS[k]) return VITAL_LABELS[k];
+  const words = k.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
