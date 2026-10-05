@@ -117,6 +117,33 @@ export interface SystemReportDetails {
     lat: number; lng: number;
   }[];
   inventory: { name: string; category: string; quantityStock: number; reorderLevel: number; unit: string }[];
+  officialSubCounties: string[];
+  checkIns: {
+    checkedInAt: string; name: string; role: string; vehicle: string; location: string | null;
+    locationMatch: 'MATCHED' | 'MISMATCH' | 'UNVERIFIED'; distanceM: number | null; accuracyM: number | null;
+    mockLocation: boolean;
+  }[];
+  standbys: {
+    vehicle: string; title: string; location: string | null; startedAt: string; endedAt: Ts;
+    minutes: number | null; notes: string | null;
+  }[];
+  checkouts: {
+    checkedOutAt: string; item: string; category: string; unit: string; quantity: number; returned: number;
+    status: string; returnedAt: Ts; by: string; vehicle: string;
+  }[];
+  checklist: {
+    checkedAt: string; vehicle: string; item: string; category: string; status: string; note: string | null; by: string;
+  }[];
+  ratings: {
+    createdAt: string; facility: string; stars: number; tags: string; comment: string | null;
+    by: string; role: string; caseNumber: string;
+  }[];
+  pcrs: { createdAt: string; caseNumber: string; uploader: string; mimeType: string; sizeKb: number; note: string | null }[];
+  calls: {
+    startedAt: string; direction: string; status: string; from: string | null; to: string | null;
+    durationSec: number; talkSec: number; caseNumber: string | null; trunk: string | null; notes: string | null;
+  }[];
+  activity: { at: string; user: string; role: string; action: string; subject: string; subjectId: string; ip: string | null }[];
 }
 
 export interface Slice {

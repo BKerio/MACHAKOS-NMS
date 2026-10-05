@@ -415,6 +415,43 @@ export class AdminService {
       this.app.prisma.task.groupBy({ by: ['vehicleId', 'status'], _count: { id: true } }),
       this.app.prisma.facilityRating.groupBy({ by: ['facilityId'], _avg: { stars: true }, _count: { _all: true } }),
     ]);
+
+    const plate = { select: { registrationNumber: true } } as const;
+    const caseOfTask = { select: { incident: { select: { caseNumber: true } } } } as const;
+    const [
+      checkIns, standbys, checkouts, checklist, ratingRows, pcrs, calls, audit, subCounties,
+    ] = await Promise.all([
+      this.app.prisma.checkIn.findMany({
+        orderBy: { checkedInAt: 'desc' },
+        take: 5000,
+        include: { user: person, vehicle: plate },
+      }),
+      this.app.prisma.standbyDeployment.findMany({ orderBy: { startedAt: 'desc' }, include: { vehicle: plate } }),
+      this.app.prisma.inventoryCheckout.findMany({
+        orderBy: { checkedOutAt: 'desc' },
+        take: 5000,
+        include: { item: { select: { name: true, category: true, unit: true } }, user: person, vehicle: plate },
+      }),
+      this.app.prisma.vehicleChecklistCheck.findMany({
+        orderBy: { checkedAt: 'desc' },
+        include: { vehicle: plate, item: { select: { name: true, category: true } }, checkedBy: person },
+      }),
+      this.app.prisma.facilityRating.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: { facility: { select: { name: true } }, user: person, task: caseOfTask },
+      }),
+      this.app.prisma.patientCareReport.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: { uploader: person, task: caseOfTask },
+      }),
+      this.app.prisma.callLog.findMany({
+        orderBy: { startedAt: 'desc' },
+        take: 5000,
+        include: { incident: { select: { caseNumber: true } } },
+      }),
+      this.app.prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 5000, include: { user: person } }),
+      this.app.prisma.subCounty.findMany({ orderBy: { sortOrder: 'asc' }, select: { name: true } }),
+    ]);
     const kmByVehicle = new Map(distance.map((d) => [d.vehicleId, d._sum.distanceKm ?? 0]));
     const completedByVehicle = new Map(
       taskCounts.filter((t) => t.status === 'COMPLETED').map((t) => [t.vehicleId, t._count.id])
@@ -546,6 +583,87 @@ export class AdminService {
         };
       }),
       inventory,
+      officialSubCounties: subCounties.map((s) => s.name),
+      checkIns: checkIns.map((c) => ({
+        checkedInAt: c.checkedInAt,
+        name: c.user.name,
+        role: c.role,
+        vehicle: c.vehicle.registrationNumber,
+        location: c.locationName,
+        locationMatch: c.locationMatch,
+        distanceM: c.distanceM,
+        accuracyM: c.accuracyM == null ? null : Math.round(c.accuracyM),
+        mockLocation: c.mockLocation,
+      })),
+      standbys: standbys.map((s) => ({
+        vehicle: s.vehicle.registrationNumber,
+        title: s.title,
+        location: s.location,
+        startedAt: s.startedAt,
+        endedAt: s.endedAt,
+        minutes: minutes(s.startedAt, s.endedAt),
+        notes: s.notes,
+      })),
+      checkouts: checkouts.map((c) => ({
+        checkedOutAt: c.checkedOutAt,
+        item: c.item.name,
+        category: c.item.category,
+        unit: c.item.unit,
+        quantity: c.quantity,
+        returned: c.returnedQuantity,
+        status: c.status,
+        returnedAt: c.returnedAt,
+        by: c.user.name,
+        vehicle: c.vehicle.registrationNumber,
+      })),
+      checklist: checklist.map((c) => ({
+        checkedAt: c.checkedAt,
+        vehicle: c.vehicle.registrationNumber,
+        item: c.item.name,
+        category: c.item.category,
+        status: c.status,
+        note: c.note,
+        by: c.checkedBy.name,
+      })),
+      ratings: ratingRows.map((r) => ({
+        createdAt: r.createdAt,
+        facility: r.facility.name,
+        stars: r.stars,
+        tags: r.tags.join(', '),
+        comment: r.comment,
+        by: r.user.name,
+        role: r.user.role,
+        caseNumber: r.task.incident.caseNumber,
+      })),
+      pcrs: pcrs.map((p) => ({
+        createdAt: p.createdAt,
+        caseNumber: p.task.incident.caseNumber,
+        uploader: p.uploader.name,
+        mimeType: p.mimeType,
+        sizeKb: Math.round(p.fileSize / 102.4) / 10,
+        note: p.note || null,
+      })),
+      calls: calls.map((c) => ({
+        startedAt: c.startedAt,
+        direction: c.direction,
+        status: c.status,
+        from: maskPhone(c.callFrom),
+        to: maskPhone(c.callTo),
+        durationSec: c.duration,
+        talkSec: c.talkDuration,
+        caseNumber: c.incident?.caseNumber ?? null,
+        trunk: c.trunkName,
+        notes: c.notes,
+      })),
+      activity: audit.map((a) => ({
+        at: a.createdAt,
+        user: a.user.name,
+        role: a.user.role,
+        action: a.action,
+        subject: a.subjectType,
+        subjectId: a.subjectId.slice(0, 8),
+        ip: maskIp(a.ipAddress),
+      })),
     };
   }
 
@@ -837,6 +955,13 @@ function maskEmail(v?: string | null) {
   const [user, domain] = v.split('@');
   if (!domain) return maskId(v);
   return `${user.slice(0, 2)}${'*'.repeat(Math.max(3, user.length - 2))}@${domain}`;
+}
+
+/** 41.90.12.7 -> 41.90.*.*; IPv6 keeps its first two groups. */
+function maskIp(v?: string | null) {
+  if (!v) return null;
+  if (v.includes('.')) return v.split('.').map((p, i) => (i < 2 ? p : '*')).join('.');
+  return `${v.split(':').slice(0, 2).join(':')}:*`;
 }
 
 function maskId(v?: string | null) {
