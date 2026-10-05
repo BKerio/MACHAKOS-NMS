@@ -101,7 +101,7 @@ export const router = createBrowserRouter([
         path: 'admin/users',
         element: (
           <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN']}>
-            <DashboardPage />
+            <UserManagementPage />
           </RoleGuard>
         ),
       },

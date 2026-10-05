@@ -554,11 +554,21 @@ export function printSetup(ws: Worksheet, titleRows?: string) {
   ws.headerFooter = { oddFooter: '&L&8Machakos County EOC&C&8&A&R&8Page &P of &N' };
 }
 
-/** Arial everywhere, keeping each cell's size, weight and colour. */
-export function applyFont(ws: Worksheet) {
+/**
+ * Final pass: Arial everywhere (keeping size, weight and colour), and drop any
+ * cached formula result that is not a finite number or text - "NaN" in the XML
+ * makes Excel report the file as corrupt. Excel recalculates those on open.
+ */
+export function finishSheet(ws: Worksheet) {
   ws.eachRow({ includeEmpty: false }, (row) => {
     row.eachCell({ includeEmpty: true }, (cell) => {
       cell.font = { size: 10, ...cell.font, name: FONT };
+      // Read model.result: ExcelJS's .value getter drops falsy results such as 0.
+      const model = cell.model as { formula?: string; result?: unknown };
+      if (model.formula && typeof model.result === 'number' && !Number.isFinite(model.result)) {
+        console.warn(`System report: no cached result for ${ws.name}!${cell.address}`);
+        cell.value = { formula: model.formula } as any;
+      }
     });
   });
 }
