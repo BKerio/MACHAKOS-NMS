@@ -2,6 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from '@/App.tsx'
 import './index.css'
+import { initTheme } from '@/lib/theme'
+
+// Before the first render, so no page flashes the wrong theme.
+initTheme()
 
 function main() {
   // After a new deploy, lazily-loaded route chunks get new content-hashed names and

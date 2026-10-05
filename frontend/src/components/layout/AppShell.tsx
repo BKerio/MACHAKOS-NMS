@@ -15,16 +15,8 @@ function AppShell() {
   const user = useAuthStore((s) => s.user);
 
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true');
-  const [theme, setTheme] = useState<'light' | 'dark'>(
-    () => (localStorage.getItem('theme') as 'light' | 'dark') ?? 'light'
-  );
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [reconnectedFlash, setReconnectedFlash] = useState(false);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('theme', theme);
-  }, [theme]);
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', String(collapsed));
@@ -157,8 +149,6 @@ function AppShell() {
       />
       <div className="main">
         <TopBar
-          theme={theme}
-          onThemeToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           onToggleSidebar={() => setCollapsed((c) => !c)}
         />
         {!isConnected && (

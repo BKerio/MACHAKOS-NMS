@@ -3,8 +3,6 @@ import {
   LogOut as SignOut,
   Menu as List,
   Phone,
-  Sun,
-  Moon,
   Search as MagnifyingGlass,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -15,14 +13,13 @@ import RoleSwitcher from '@/components/layout/RoleSwitcher';
 import { useNavigate, Link } from 'react-router-dom';
 import { useActiveCalls } from '@/hooks/useActiveCalls';
 import { confirmDialog } from '@/lib/alert';
+import ThemeMenu from '@/components/layout/ThemeMenu';
 
 interface TopBarProps {
-  theme: 'light' | 'dark';
-  onThemeToggle: () => void;
   onToggleSidebar: () => void;
 }
 
-function TopBar({ theme, onThemeToggle, onToggleSidebar }: TopBarProps) {
+function TopBar({ onToggleSidebar }: TopBarProps) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [show, setShow] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
@@ -103,10 +100,8 @@ function TopBar({ theme, onThemeToggle, onToggleSidebar }: TopBarProps) {
         {/* Role switcher - Super Admin / Admin can preview any role */}
         <RoleSwitcher />
 
-        {/* Theme toggle */}
-        <button className="icon-btn" onClick={onThemeToggle} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+        {/* Appearance: light / dark / system + accent */}
+        <ThemeMenu />
 
         {/* Notifications */}
         <button

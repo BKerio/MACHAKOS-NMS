@@ -88,10 +88,10 @@ function getDateRange(preset: Preset, customFrom: string, customTo: string): { f
 
 const TOOLTIP_STYLE = {
   borderRadius: '8px',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--border)',
   boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-  background: '#fff',
-  color: '#000',
+  background: 'var(--surface)',
+  color: 'var(--ink)',
 };
 
 function AnalyticsPage() {

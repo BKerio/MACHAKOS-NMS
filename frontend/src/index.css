@@ -4,30 +4,34 @@
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
 
-  /* Map existing Tailwind token names to new palette */
-  --color-brand-green: #1B5FAC;
-  --color-brand-sidebar: #0A1B2E;
-  --color-brand-teal: #15211B;
-
-  --color-surface-page: #F4F7F5;
-  --color-surface-card: #FFFFFF;
-  --color-surface-border: #E3E8E5;
-
-  --color-slate-text: #6B7670;
-
   --color-status-danger: #D62828;
   --color-status-warning: #B7791F;
   --color-status-success: #169A5B;
   --color-status-info: #2563EB;
 }
 
+/* Project tokens read the live palette, so Tailwind classes such as
+   bg-brand-green or border-surface-border follow light/dark and the accent. */
+@theme inline {
+  --color-brand-green: var(--green);
+  --color-brand-sidebar: var(--nav-bg);
+  --color-brand-teal: var(--ink);
+  --color-surface-page: var(--bg);
+  --color-surface-card: var(--surface);
+  --color-surface-border: var(--border);
+  --color-slate-text: var(--muted);
+}
+
 /* ── Design system CSS variables ── */
 :root {
+  /* Accent. "green" is the historical name (it is the county blue by default).
+     Every shade derives from --green, so swapping the accent recolours them all. */
   --green: #1B5FAC;
-  --green-dark: #164B87;
-  --green-deep: #123A68;
-  --green-light: #E7F0FA;
-  --green-bright: #2E86D6;
+  --on-accent: #FFFFFF;
+  --green-dark: color-mix(in srgb, var(--green) 82%, #000);
+  --green-deep: color-mix(in srgb, var(--green) 66%, #000);
+  --green-light: color-mix(in srgb, var(--green) 11%, var(--surface));
+  --green-bright: color-mix(in srgb, var(--green) 78%, #fff);
   --gold: #D4A017;
   --gold-soft: #FBF3DD;
   --red: #D62828;
@@ -48,7 +52,7 @@
   --ink-2: #3D4A44;
   --muted: #6B7670;
   --muted-2: #94A099;
-  --ring: rgba(27, 95, 172, 0.32);
+  --ring: color-mix(in srgb, var(--green) 32%, transparent);
 
   --shadow-sm: 0 1px 2px rgba(16,33,26,.05);
   --shadow: 0 1px 3px rgba(16,33,26,.07), 0 1px 2px rgba(16,33,26,.04);
@@ -60,7 +64,7 @@
   --nav-border: rgba(255,255,255,.08);
   --nav-ink: #DCE6F0;
   --nav-muted: #7E93A8;
-  --nav-active: #164B87;
+  --nav-active: color-mix(in srgb, var(--green) 72%, #0A1B2E);
 
   --radius-xs: 6px;
   --radius-sm: 8px;
@@ -80,7 +84,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 #root { min-height: 100vh; }
-::selection { background: var(--green-bright); color: #fff; }
+::selection { background: var(--green-bright); color: var(--on-accent); }
 
 /* ── Scrollbars ── */
 .scroll-thin::-webkit-scrollbar { width: 6px; }
@@ -121,7 +125,7 @@ body {
 .btn-sm { height: 34px; font-size: 13px; padding: 0 12px; border-radius: var(--radius-xs); }
 .btn-lg { height: 46px; font-size: 15px; padding: 0 22px; }
 .btn-block { width: 100%; }
-.btn-primary { background: var(--green); color: #fff; box-shadow: var(--shadow-sm); }
+.btn-primary { background: var(--green); color: var(--on-accent); box-shadow: var(--shadow-sm); }
 .btn-primary:hover { background: var(--green-dark); }
 .btn-ghost { background: transparent; color: var(--ink-2); border-color: var(--border-strong); }
 .btn-ghost:hover { background: var(--surface-2); border-color: var(--muted-2); }
@@ -764,4 +768,138 @@ body {
 .wallboard-page { min-height: 100%; flex: 1; }
 @media (max-width: 859px) {
   .content:has(.wallboard-page) { padding-bottom: calc(72px + env(safe-area-inset-bottom)); background: var(--nav-bg); }
+}
+
+
+/* ========================================================================
+   Dark theme: <html data-theme="dark"> (set by lib/theme.ts)
+   ======================================================================== */
+[data-theme="dark"] {
+  --bg: #0B1420;
+  --bg-2: #0E1826;
+  --surface: #111C2B;
+  --surface-2: #152233;
+  --surface-3: #1B2A3D;
+  --border: #243447;
+  --border-strong: #32455B;
+  --ink: #E8EEF4;
+  --ink-2: #C3CFDB;
+  --muted: #8C9BAC;
+  --muted-2: #66788C;
+
+  --red: #F06464;
+  --red-soft: rgba(240, 100, 100, 0.14);
+  --amber: #E0A84A;
+  --amber-soft: rgba(224, 168, 74, 0.14);
+  --gold: #E3B53A;
+  --gold-soft: rgba(227, 181, 58, 0.14);
+  --blue: #6EA2F5;
+  --blue-soft: rgba(110, 162, 245, 0.14);
+  --green-light: color-mix(in srgb, var(--green) 18%, var(--surface));
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+  --shadow: 0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+  --shadow-md: 0 6px 18px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.3);
+  --shadow-lg: 0 22px 56px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.35);
+
+  --nav-bg: #070F19;
+  --nav-bg-2: #0B1624;
+
+  /* Tailwind slate runs light to dark; flip it so "light background" and
+     "dark text" utilities keep their meaning on a dark page. */
+  --color-slate-50: #152233;
+  --color-slate-100: #1B2A3D;
+  --color-slate-200: #243447;
+  --color-slate-300: #3A4E66;
+  --color-slate-400: #7E8FA3;
+  --color-slate-500: #94A3B8;
+  --color-slate-600: #B9C5D2;
+  --color-slate-700: #CBD5E1;
+  --color-slate-800: #E2E8F0;
+  --color-slate-900: #F1F5F9;
+  --color-gray-50: #152233;
+  --color-gray-100: #1B2A3D;
+  --color-gray-200: #243447;
+  --color-gray-500: #94A3B8;
+  --color-gray-700: #CBD5E1;
+  --color-amber-50: rgba(224, 168, 74, 0.10);
+  --color-amber-100: rgba(224, 168, 74, 0.16);
+  --color-amber-700: #F2C46E;
+  --color-blue-50: rgba(110, 162, 245, 0.10);
+  --color-blue-200: rgba(110, 162, 245, 0.30);
+  --color-blue-700: #9CC3F0;
+  --color-red-50: rgba(240, 100, 100, 0.10);
+  --color-status-danger: #F06464;
+  --color-status-warning: #E0A84A;
+  --color-status-success: #3FC486;
+  --color-status-info: #6EA2F5;
+}
+/* Plain white panels become the dark surface. (Translucent white overlays on
+   the dark sidebar, bg-white/10 and friends, are different classes.) */
+[data-theme="dark"] .bg-white { background-color: var(--surface); }
+
+/* ========================================================================
+   Accents: <html data-accent="..."> recolours buttons, links, focus rings
+   and highlights. Dark-theme variants are lifted for contrast.
+   ======================================================================== */
+[data-accent="mono"]   { --green: #15211B; --on-accent: #FFFFFF; }
+[data-accent="green"]  { --green: #15803D; }
+[data-accent="teal"]   { --green: #0F766E; }
+[data-accent="purple"] { --green: #7C3AED; }
+[data-accent="rose"]   { --green: #E11D48; }
+[data-accent="orange"] { --green: #EA580C; }
+[data-accent="flash"]  { --green: #B8D40F; --on-accent: #15211B; }
+
+[data-theme="dark"]                       { --green: #4C8FE0; }
+[data-theme="dark"][data-accent="mono"]   { --green: #E8EEF4; --on-accent: #0B1420; }
+[data-theme="dark"][data-accent="green"]  { --green: #22C55E; --on-accent: #06210F; }
+[data-theme="dark"][data-accent="teal"]   { --green: #2DD4BF; --on-accent: #042F2B; }
+[data-theme="dark"][data-accent="purple"] { --green: #A78BFA; --on-accent: #1E1036; }
+[data-theme="dark"][data-accent="rose"]   { --green: #FB7185; --on-accent: #3B0712; }
+[data-theme="dark"][data-accent="orange"] { --green: #FB923C; --on-accent: #3A1503; }
+[data-theme="dark"][data-accent="flash"]  { --green: #D9F31F; --on-accent: #15211B; }
+
+/* -- Appearance menu (components/layout/ThemeMenu.tsx) -- */
+.theme-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: 268px;
+  padding: 8px; border-radius: 14px; background: var(--surface);
+  border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+}
+.theme-menu-item {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+  border-radius: 8px; border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--ink-2); text-align: left;
+}
+.theme-menu-item:hover { background: var(--surface-2); color: var(--ink); }
+.theme-menu-item.on { background: var(--surface-3); color: var(--ink); }
+.theme-menu-sep { height: 1px; background: var(--border); margin: 8px 4px; }
+.theme-menu-label { font-size: 12px; color: var(--muted); margin: 0 8px 8px; }
+.theme-accents { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 2px; padding: 0 2px 2px; }
+.theme-accent {
+  display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 2px;
+  border: 0; background: transparent; cursor: pointer; border-radius: 8px; font: inherit;
+}
+.theme-accent:hover { background: var(--surface-2); }
+.theme-swatch {
+  width: 28px; height: 28px; border-radius: 99px; display: grid; place-items: center;
+  color: #fff; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
+}
+.theme-accent.on .theme-swatch { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.theme-accent-name { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+.theme-accent.on .theme-accent-name { color: var(--ink); font-weight: 700; }
+
+/* Sidebar highlights follow the accent too. The sidebar is always navy, so
+   these are bright variants that read on dark (an "r,g,b" triplet, because
+   the sidebar styles use rgba(var(--accent), alpha)). The default keeps the
+   original solid-blue active tile; other accents fill it with the accent and
+   switch the icon to navy for contrast. */
+[data-accent="mono"]   .sidebar { --accent: 226,232,240; }
+[data-accent="green"]  .sidebar { --accent: 74,222,128; }
+[data-accent="teal"]   .sidebar { --accent: 45,212,191; }
+[data-accent="purple"] .sidebar { --accent: 167,139,250; }
+[data-accent="rose"]   .sidebar { --accent: 251,113,133; }
+[data-accent="orange"] .sidebar { --accent: 251,146,60; }
+[data-accent="flash"]  .sidebar { --accent: 217,243,31; }
+[data-accent]:not([data-accent="default"]) .nav-item.active .nav-tile {
+  background: rgb(var(--accent)); color: var(--nav-bg); box-shadow: 0 6px 16px rgba(var(--accent), .3);
 }
