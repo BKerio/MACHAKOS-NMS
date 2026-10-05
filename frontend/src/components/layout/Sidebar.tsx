@@ -32,6 +32,8 @@ import {
   Bell,
   Megaphone,
   CircleUserRound,
+  Search,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { useActiveCalls } from '@/hooks/useActiveCalls';
@@ -135,6 +137,7 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
   const incidentQueueCount = useIncidentQueueCount();
   // When collapsed, hovering the rail temporarily expands it as an overlay.
   const [peek, setPeek] = useState(false);
+  const [query, setQuery] = useState('');
 
   const visibleSections = menuSections
     .map((section) => ({
@@ -143,6 +146,17 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
     }))
     .filter((section) => section.items.length > 0);
   const visibleItems = visibleSections.flatMap((section) => section.items);
+
+  // Search narrows the menu to matching pages (by label or section name).
+  const q = query.trim().toLowerCase();
+  const shownSections = q
+    ? visibleSections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((i) => i.label.toLowerCase().includes(q) || section.title?.toLowerCase().includes(q)),
+        }))
+        .filter((section) => section.items.length > 0)
+    : visibleSections;
 
   // Several nav paths share a prefix (e.g. '/fleet' and '/fleet/fuel'), so a
   // plain startsWith check would light up both at once. Only the single
@@ -217,13 +231,37 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
             </div>
 
             <div className="brand-text">
-              <b>Emergency Operations</b>
-              <span className="brand-org">Machakos County</span>
+              <b>Emergency Ops</b>
+              <span className="brand-org">for Machakos County</span>
             </div>
           </div>
 
+          <div className="sidebar-search">
+            <Search size={15} aria-hidden="true" />
+            <input
+              type="search"
+              placeholder="Search"
+              aria-label="Search the menu"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setQuery('');
+                if (e.key === 'Enter') {
+                  const first = shownSections[0]?.items[0];
+                  if (first) { navigate(first.path); setQuery(''); }
+                }
+              }}
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
           <nav className="nav-scroll" aria-label="Main">
-            {visibleSections.map((section, idx) => (
+            {shownSections.length === 0 && <p className="nav-empty">No pages match “{query}”.</p>}
+            {shownSections.map((section, idx) => (
               <div className="nav-group" key={section.title ?? `section-${idx}`}>
                 {section.title && (
                   <div className="nav-group-label">
@@ -238,11 +276,12 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
                     <Link
                       key={item.path}
                       to={item.path}
+                      onClick={() => setQuery('')}
                       className={`nav-item${isActive ? ' active' : ''}`}
                       aria-current={isActive ? 'page' : undefined}
                     >
                       <span className="nav-tile">
-                        <item.Icon size={24} aria-hidden="true" />
+                        <item.Icon size={20} aria-hidden="true" />
                       </span>
                       <span className="nav-label">{item.label}</span>
                       {badge && (
