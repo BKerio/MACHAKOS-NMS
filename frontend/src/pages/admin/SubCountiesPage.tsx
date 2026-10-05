@@ -63,7 +63,7 @@ function SubCountiesPage() {
     },
   });
 
-  const filtered = subCounties.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = subCounties.filter(s => (s.name ?? '').toLowerCase().includes(search.toLowerCase()));
 
   function submit() {
     const name = newName.trim();

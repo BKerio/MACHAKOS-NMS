@@ -90,12 +90,15 @@ function FacilitiesPage() {
     },
   });
 
+  // Shares its cache entry with SubCountiesPage, so the cached value must stay the
+  // raw API rows - derive the name list with `select` instead of in queryFn.
   const { data: subCounties = [] } = useQuery({
     queryKey: ['admin', 'sub-counties'],
     queryFn: async () => {
       const res = await api.get('/admin/sub-counties');
-      return (res.data.data as { name: string }[]).map(s => s.name);
+      return res.data.data as { id: string; name: string }[];
     },
+    select: (rows) => rows.map(s => s.name),
     staleTime: 5 * 60_000,
   });
 

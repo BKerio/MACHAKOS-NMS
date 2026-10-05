@@ -37,7 +37,9 @@ function NatureOptionsPage() {
   const queryClient = useQueryClient();
 
   const { data: options = [], isLoading } = useQuery<NatureOption[]>({
-    queryKey: ['nature-options'],
+    // Flat admin rows - kept apart from the wizard's grouped ['nature-options'] entry.
+    // Invalidating ['nature-options'] still refreshes both (prefix match).
+    queryKey: ['nature-options', 'admin'],
     queryFn: async () => {
       const res = await api.get('/admin/nature-options');
       return res.data.data as NatureOption[];

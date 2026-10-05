@@ -141,7 +141,8 @@ function NatureOptionsManager() {
   const [selectedNature, setSelectedNature] = useState('');
 
   const { data: options = [] } = useQuery<{ id: string; nature: string; detail: string | null }[]>({
-    queryKey: ['nature-options'],
+    // Flat admin rows - kept apart from the wizard's grouped ['nature-options'] entry.
+    queryKey: ['nature-options', 'admin'],
     queryFn: async () => {
       const res = await api.get('/admin/nature-options');
       return res.data.data;

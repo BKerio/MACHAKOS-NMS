@@ -4,6 +4,7 @@ import RoleGuard from '@/components/shared/RoleGuard';
 import AppShell from '@/components/layout/AppShell';
 import LoginPage from '@/pages/auth/LoginPage';
 import AppLoader from '@/components/shared/AppLoader';
+import RouteError from '@/components/shared/RouteError';
 
 // Heavy authenticated pages are code-split so they load on demand (keeps the
 // initial bundle small). The Suspense boundary lives in AppShell.
@@ -57,12 +58,14 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+    errorElement: <RouteError />,
   },
   {
     // Public, read-only wallboard for an unattended screen in the ops room.
     // Sits OUTSIDE AppShell and any RoleGuard on purpose - no login, no chrome.
     // Access is gated by ?token= matching the backend's WALLBOARD_TOKEN.
     path: '/display',
+    errorElement: <RouteError />,
     element: (
       <Suspense
         fallback={
@@ -82,7 +85,14 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShell />,
+    // Fallback if AppShell itself throws.
+    errorElement: <RouteError />,
     children: [
+      {
+      // Pathless layout route: a page crash renders RouteError inside the shell,
+      // so the sidebar stays usable and the user can navigate away.
+      errorElement: <RouteError />,
+      children: [
       {
         index: true,
         element: <Navigate to="/login" replace />,
@@ -414,6 +424,8 @@ export const router = createBrowserRouter([
       {
         path: '*',
         element: <div className="p-10 font-sans font-bold text-slate-text text-center">Page Not Found</div>,
+      },
+      ],
       },
     ],
   },

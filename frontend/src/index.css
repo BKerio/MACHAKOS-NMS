@@ -41,8 +41,10 @@
   --blue: #2563EB;
   --blue-soft: #E8EFFD;
 
-  --bg: #F4F7F5;
-  --bg-2: #EDF2EF;
+  /* Page background matches the sidebar panel (--sb-bg reads this), so the
+     shell reads as one surface with white cards floating on it. */
+  --bg: #EFEFF2;
+  --bg-2: #E7E7EB;
   --surface: #FFFFFF;
   --surface-2: #F8FAF9;
   --surface-3: #F1F5F3;
@@ -775,8 +777,8 @@ body {
    Dark theme: <html data-theme="dark"> (set by lib/theme.ts)
    ======================================================================== */
 [data-theme="dark"] {
-  --bg: #0B1420;
-  --bg-2: #0E1826;
+  --bg: #0E1723;
+  --bg-2: #0B131D;
   --surface: #111C2B;
   --surface-2: #152233;
   --surface-3: #1B2A3D;
@@ -911,14 +913,13 @@ body {
    These rules sit after the original sidebar styles and override them.
    ======================================================================== */
 :root {
-  --sb-bg: #EFEFF2;
+  --sb-bg: var(--bg);
   --sb-line: rgba(0, 0, 0, .08);
   --sb-hover: rgba(0, 0, 0, .045);
   --sb-active: rgba(0, 0, 0, .075);
   --sb-muted: #86868B;
 }
 [data-theme="dark"] {
-  --sb-bg: #0E1723;
   --sb-line: rgba(255, 255, 255, .08);
   --sb-hover: rgba(255, 255, 255, .05);
   --sb-active: rgba(255, 255, 255, .09);
