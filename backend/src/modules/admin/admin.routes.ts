@@ -84,6 +84,7 @@ const partnerAmbulanceSchema = z.object({
 const createFacilitySchema = z.object({
   name: z.string().min(2),
   type: z.string().min(2),
+  ownership: z.enum(['PUBLIC', 'PRIVATE']).optional(),
   kephLevel: z.number().int().min(1).max(6),
   subCounty: z.string().min(2),
   lat: z.number(),
@@ -93,6 +94,7 @@ const createFacilitySchema = z.object({
 const updateFacilitySchema = z.object({
   name: z.string().min(2).optional(),
   type: z.string().optional(),
+  ownership: z.enum(['PUBLIC', 'PRIVATE']).optional(),
   kephLevel: z.number().int().min(1).max(6).optional(),
   isActive: z.boolean().optional(),
   subCounty: z.string().min(2).optional(),

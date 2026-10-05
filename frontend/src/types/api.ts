@@ -118,10 +118,13 @@ export interface PaginatedResponse<T> {
   meta: PaginatedMeta;
 }
 
+export type FacilityOwnership = 'PUBLIC' | 'PRIVATE';
+
 export interface Facility {
   id: string;
   name: string;
   type: string;
+  ownership: FacilityOwnership;
   kephLevel: number;
   subCounty: string;
   lat: number;

@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   FileBarChart2 as FileBarChart,
   FileSpreadsheet,
@@ -24,48 +24,13 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import api from '@/api/client';
 import { useNotificationStore } from '@/stores/notificationStore';
-
-interface SystemReport {
-  generatedAt: string;
-  summary: {
-    users: number;
-    activeUsers: number;
-    inactiveUsers: number;
-    incidents: number;
-    vehicles: number;
-    agencies: number;
-    facilities: number;
-    inventoryItems: number;
-    lowStockItems: number;
-    partnerAmbulances: number;
-    activePartnerAmbulances: number;
-    gbvReports: number;
-    natureOptions: number;
-    tasks: number;
-  };
-  usersByRole: { role: string; count: number }[];
-  usersByStatus: { status: string; count: number }[];
-  incidentsByStatus: { status: string; count: number }[];
-  incidentsByNature: { nature: string; count: number }[];
-  incidentsBySubCounty: { subCounty: string; count: number }[];
-  vehiclesByStatus: { status: string; count: number }[];
-  agenciesByType: { type: string; count: number }[];
-  facilitiesByType: { type: string; count: number }[];
-  inventoryByCategory: { category: string; items: number; stock: number }[];
-  inventoryLowStock: {
-    name: string;
-    category: string;
-    quantityStock: number;
-    reorderLevel: number;
-    unit: string;
-  }[];
-  tasksByStatus: { status: string; count: number }[];
-}
+import { caseSlices, fmtMinutes, ownershipSlices, pct, type Slice, type SystemReport } from './systemReport/types';
+import { renderPie } from './systemReport/pieImage';
+import { exportSystemReportExcel } from './systemReport/exportExcel';
 
 const CHART_COLORS = [
   '#15211B',
@@ -90,6 +55,54 @@ const TOOLTIP_STYLE = {
 
 function labelize(value: string) {
   return value.replace(/_/g, ' ');
+}
+
+/** Labelled donut for part-to-whole at a glance; the legend beside it carries every value. */
+function DonutWithLegend({ slices, caption }: { slices: Slice[]; caption: string }) {
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  if (total === 0) return <EmptyChart />;
+  return (
+    <div className="h-full flex items-center gap-4">
+      <div className="relative h-full flex-1 min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={slices.filter((s) => s.value > 0)}
+              dataKey="value"
+              nameKey="label"
+              innerRadius="58%"
+              outerRadius="88%"
+              stroke="var(--surface)"
+              strokeWidth={2}
+              isAnimationActive={false}
+            >
+              {slices.filter((s) => s.value > 0).map((s) => (
+                <Cell key={s.label} fill={s.color} />
+              ))}
+            </Pie>
+            <RechartsTooltip
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(v: any, name: any) => [`${v} (${pct(Number(v), total)})`, name]}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-2xl font-black leading-none" style={{ color: 'var(--ink)' }}>{total}</span>
+          <span className="text-[11px] mt-1" style={{ color: 'var(--muted)' }}>{caption}</span>
+        </div>
+      </div>
+      <ul className="flex flex-col gap-2 text-sm min-w-[170px]">
+        {slices.map((s) => (
+          <li key={s.label} className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-[3px] flex-shrink-0" style={{ background: s.color }} />
+            <span className="flex-1" style={{ color: 'var(--ink)' }}>{s.label}</span>
+            <span className="font-bold tabular-nums" style={{ color: 'var(--ink)' }}>{s.value}</span>
+            <span className="w-12 text-right text-xs tabular-nums" style={{ color: 'var(--muted)' }}>{pct(s.value, total)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function shortNature(value: string) {
@@ -155,66 +168,23 @@ function SystemReportPage() {
     [data]
   );
 
-  function exportExcel() {
+  const [exporting, setExporting] = useState(false);
+
+  async function exportExcel() {
     if (!data) {
       addNotification({ type: 'info', title: 'No Data', message: 'Report is still loading.' });
       return;
     }
-
-    const wb = XLSX.utils.book_new();
-
-    const summaryRows = [
-      ['Metric', 'Value'],
-      ['Generated At', new Date(data.generatedAt).toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })],
-      ['Total Users', data.summary.users],
-      ['Active Users', data.summary.activeUsers],
-      ['Inactive Users', data.summary.inactiveUsers],
-      ['Total Incidents', data.summary.incidents],
-      ['Total Tasks', data.summary.tasks],
-      ['Vehicles', data.summary.vehicles],
-      ['Agencies', data.summary.agencies],
-      ['Facilities', data.summary.facilities],
-      ['Inventory Items', data.summary.inventoryItems],
-      ['Low Stock Items', data.summary.lowStockItems],
-      ['Partner Ambulances', data.summary.partnerAmbulances],
-      ['Active Partner Ambulances', data.summary.activePartnerAmbulances],
-      ['GBV Reports', data.summary.gbvReports],
-      ['Nature Options', data.summary.natureOptions],
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Summary');
-
-    const sheets: [string, string[], (string | number)[][]][] = [
-      ['Users by Role', ['Role', 'Count'], data.usersByRole.map((r) => [r.role, r.count])],
-      ['Incidents by Status', ['Status', 'Count'], data.incidentsByStatus.map((r) => [r.status, r.count])],
-      ['Incidents by Nature', ['Nature', 'Count'], data.incidentsByNature.map((r) => [r.nature, r.count])],
-      ['Incidents by Sub-County', ['Sub-County', 'Count'], data.incidentsBySubCounty.map((r) => [r.subCounty, r.count])],
-      ['Vehicles by Status', ['Status', 'Count'], data.vehiclesByStatus.map((r) => [r.status, r.count])],
-      ['Agencies by Type', ['Type', 'Count'], data.agenciesByType.map((r) => [r.type, r.count])],
-      ['Facilities by Type', ['Type', 'Count'], data.facilitiesByType.map((r) => [r.type, r.count])],
-      [
-        'Inventory by Category',
-        ['Category', 'Items', 'Stock'],
-        data.inventoryByCategory.map((r) => [r.category, r.items, r.stock]),
-      ],
-      [
-        'Low Stock',
-        ['Name', 'Category', 'Stock', 'Reorder', 'Unit'],
-        data.inventoryLowStock.map((r) => [r.name, r.category, r.quantityStock, r.reorderLevel, r.unit]),
-      ],
-      ['Tasks by Status', ['Status', 'Count'], data.tasksByStatus.map((r) => [r.status, r.count])],
-    ];
-
-    for (const [title, headers, rows] of sheets) {
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.aoa_to_sheet([headers, ...rows]),
-        title.slice(0, 31)
-      );
+    setExporting(true);
+    try {
+      await exportSystemReportExcel(data);
+      addNotification({ type: 'success', title: 'Excel Exported', message: 'System report downloaded as Excel.' });
+    } catch (err) {
+      console.error(err);
+      addNotification({ type: 'error', title: 'Export Failed', message: 'Could not build the Excel report.' });
+    } finally {
+      setExporting(false);
     }
-
-    const stamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `EOC_System_Report_${stamp}.xlsx`);
-    addNotification({ type: 'success', title: 'Excel Exported', message: 'System report downloaded as Excel.' });
   }
 
   function exportPdf() {
@@ -242,6 +212,41 @@ function SystemReportPage() {
     doc.setTextColor(0);
     y += 8;
 
+    const c = data.caseSummary;
+    const rt = data.responseTimes;
+    autoTable(doc, {
+      startY: y,
+      head: [['Cases', 'Value']],
+      body: [
+        ['Total cases', String(c.total)],
+        ['Solved (resolved)', String(c.resolved)],
+        ['Pending (awaiting dispatch)', String(c.pending)],
+        ['In progress (crew dispatched)', String(c.inProgress)],
+        ['Drafts (not submitted)', String(c.drafts)],
+        ['Resolution rate (of submitted)', `${c.resolutionRate}%`],
+        ['Today / last 7 days / last 30 days', `${c.today} / ${c.last7Days} / ${c.last30Days}`],
+        ['Mass casualty incidents', String(c.massCasualty)],
+        ['GBV-flagged cases', String(c.gbvFlagged)],
+        ['Avg time to reach scene', fmtMinutes(rt.avgResponseMinutes)],
+        ['Avg case duration', fmtMinutes(rt.avgCaseMinutes)],
+      ],
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [27, 95, 172] },
+      margin: { left: 14, right: 14 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 6;
+
+    // Two pies side by side: case outcomes and facility ownership.
+    const pieW = (pageWidth - 28 - 6) / 2;
+    const pies = [
+      renderPie('Case outcomes', caseSlices(data), 'cases'),
+      renderPie('Facilities - Public vs Private', ownershipSlices(data), 'facilities'),
+    ];
+    pies.forEach((p, i) => {
+      doc.addImage(p.dataUrl, 'PNG', 14 + i * (pieW + 6), y, pieW, (pieW * p.height) / p.width);
+    });
+    y += (pieW * pies[0].height) / pies[0].width + 8;
+
     autoTable(doc, {
       startY: y,
       head: [['Metric', 'Value']],
@@ -252,7 +257,7 @@ function SystemReportPage() {
         ['Tasks', String(data.summary.tasks)],
         ['Vehicles', String(data.summary.vehicles)],
         ['Agencies', String(data.summary.agencies)],
-        ['Facilities', String(data.summary.facilities)],
+        ['Facilities (public / private)', `${data.summary.facilities} (${data.summary.publicFacilities} / ${data.summary.privateFacilities})`],
         ['Inventory Items', String(data.summary.inventoryItems)],
         ['Low Stock Items', String(data.summary.lowStockItems)],
         ['Partner Ambulances', String(data.summary.partnerAmbulances)],
@@ -285,6 +290,16 @@ function SystemReportPage() {
         title: 'Incidents by Sub-County',
         head: ['Sub-County', 'Count'],
         body: data.incidentsBySubCounty.map((r) => [r.subCounty, r.count]),
+      },
+      {
+        title: 'Facilities by Ownership',
+        head: ['Ownership', 'Count', 'Share'],
+        body: ownershipSlices(data).map((s) => [s.label, s.value, pct(s.value, data.summary.facilities)]),
+      },
+      {
+        title: 'Facilities by Type',
+        head: ['Type', 'Count'],
+        body: data.facilitiesByType.map((r) => [r.type, r.count]),
       },
       {
         title: 'Vehicles by Status',
@@ -368,12 +383,12 @@ function SystemReportPage() {
           <button
             type="button"
             onClick={exportExcel}
-            disabled={!data}
+            disabled={!data || exporting}
             className="flex items-center gap-2 px-4 py-3 text-xs font-black tracking-widest rounded-xl border transition-colors disabled:opacity-40"
             style={{ borderColor: 'var(--border)', color: 'var(--ink)', background: 'var(--surface-2)' }}
           >
             <FileSpreadsheet size={16} />
-            Export Excel
+            {exporting ? 'Building…' : 'Export Excel'}
           </button>
           <button
             type="button"
@@ -436,6 +451,48 @@ function SystemReportPage() {
               {summary.lowStockItems} inventory item{summary.lowStockItems === 1 ? '' : 's'} at or below reorder level
             </div>
           )}
+
+          {/* Case summary */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            {[
+              { label: 'Total cases', value: data.caseSummary.total },
+              { label: 'Solved', value: data.caseSummary.resolved, color: '#0a7d0a' },
+              { label: 'Pending', value: data.caseSummary.pending, color: '#a86b00' },
+              { label: 'In progress', value: data.caseSummary.inProgress, color: '#1c5cab' },
+              { label: 'Resolution rate', value: `${data.caseSummary.resolutionRate}%` },
+              { label: 'Avg to scene', value: fmtMinutes(data.responseTimes.avgResponseMinutes) },
+            ].map((kpi) => (
+              <div
+                key={kpi.label}
+                className="rounded-xl border p-4 shadow-sm"
+                style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+              >
+                <span className="text-[10px] font-black tracking-widest" style={{ color: kpi.color ?? 'var(--muted)' }}>
+                  {kpi.label}
+                </span>
+                <p className="text-2xl font-black leading-none mt-2" style={{ color: 'var(--ink)' }}>
+                  {kpi.value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard
+              title="Case Outcomes"
+              subtitle={`${data.caseSummary.today} today · ${data.caseSummary.last7Days} in 7 days · ${data.caseSummary.last30Days} in 30 days · ${data.caseSummary.massCasualty} mass casualty`}
+              height={300}
+            >
+              <DonutWithLegend slices={caseSlices(data)} caption="cases" />
+            </ChartCard>
+            <ChartCard
+              title="Facilities - Public vs Private"
+              subtitle={`${data.summary.activeFacilities} of ${data.summary.facilities} facilities active`}
+              height={300}
+            >
+              <DonutWithLegend slices={ownershipSlices(data)} caption="facilities" />
+            </ChartCard>
+          </div>
 
           {/* Charts row 1 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

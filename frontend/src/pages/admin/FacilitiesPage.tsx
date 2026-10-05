@@ -21,7 +21,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
 import api from '@/api/client';
-import { Facility } from '@/types/api';
+import { Facility, FacilityOwnership } from '@/types/api';
 import Map from '@/components/shared/Map';
 import LoadingState from '@/components/shared/LoadingState';
 
@@ -49,7 +49,17 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   'Maternity': Baby,
 };
 
-const emptyForm = { name: '', type: 'Hospital', kephLevel: 3, subCounty: '' };
+const OWNERSHIP_OPTIONS: { value: FacilityOwnership; label: string; hint: string }[] = [
+  { value: 'PUBLIC', label: 'Public', hint: 'County / national government' },
+  { value: 'PRIVATE', label: 'Private', hint: 'Privately owned' },
+];
+
+const ownershipBadge: Record<FacilityOwnership, { bg: string; color: string }> = {
+  PUBLIC: { bg: '#EFF6FF', color: '#1D4ED8' },
+  PRIVATE: { bg: '#FFF7ED', color: '#C2410C' },
+};
+
+const emptyForm = { name: '', type: 'Hospital', ownership: 'PUBLIC' as FacilityOwnership, kephLevel: 3, subCounty: '' };
 
 // ── input style helper (dark-mode safe) ──────────────────────────────────────
 const inputCls =
@@ -107,6 +117,7 @@ function FacilitiesPage() {
       api.post('/admin/facilities', {
         name: form.name,
         type: form.type,
+        ownership: form.ownership,
         kephLevel: Number(form.kephLevel),
         subCounty: form.subCounty,
         lat: pin!.lat,
@@ -220,7 +231,7 @@ function FacilitiesPage() {
   }
 
   function openEdit(f: Facility) {
-    setForm({ name: f.name, type: f.type, kephLevel: f.kephLevel, subCounty: f.subCounty });
+    setForm({ name: f.name, type: f.type, ownership: f.ownership ?? 'PUBLIC', kephLevel: f.kephLevel, subCounty: f.subCounty });
     setPin({ lat: f.lat, lng: f.lng });
     setLocationQuery('');
     setSuggestions([]);
@@ -241,6 +252,7 @@ function FacilitiesPage() {
         data: {
           name: form.name,
           type: form.type,
+          ownership: form.ownership,
           kephLevel: Number(form.kephLevel),
           subCounty: form.subCounty,
           lat: pin!.lat,
@@ -285,11 +297,12 @@ function FacilitiesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: 'Total', value: facilities.length },
           { label: 'Active', value: facilities.filter(f => f.isActive).length },
-          { label: 'Hospitals', value: facilities.filter(f => f.type === 'Hospital').length },
+          { label: 'Public', value: facilities.filter(f => f.ownership === 'PUBLIC').length },
+          { label: 'Private', value: facilities.filter(f => f.ownership === 'PRIVATE').length },
           { label: 'Sub-Counties', value: new Set(facilities.map(f => f.subCounty)).size },
         ].map(stat => (
           <div
@@ -354,7 +367,7 @@ function FacilitiesPage() {
             <table className="w-full text-left border-collapse min-w-[820px]">
               <thead>
                 <tr className="border-b" style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}>
-                  {['Facility', 'Type', 'KEPH Level', 'Sub-County', 'Crew rating', 'Coordinates', 'Status', ''].map(h => (
+                  {['Facility', 'Type', 'Ownership', 'KEPH Level', 'Sub-County', 'Crew rating', 'Coordinates', 'Status', ''].map(h => (
                     <th key={h} className="px-6 py-4 font-sans text-[10px] font-black tracking-[0.2em]" style={{ color: 'var(--muted)' }}>
                       {h}
                     </th>
@@ -364,7 +377,7 @@ function FacilitiesPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-20 text-center">
+                    <td colSpan={9} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-4">
                         <Hospital size={48} style={{ color: 'var(--border)' }} />
                         <p className="font-bold text-sm tracking-widest" style={{ color: 'var(--muted)' }}>No facilities found</p>
@@ -389,6 +402,14 @@ function FacilitiesPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-semibold text-sm" style={{ color: 'var(--ink)' }}>{f.type}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest"
+                        style={{ background: ownershipBadge[f.ownership]?.bg ?? 'var(--surface-2)', color: ownershipBadge[f.ownership]?.color ?? 'var(--muted)' }}
+                      >
+                        {f.ownership === 'PRIVATE' ? 'Private' : 'Public'}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <span
@@ -533,6 +554,26 @@ function FacilitiesPage() {
                       >
                         <Icon size={20} />
                         <span className="text-[10px] font-bold text-center leading-tight">{t}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {OWNERSHIP_OPTIONS.map(o => {
+                    const active = form.ownership === o.value;
+                    const badge = ownershipBadge[o.value];
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, ownership: o.value }))}
+                        className="rounded-xl border-2 px-3 py-2.5 text-left transition-all"
+                        style={active
+                          ? { background: badge.bg, borderColor: badge.color, color: badge.color }
+                          : { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--muted)' }}
+                      >
+                        <span className="block text-sm font-black">{o.label}</span>
+                        <span className="block text-[10px] font-semibold opacity-80">{o.hint}</span>
                       </button>
                     );
                   })}

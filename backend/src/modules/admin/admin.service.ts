@@ -225,14 +225,14 @@ export class AdminService {
   }
 
   async createFacility(data: {
-    name: string; type: string; kephLevel: number;
+    name: string; type: string; ownership?: 'PUBLIC' | 'PRIVATE'; kephLevel: number;
     subCounty: string; lat: number; lng: number;
   }) {
     return this.app.prisma.facility.create({ data });
   }
 
   async updateFacility(id: string, data: {
-    name?: string; type?: string; kephLevel?: number; isActive?: boolean;
+    name?: string; type?: string; ownership?: 'PUBLIC' | 'PRIVATE'; kephLevel?: number; isActive?: boolean;
     subCounty?: string; lat?: number; lng?: number;
   }) {
     const facility = await this.app.prisma.facility.findUnique({ where: { id } });
@@ -426,6 +426,71 @@ export class AdminService {
       this.app.prisma.incidentNatureOption.count(),
     ]);
 
+    // Case volume windows are counted from Nairobi midnight (UTC+3, no DST).
+    const NAIROBI_MS = 3 * 3600_000;
+    const now = Date.now();
+    const todayStart = new Date(Math.floor((now + NAIROBI_MS) / 86_400_000) * 86_400_000 - NAIROBI_MS);
+    const daysAgo = (n: number) => new Date(todayStart.getTime() - (n - 1) * 86_400_000);
+
+    const [
+      incidentsToday,
+      incidentsWeek,
+      incidentsMonth,
+      massCasualtyIncidents,
+      gbvFlaggedIncidents,
+      incidentsByGender,
+      incidentsByMonth,
+      taskTimes,
+      facilities,
+    ] = await Promise.all([
+      this.app.prisma.incident.count({ where: { createdAt: { gte: todayStart } } }),
+      this.app.prisma.incident.count({ where: { createdAt: { gte: daysAgo(7) } } }),
+      this.app.prisma.incident.count({ where: { createdAt: { gte: daysAgo(30) } } }),
+      this.app.prisma.incident.count({ where: { massCasualty: true } }),
+      this.app.prisma.incident.count({ where: { isGbvCase: true } }),
+      this.app.prisma.incident.groupBy({ by: ['patientGender'], _count: { id: true } }),
+      // Last 6 months, Nairobi calendar months.
+      this.app.prisma.$queryRaw<Array<{ month: string; total: bigint; resolved: bigint }>>`
+        SELECT to_char(date_trunc('month', created_at + interval '3 hours'), 'YYYY-MM') AS month,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE status = 'RESOLVED') AS resolved
+        FROM incidents
+        WHERE created_at >= date_trunc('month', now() + interval '3 hours') - interval '5 months' - interval '3 hours'
+        GROUP BY 1 ORDER BY 1`,
+      // Averages in minutes; AVG skips tasks missing a timestamp.
+      this.app.prisma.$queryRaw<Array<{
+        accept_min: number | null; response_min: number | null; cycle_min: number | null;
+        total_km: number | null; completed: bigint;
+      }>>`
+        SELECT AVG(EXTRACT(EPOCH FROM (accepted_at - received_at))) / 60      AS accept_min,
+               AVG(EXTRACT(EPOCH FROM (scene_arrival_at - received_at))) / 60 AS response_min,
+               AVG(EXTRACT(EPOCH FROM (completed_at - received_at))) / 60     AS cycle_min,
+               SUM(COALESCE(distance_to_scene_km, 0) + COALESCE(scene_to_facility_km, 0)) AS total_km,
+               COUNT(*) FILTER (WHERE status = 'COMPLETED') AS completed
+        FROM tasks`,
+      this.app.prisma.facility.findMany({
+        select: { name: true, type: true, ownership: true, kephLevel: true, subCounty: true, isActive: true },
+        orderBy: [{ ownership: 'asc' }, { name: 'asc' }],
+      }),
+    ]);
+
+    const statusCount = (s: string) => incidentsByStatus.find((r) => r.status === s)?._count.id ?? 0;
+    const resolved = statusCount('RESOLVED');
+    const inProgress = statusCount('DISPATCHED');
+    const pending = statusCount('SUBMITTED') + statusCount('DISPATCH_HANDLING') + statusCount('DISPATCH_ON_HOLD');
+    const drafts = statusCount('DRAFT');
+    const submitted = incidentsTotal - drafts;
+
+    const tally = <T,>(rows: T[], key: (r: T) => string | number) => {
+      const m = new Map<string | number, number>();
+      for (const r of rows) m.set(key(r), (m.get(key(r)) ?? 0) + 1);
+      return m;
+    };
+    const ownershipCounts = tally(facilities, (f) => f.ownership);
+    const kephCounts = tally(facilities, (f) => f.kephLevel);
+    const round1 = (n: number | null | undefined) => (n == null ? null : Math.round(Number(n) * 10) / 10);
+    const t = taskTimes[0];
+
     const lowStockItems = inventoryItems.filter(
       (i) => i.reorderLevel > 0 && i.quantityStock <= i.reorderLevel
     );
@@ -450,7 +515,48 @@ export class AdminService {
         gbvReports: gbvTotal,
         natureOptions: natureOptionsTotal,
         tasks: tasksByStatus.reduce((s, t) => s + t._count.id, 0),
+        publicFacilities: ownershipCounts.get('PUBLIC') ?? 0,
+        privateFacilities: ownershipCounts.get('PRIVATE') ?? 0,
+        activeFacilities: facilities.filter((f) => f.isActive).length,
       },
+      // Case outcomes. Pending = waiting on dispatch (submitted, being handled, on hold);
+      // in progress = crew dispatched; drafts are never-submitted watcher entries.
+      caseSummary: {
+        total: incidentsTotal,
+        resolved,
+        pending,
+        inProgress,
+        drafts,
+        resolutionRate: submitted > 0 ? Math.round((resolved / submitted) * 1000) / 10 : 0,
+        today: incidentsToday,
+        last7Days: incidentsWeek,
+        last30Days: incidentsMonth,
+        massCasualty: massCasualtyIncidents,
+        gbvFlagged: gbvFlaggedIncidents,
+      },
+      responseTimes: {
+        avgAcceptMinutes: round1(t?.accept_min),
+        avgResponseMinutes: round1(t?.response_min),
+        avgCaseMinutes: round1(t?.cycle_min),
+        totalDistanceKm: round1(t?.total_km) ?? 0,
+        completedTasks: Number(t?.completed ?? 0),
+      },
+      incidentsByMonth: incidentsByMonth.map((r) => ({
+        month: r.month,
+        total: Number(r.total),
+        resolved: Number(r.resolved),
+      })),
+      incidentsByGender: incidentsByGender
+        .map((r) => ({ gender: r.patientGender?.trim() || 'Not recorded', count: r._count.id }))
+        .sort((a, b) => b.count - a.count),
+      facilitiesByOwnership: [
+        { ownership: 'PUBLIC', count: ownershipCounts.get('PUBLIC') ?? 0 },
+        { ownership: 'PRIVATE', count: ownershipCounts.get('PRIVATE') ?? 0 },
+      ],
+      facilitiesByKeph: [...kephCounts.entries()]
+        .map(([level, count]) => ({ level: Number(level), count }))
+        .sort((a, b) => a.level - b.level),
+      facilityList: facilities,
       usersByRole: usersByRole.map((r) => ({
         role: r.role,
         count: r._count.id,

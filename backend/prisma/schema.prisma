@@ -610,10 +610,17 @@ model CheckIn {
 // Facility
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Who runs a facility: government (county/national) or privately owned.
+enum FacilityOwnership {
+  PUBLIC
+  PRIVATE
+}
+
 model Facility {
   id        String   @id @default(uuid())
   name      String
   type      String   // e.g., "Hospital", "Health Centre", "Clinic"
+  ownership FacilityOwnership @default(PUBLIC)
   kephLevel Int      @map("keph_level") // 1–6, Kenya KEPH classification
   subCounty String   @map("sub_county")
   lat       Float
