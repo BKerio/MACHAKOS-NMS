@@ -501,6 +501,11 @@ model Vehicle {
   // left null rather than persisted as 0. See TrackingService.mapToInternalFormat.
   lastFuelLevelL     Float?    @map("last_fuel_level_l")
   lastFuelLevelAt    DateTime? @map("last_fuel_level_at")
+  // Previous GPS sample used to add up distance driven (see VehicleDistanceHour).
+  distLastLat         Float?    @map("dist_last_lat")
+  distLastLng         Float?    @map("dist_last_lng")
+  distLastAt          DateTime? @map("dist_last_at")
+  distLastOdometerKm  Float?    @map("dist_last_odometer_km")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
@@ -535,8 +540,30 @@ model Vehicle {
   standbys  StandbyDeployment[]
   inventoryCheckouts InventoryCheckout[]
   checklistChecks    VehicleChecklistCheck[]
+  distanceHours      VehicleDistanceHour[]
 
   @@map("vehicles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VehicleDistanceHour - kilometres an ambulance drove in one clock hour
+// (Africa/Nairobi), accumulated every GPS poll from the tracker's odometer when
+// it reports one, else from the straight-line legs between fixes. One row per
+// vehicle per hour; powers the hourly distance report on Fuel Monitoring.
+// ─────────────────────────────────────────────────────────────────────────────
+model VehicleDistanceHour {
+  id            String   @id @default(uuid())
+  vehicleId     String   @map("vehicle_id")
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  hourStart     DateTime @map("hour_start")
+  distanceKm    Float    @default(0) @map("distance_km")
+  movingSamples Int      @default(0) @map("moving_samples")
+  source        String   @default("GPS") // GPS | ODOMETER
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([vehicleId, hourStart])
+  @@index([hourStart])
+  @@map("vehicle_distance_hours")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

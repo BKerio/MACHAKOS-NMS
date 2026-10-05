@@ -585,6 +585,19 @@ export class FleetService {
     if (running) {
       throw new ConflictError(`${vehicle.registrationNumber} is already on standby for "${running.title}". End that first.`);
     }
+    // The reverse rule of dispatch: a unit on a case (or out of service) can't be promised to an event.
+    if (vehicle.status === VehicleStatus.MAINTENANCE) {
+      throw new BadRequestError(`${vehicle.registrationNumber} is out of service. Return it to service first.`);
+    }
+    const onCase = await this.app.prisma.task.findFirst({
+      where: { vehicleId: vehicle.id, status: { notIn: ['COMPLETED', 'CANCELLED', 'HANDED_OVER'] } },
+      select: { incident: { select: { caseNumber: true } } },
+    });
+    if (onCase || vehicle.status === VehicleStatus.BUSY) {
+      throw new ConflictError(
+        `${vehicle.registrationNumber} is on ${onCase ? onCase.incident.caseNumber : 'a case'}. It can go on standby once that case is finished.`,
+      );
+    }
 
     const row = await this.app.prisma.standbyDeployment.create({
       data: {

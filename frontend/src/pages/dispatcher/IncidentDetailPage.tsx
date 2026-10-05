@@ -197,7 +197,7 @@ function IncidentDetailPage() {
 
   // Only show vehicles that can actually be dispatched right now
   const nearestVehicles = (nearestVehiclesRaw ?? []).filter(
-    v => v.status === 'READY' && v.isActive && !!v.currentDriver
+    v => v.status === 'READY' && v.isActive && !!v.currentDriver && !v.standby
   );
 
   // Real-time: keep incident fresh when status changes or crew is assigned
@@ -1671,10 +1671,13 @@ function IncidentDetailPage() {
                 setSelectedVehicleId(v.vehicleId);
                 document.getElementById('dispatch-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
               } else {
+                const standby = (nearestVehiclesRaw ?? []).find(nv => nv.id === v.vehicleId)?.standby;
                 addNotification({
                   type: 'error',
                   title: 'Not Available',
-                  message: `${v.registration} is ${v.dbStatus === 'BUSY' ? 'already on a call' : v.dbStatus === 'MAINTENANCE' ? 'under maintenance' : 'not ready for dispatch'}.`,
+                  message: standby
+                    ? `${v.registration} is on standby for "${standby.title}". End the standby before assigning it a case.`
+                    : `${v.registration} is ${v.dbStatus === 'BUSY' ? 'already on a call' : v.dbStatus === 'MAINTENANCE' ? 'under maintenance' : 'not ready for dispatch'}.`,
                 });
               }
             }}

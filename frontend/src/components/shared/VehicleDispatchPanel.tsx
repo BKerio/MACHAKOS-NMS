@@ -101,6 +101,15 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
   const hasDriver = !!dbVehicle?.currentDriver;
   const crewReady = !!dbVehicle && isCrewComplete(dbVehicle);
   const isVehicleBusy = dbVehicle?.status === 'BUSY';
+  // A unit on standby is promised to an event and can't take a case (the server refuses too).
+  const { data: standby = null } = useQuery({
+    queryKey: ['fleet', 'standby', 'active', clickedVehicle.vehicleId],
+    queryFn: async () => {
+      const rows = (await api.get('/fleet/standby', { params: { active: 'true', vehicleId: clickedVehicle.vehicleId } })).data.data as
+        { title: string; location?: string | null }[];
+      return rows[0] ?? null;
+    },
+  });
   const isLoading = loadingVehicles || loadingIncidents;
 
   const scoredIncidents = scoreIncidents(incidents, clickedVehicle.lat, clickedVehicle.lng);
@@ -134,6 +143,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
     hasDriver &&
     crewReady &&
     !isVehicleBusy &&
+    !standby &&
     !!selectedIncidentId &&
     !!dbVehicle &&
     !dispatch.isPending;
@@ -245,6 +255,14 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
           )}
 
           {/* Warnings */}
+          {!isLoading && standby && !isVehicleBusy && (
+            <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg text-xs font-medium bg-status-warning/10 border border-status-warning/30 text-status-warning">
+              <WarningCircle size={14} className="flex-shrink-0 mt-0.5" />
+              <span>
+                On standby for "{standby.title}"{standby.location ? ` at ${standby.location}` : ''}. End the standby before assigning it a case.
+              </span>
+            </div>
+          )}
           {!isLoading && (isVehicleBusy || !hasDriver) && (
             <div
               className={`mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg text-xs font-medium ${
@@ -349,7 +367,9 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
               ? 'Driver must check in via mobile before dispatching'
               : !crewReady
                 ? `Crew incomplete (${crewShortfall(dbVehicle!)}) - needs an EMT and a nurse, two EMTs, or two nurses`
-                : 'Vehicle is currently on an active task'}
+                : standby
+                  ? 'Vehicle is on standby - end the standby first'
+                  : 'Vehicle is currently on an active task'}
           </p>
         )}
         <button

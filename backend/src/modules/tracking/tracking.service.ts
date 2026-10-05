@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { Role } from '../../shared/types/index.js';
+import { extractOdometerKm, legKm, nairobiHourStart } from './distance.js';
 
 /**
  * Uffizio Pull API - GPS Tracking Service
@@ -41,6 +42,8 @@ interface VehicleLocation {
   hasDriver: boolean;
   /** Litres, only set when the tracker reports a real fuel-sensor port (see extractFuelLevel). */
   fuelLevelL: number | null;
+  /** Tracker odometer in km, when the feed carries one (see distance.ts). */
+  odometerKm: number | null;
 }
 
 /**
@@ -284,6 +287,9 @@ export class TrackingService {
     }
 
     await this.persistLocations(locations);
+    // Hourly distance is a report, not live tracking - never let it break a poll.
+    await this.accumulateDistance(locations).catch((err) =>
+      this.app.log.warn({ err }, 'Uffizio: hourly distance update failed'));
 
     this.app.io
       .to(`role:${Role.DISPATCHER}`)
@@ -356,10 +362,54 @@ export class TrackingService {
         dbStatus: (dbV.status as 'READY' | 'BUSY' | 'MAINTENANCE') ?? 'READY',
         hasDriver: !!dbV.currentDriverId,
         fuelLevelL: extractFuelLevel(raw),
+        odometerKm: extractOdometerKm(raw),
       });
     }
 
     return locations;
+  }
+
+  // ── Hourly distance ───────────────────────────────────────────────────────
+
+  /**
+   * Adds the leg each ambulance drove since its previous fix to the clock hour
+   * of the new fix (VehicleDistanceHour), then remembers the new fix. Runs
+   * once per poll, so each 65-second leg is counted exactly once.
+   */
+  private async accumulateDistance(locations: VehicleLocation[]): Promise<void> {
+    const prevRows = await this.app.prisma.vehicle.findMany({
+      where: { id: { in: locations.map((l) => l.vehicleId) } },
+      select: { id: true, distLastLat: true, distLastLng: true, distLastAt: true, distLastOdometerKm: true },
+    });
+    const prevById = new Map(prevRows.map((r) => [r.id, r]));
+
+    for (const loc of locations) {
+      const at = new Date(loc.timestamp);
+      const prev = prevById.get(loc.vehicleId);
+      // Same fix as last poll (tracker hasn't reported since) - nothing to add.
+      if (prev?.distLastAt && prev.distLastAt.getTime() >= at.getTime()) continue;
+
+      if (prev?.distLastAt && prev.distLastLat != null && prev.distLastLng != null) {
+        const leg = legKm(
+          { lat: prev.distLastLat, lng: prev.distLastLng, at: prev.distLastAt, odometerKm: prev.distLastOdometerKm },
+          { lat: loc.lat, lng: loc.lng, at, odometerKm: loc.odometerKm },
+          loc.ignition || loc.speed > 3,
+        );
+        if (leg && leg.km > 0) {
+          const hourStart = nairobiHourStart(at);
+          await this.app.prisma.vehicleDistanceHour.upsert({
+            where: { vehicleId_hourStart: { vehicleId: loc.vehicleId, hourStart } },
+            create: { vehicleId: loc.vehicleId, hourStart, distanceKm: leg.km, movingSamples: 1, source: leg.source },
+            update: { distanceKm: { increment: leg.km }, movingSamples: { increment: 1 }, source: leg.source },
+          });
+        }
+      }
+
+      await this.app.prisma.vehicle.update({
+        where: { id: loc.vehicleId },
+        data: { distLastLat: loc.lat, distLastLng: loc.lng, distLastAt: at, distLastOdometerKm: loc.odometerKm },
+      });
+    }
   }
 
   // ── Persistence ───────────────────────────────────────────────────────────

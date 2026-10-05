@@ -4,7 +4,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/err
 import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { getChecklistSummary, checklistIncompleteMessage } from '../fleet/checklist.js';
-import { findReadyUnits } from '../fleet/readiness.js';
+import { assertNotOnStandby, findReadyUnits } from '../fleet/readiness.js';
 import {
   clearedCrew,
   crewInclude,
@@ -252,6 +252,7 @@ export class TaskService {
     if (!vehicle) throw new NotFoundError('Vehicle not found');
     const driverId = vehicle.currentDriverId;
     if (!driverId) throw new BadRequestError('No driver is checked in to this vehicle');
+    await assertNotOnStandby(this.app.prisma, vehicle.id, vehicle.registrationNumber);
     const crewProblem = crewIncompleteMessage(vehicle);
     if (crewProblem) throw new BadRequestError(crewProblem);
 
@@ -465,6 +466,7 @@ export class TaskService {
       if (newVehicle.agencyId !== task.vehicle.agencyId) {
         throw new BadRequestError('Replacement vehicle must belong to the same agency');
       }
+      await assertNotOnStandby(this.app.prisma, newVehicle.id, newVehicle.registrationNumber);
       const stillOnCase = await this.app.prisma.task.count({
         where: {
           vehicleId: newVehicle.id,

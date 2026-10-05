@@ -98,6 +98,8 @@ export interface Vehicle {
    * vehicle lists (nearest-vehicles, admin vehicle list) - see backend
    * fleet/checklist.ts. Absent on payloads that don't compute it. */
   checklistComplete?: boolean;
+  /** The standby this unit is committed to (nearest-vehicles list). On standby = not dispatchable. */
+  standby?: { title: string; location?: string | null } | null;
   checklistConfirmed?: number;
   checklistTotal?: number;
   checklistMedicalOk?: boolean;

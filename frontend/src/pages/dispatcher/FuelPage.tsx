@@ -17,6 +17,7 @@ import { formatDistanceToNow } from 'date-fns';
 import api from '@/api/client';
 import type { Vehicle } from '@/types/api';
 import LoadingState from '@/components/shared/LoadingState';
+import HourlyDistanceCard from '@/components/fleet/HourlyDistanceCard';
 
 interface FuelSummaryRow {
   imei: string;
@@ -226,6 +227,9 @@ function FuelPage() {
           </div>
         )}
       </div>
+
+      {/* Km per ambulance per hour - from our own GPS poll, always available */}
+      <HourlyDistanceCard />
 
       {/* Date range */}
       <div className="card card-pad row" style={{ gap: 10, flexWrap: 'wrap' }}>

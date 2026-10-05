@@ -213,7 +213,10 @@ export class DispatchService {
   private async withChecklistSummary<
     T extends { id: string; currentDriver: unknown; currentEmt: unknown; currentEmt2: unknown; currentNurse: unknown; currentNurse2: unknown },
   >(vehicles: T[]) {
-    const summaries = await Promise.all(vehicles.map((v) => getChecklistSummary(this.app.prisma, v.id)));
+    const [summaries, standbys] = await Promise.all([
+      Promise.all(vehicles.map((v) => getChecklistSummary(this.app.prisma, v.id))),
+      this.activeStandbys(vehicles.map((v) => v.id)),
+    ]);
     return vehicles.map((v, i) => {
       const medicCount = [v.currentEmt, v.currentEmt2, v.currentNurse, v.currentNurse2].filter(Boolean).length;
       return {
@@ -223,8 +226,19 @@ export class DispatchService {
         checklistComplete: summaries[i].complete,
         checklistConfirmed: summaries[i].confirmed,
         checklistTotal: summaries[i].totalRequired,
+        // On standby = promised to an event: shown, but never dispatchable.
+        standby: standbys.get(v.id) ?? null,
       };
     });
+  }
+
+  /** Not-yet-ended standbys for these vehicles, keyed by vehicle id. */
+  private async activeStandbys(vehicleIds: string[]) {
+    const rows = await this.app.prisma.standbyDeployment.findMany({
+      where: { vehicleId: { in: vehicleIds }, endedAt: null },
+      select: { vehicleId: true, title: true, location: true },
+    });
+    return new Map(rows.map((r) => [r.vehicleId, { title: r.title, location: r.location }]));
   }
 
   /**
@@ -232,6 +246,9 @@ export class DispatchService {
    */
   async findNearestVehicles(lat: number, lng: number, agencyId?: string, limit: number = 5) {
     const allLocations = await this.fleetService.getAllActiveVehicleLocations();
+    // Units on standby rank with the not-ready ones, so they can't crowd
+    // dispatchable units out of the limited list.
+    const onStandby = new Set((await this.activeStandbys(allLocations.map((v) => v.vehicleId))).keys());
 
     if (allLocations.length > 0) {
       const availableVehicles = allLocations.filter(v => {
@@ -257,7 +274,7 @@ export class DispatchService {
       // Units that can take a case come first, then by distance - so a cluster
       // of busy or broken-down vehicles near the scene can't push every ready
       // one past the limit.
-      const notReady = (v: { status?: string }) => (v.status === 'READY' ? 0 : 1);
+      const notReady = (v: { id: string; status?: string }) => (v.status === 'READY' && !onStandby.has(v.id) ? 0 : 1);
       vehiclesWithDistance.sort((a, b) => notReady(a) - notReady(b) || a.distanceKm - b.distanceKm);
       const top = vehiclesWithDistance.slice(0, limit);
 
@@ -287,15 +304,14 @@ export class DispatchService {
     // Redis empty - fall back to DB vehicles with crew data
     const where = agencyId ? { isActive: true, agencyId } : { isActive: true };
     // Ready units first (same reason as above), then by plate.
-    const dbVehicles = (
-      await this.app.prisma.vehicle.findMany({
-        where,
-        orderBy: { registrationNumber: 'asc' },
-        include: crewInclude,
-      })
-    )
-      .sort((a, b) => (a.status === 'READY' ? 0 : 1) - (b.status === 'READY' ? 0 : 1))
-      .slice(0, limit);
+    const allDb = await this.app.prisma.vehicle.findMany({
+      where,
+      orderBy: { registrationNumber: 'asc' },
+      include: crewInclude,
+    });
+    const dbStandby = await this.activeStandbys(allDb.map((v) => v.id));
+    const rank = (v: { id: string; status: string }) => (v.status === 'READY' && !dbStandby.has(v.id) ? 0 : 1);
+    const dbVehicles = allDb.sort((a, b) => rank(a) - rank(b)).slice(0, limit);
     const checkIns = await this.fleetService.driverCheckIns(dbVehicles);
 
     return this.withChecklistSummary(
