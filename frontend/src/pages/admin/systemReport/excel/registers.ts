@@ -31,6 +31,7 @@ export function casesRegister(ws: Worksheet, d: SystemReport, x: D): Reg {
   const cols: Col<CaseRow>[] = [
     { header: 'Case No', width: 11, kind: 'text', get: (r) => r.caseNumber },
     { header: 'Status', width: 17, kind: 'label', get: (r) => r.status },
+    { header: 'Case Type', width: 11, kind: 'label', get: (r) => r.incidentType },
     { header: 'Created', width: 17, kind: 'date', get: (r) => r.createdAt },
     { header: 'Weekday', width: 9, kind: 'text', get: (r) => weekdayHour(r.createdAt).weekday },
     { header: 'Hour', width: 7, kind: 'int', get: (r) => weekdayHour(r.createdAt).hour },
@@ -52,6 +53,8 @@ export function casesRegister(ws: Worksheet, d: SystemReport, x: D): Reg {
     { header: 'Casualties', width: 10, kind: 'int', get: (r) => r.massCasualtyCount },
     { header: 'GBV Case', width: 9, kind: 'yesno', get: (r) => r.gbv },
     { header: 'Patient Name', width: 22, kind: 'text', get: (r) => r.patientName },
+    { header: 'Unknown Person', width: 9, kind: 'yesno', get: (r) => r.patientUnknown },
+    { header: 'Distinguishing Features', width: 30, kind: 'wrap', get: (r) => r.patientDescription },
     { header: 'Age', width: 7, kind: 'text', get: (r) => r.patientAge },
     { header: 'Gender', width: 9, kind: 'text', get: (r) => r.patientGender },
     { header: 'Patient Contact', width: 14, kind: 'text', get: (r) => r.patientContact },
@@ -63,6 +66,7 @@ export function casesRegister(ws: Worksheet, d: SystemReport, x: D): Reg {
     { header: 'Maternity Vitals', width: 30, kind: 'wrap', get: (r) => r.maternityVitals },
     { header: 'Pre-Hospital Management', width: 36, kind: 'wrap', get: (r) => r.preHospitalManagement },
     { header: 'KEPH Level Required', width: 10, kind: 'int', get: (r) => r.hospitalLevelRequired },
+    { header: 'Referred From', width: 26, kind: 'text', get: (r) => r.originFacility },
     { header: 'Target Facility', width: 26, kind: 'text', get: (r) => r.targetFacility },
     { header: 'Place of Referral', width: 22, kind: 'text', get: (r) => r.placeOfReferral },
     { header: 'Ambulance Used', width: 14, kind: 'text', get: (r) => r.ambulanceUsed },
@@ -92,6 +96,8 @@ export function casesRegister(ws: Worksheet, d: SystemReport, x: D): Reg {
     ['Dispatch handling', WARN], ['Dispatch on hold', WARN], ['Draft', NEUTRAL],
   ]);
   statusFormats(ws, reg, 'Official Sub-County', [['No', BAD]]);
+  statusFormats(ws, reg, 'Case Type', [['Referral', INFO]]);
+  statusFormats(ws, reg, 'Unknown Person', [['Yes', WARN]]);
   statusFormats(ws, reg, 'Mass Casualty', [['Yes', BAD]]);
   statusFormats(ws, reg, 'GBV Case', [['Yes', BAD]]);
   return reg;

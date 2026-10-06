@@ -276,6 +276,12 @@ function QueuePage() {
                     <tr key={inc.id} onClick={() => navigate(`/incidents/${inc.id}`)}>
                       <td>
                         <span className="mono strong" style={{ fontSize: 13 }}>{inc.caseNumber}</span>
+                        {inc.incidentType === 'REFERRAL' && (
+                          <span className="pill pill-blue" style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px' }}>Referral</span>
+                        )}
+                        {inc.patientUnknown && (
+                          <span className="pill pill-amber" style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px' }}>Unknown person</span>
+                        )}
                         {inc.massCasualty && (
                           <span className="pill pill-red" style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px' }}>
                             <WarningCircle size={9} /> MCI
@@ -294,7 +300,11 @@ function QueuePage() {
                         )}
                       </td>
                       <td>
-                        <div style={{ fontSize: 13.5 }}>{inc.locationName}</div>
+                        <div style={{ fontSize: 13.5 }}>
+                          {inc.incidentType === 'REFERRAL' && inc.placeOfReferral
+                            ? `${inc.locationName} → ${inc.placeOfReferral}`
+                            : inc.locationName}
+                        </div>
                         {inc.subCounty && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{inc.subCounty}</div>}
                       </td>
                       <td>

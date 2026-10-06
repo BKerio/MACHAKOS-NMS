@@ -353,6 +353,7 @@ export class AdminService {
           dispatcher: person,
           assignedAgency: { select: { name: true } },
           targetFacility: { select: { name: true } },
+          originFacility: { select: { name: true } },
           tasks: {
             orderBy: { receivedAt: 'desc' },
             take: 1,
@@ -466,6 +467,10 @@ export class AdminService {
       cases: incidents.map((i) => ({
         caseNumber: i.caseNumber,
         status: i.status,
+        incidentType: i.incidentType,
+        originFacility: i.originFacility?.name ?? null,
+        patientUnknown: i.patientUnknown,
+        patientDescription: i.patientDescription,
         createdAt: i.createdAt,
         alertAt: i.alertAt,
         alertMode: i.alertMode,

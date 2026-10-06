@@ -67,6 +67,10 @@ export class IncidentService {
       healthcareWorkerName?: string;
       healthcareWorkerContact?: string;
       isGbvCase?: boolean;
+      incidentType?: 'EMERGENCY' | 'REFERRAL';
+      originFacilityId?: string;
+      patientUnknown?: boolean;
+      patientDescription?: string;
       vitals?: {
         temperature?: string;
         pulseRate?: string;
@@ -79,6 +83,35 @@ export class IncidentService {
       maternityVitals?: Record<string, any>;
     }
   ) {
+    // Referral (facility A -> B): the pickup facility is the case location, so
+    // dispatch, crew navigation and distances all work unchanged. Taken from the
+    // facility registry rather than the client so the pin is always the facility.
+    const isReferral = data.incidentType === 'REFERRAL';
+    if (isReferral) {
+      if (!data.originFacilityId || !data.targetFacilityId) {
+        throw new BadRequestError('A referral needs both the referring and the receiving facility');
+      }
+      if (data.originFacilityId === data.targetFacilityId) {
+        throw new BadRequestError('Referring and receiving facility must be different');
+      }
+      const [origin, target] = await Promise.all([
+        this.app.prisma.facility.findUnique({ where: { id: data.originFacilityId } }),
+        this.app.prisma.facility.findUnique({ where: { id: data.targetFacilityId } }),
+      ]);
+      if (!origin || !target) throw new BadRequestError('Referral facility not found');
+      data = {
+        ...data,
+        locationName: origin.name,
+        subCounty: origin.subCounty,
+        subCountySource: 'AUTO',
+        lat: origin.lat,
+        lng: origin.lng,
+        placeOfReferral: target.name,
+      };
+    } else {
+      data = { ...data, originFacilityId: undefined };
+    }
+
     const initialStatus = user.role === Role.WATCHER
       ? IncidentStatus.DRAFT
       : IncidentStatus.SUBMITTED;
@@ -128,6 +161,10 @@ export class IncidentService {
         healthcareWorkerName: data.healthcareWorkerName,
         healthcareWorkerContact: data.healthcareWorkerContact,
         isGbvCase: data.isGbvCase ?? false,
+        incidentType: isReferral ? 'REFERRAL' : 'EMERGENCY',
+        originFacilityId: data.originFacilityId,
+        patientUnknown: data.patientUnknown ?? false,
+        patientDescription: data.patientDescription,
         vitals: data.vitals ?? undefined,
         maternityVitals: data.maternityVitals ?? undefined,
         assignedAgencyId: user.agencyId,
@@ -238,6 +275,7 @@ export class IncidentService {
       orderBy: { createdAt: 'desc' },
       include: {
         targetFacility: { select: { name: true } },
+        originFacility: { select: { name: true } },
         // Lets the export's "Ambulance used" column fall back to the tracked
         // vehicle's registration when no free-text value was recorded.
         tasks: {
@@ -275,6 +313,7 @@ export class IncidentService {
           orderBy: { createdAt: 'asc' },
         },
         targetFacility: true,
+        originFacility: true,
       },
     });
 
@@ -343,7 +382,7 @@ export class IncidentService {
       'chiefComplaint', 'locationName', 'subCounty', 'massCasualty',
       'massCasualtyCount', 'watcherComments', 'dispatcherComments',
       'dispatcherChallenges', 'patientName', 'patientAge', 'patientGender',
-      'patientNhif', 'patientNationalId',
+      'patientNhif', 'patientNationalId', 'patientUnknown', 'patientDescription',
       'patientContact', 'nextOfKin', 'nextOfKinPhone', 'alertNature',
       'alertNatureDetail', 'placeOfReferral', 'targetFacilityId', 'hospitalLevelRequired',
       'healthcareWorkerName', 'healthcareWorkerContact',

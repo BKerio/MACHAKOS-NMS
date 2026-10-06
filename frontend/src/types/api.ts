@@ -327,6 +327,13 @@ export interface Incident {
   healthcareWorkerContact?: string;
   targetFacilityId?: string | null;
   targetFacility?: Facility | null;
+  /** REFERRAL = facility-to-facility transfer: pickup at originFacility, delivery to targetFacility. */
+  incidentType?: 'EMERGENCY' | 'REFERRAL';
+  originFacilityId?: string | null;
+  originFacility?: Facility | null;
+  /** Unidentified patient - patientName holds the John/Jane Doe placeholder. */
+  patientUnknown?: boolean;
+  patientDescription?: string | null;
   massCasualty: boolean;
   massCasualtyCount?: number;
   watcherComments?: string;

@@ -20,6 +20,10 @@ import {
   RadioTower,
   Footprints,
   MoreHorizontal,
+  Siren,
+  ArrowRightLeft,
+  Hospital,
+  UserX,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
@@ -28,6 +32,7 @@ import CreatableCombobox from '@/components/shared/CreatableCombobox';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
 import { toNairobiInput, nairobiInputToISO } from '@/lib/datetime';
+import { fetchDrivingRoute, type DrivingRoute } from '@/lib/directions';
 import type { Facility } from '@/types/api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -35,6 +40,26 @@ import type { Facility } from '@/types/api';
 const ORIGIN_OPTIONS = [
   'Community', 'Hospital', 'Police', 'Fire Department', 'Other EMS', 'Self-referral', 'Other',
 ];
+
+type IncidentType = 'EMERGENCY' | 'REFERRAL';
+
+const facilityLabel = (f: Facility) =>
+  [f.name, f.type, f.subCounty].filter(Boolean).join(' · ');
+
+/** Great-circle distance in km - a fallback while the road route loads. */
+function straightKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2
+    + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/** Placeholder name for an unidentified patient, by recorded sex. */
+function unknownPatientName(gender: string) {
+  if (gender === 'Male') return 'John Doe';
+  if (gender === 'Female') return 'Jane Doe';
+  return 'Unknown person';
+}
 
 // ── Style tokens ─────────────────────────────────────────────────────────────
 
@@ -92,11 +117,11 @@ function Row({
 
 /** Pick-one tiles with an icon (the design's "Number of employees" tiles). */
 function TileGroup<T extends string>({
-  options, value, onChange,
-}: { options: { value: T; label: string; Icon: ElementType }[]; value: T; onChange: (v: T) => void }) {
+  options, value, onChange, cols = 'grid-cols-2 sm:grid-cols-4',
+}: { options: { value: T; label: string; Icon: ElementType; sub?: string }[]; value: T; onChange: (v: T) => void; cols?: string }) {
   return (
-    <div role="radiogroup" className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-      {options.map(({ value: v, label, Icon }) => {
+    <div role="radiogroup" className={`grid ${cols} gap-2.5`}>
+      {options.map(({ value: v, label, Icon, sub }) => {
         const on = value === v;
         return (
           <button
@@ -114,6 +139,7 @@ function TileGroup<T extends string>({
           >
             <Icon size={18} />
             {label}
+            {sub && <span className="text-[11px] font-normal -mt-1" style={{ color: 'var(--muted)' }}>{sub}</span>}
           </button>
         );
       })}
@@ -309,6 +335,10 @@ const defaultMV: MaternityVitalsForm = {
 // ── Form state ────────────────────────────────────────────────────────────────
 
 type FormState = {
+  incidentType: IncidentType;
+  originFacilityId: string;
+  patientUnknown: boolean;
+  patientDescription: string;
   alertAt: string;
   alertMode: string;
   notifierName: string;
@@ -340,6 +370,10 @@ type FormState = {
 };
 
 const defaultForm: FormState = {
+  incidentType: 'EMERGENCY',
+  originFacilityId: '',
+  patientUnknown: false,
+  patientDescription: '',
   alertAt: toNairobiInput(),
   alertMode: 'Phone',
   notifierName: '',
@@ -454,9 +488,50 @@ function NewIncidentWizard() {
 
 
 
+  // ── Referral (facility A -> facility B) ────────────────────────────────────
+  const isReferral = form.incidentType === 'REFERRAL';
+  const originFacility = facilities.find(f => f.id === form.originFacilityId);
+  const targetFacility = facilities.find(f => f.id === form.targetFacilityId);
+  const sameFacility = !!form.originFacilityId && form.originFacilityId === form.targetFacilityId;
+  const patientDisplayName = form.patientUnknown ? unknownPatientName(form.patientGender) : form.patientName;
+
+  // The referring facility is the pickup point, so it becomes the case location.
+  const pickOriginFacility = (id: string) => {
+    const f = facilities.find(x => x.id === id);
+    set(f
+      ? { originFacilityId: id, locationName: f.name, subCounty: f.subCounty, lat: f.lat, lng: f.lng }
+      : { originFacilityId: '', locationName: '', subCounty: '' });
+    setSubCountySource(f ? 'AUTO' : '');
+  };
+
+  const switchIncidentType = (t: IncidentType) => {
+    if (t === form.incidentType) return;
+    // Facility-filled location must not leak into an emergency scene, or vice versa.
+    set({
+      incidentType: t, originFacilityId: '', targetFacilityId: '', placeOfReferral: '',
+      locationName: '', subCounty: '', lat: defaultForm.lat, lng: defaultForm.lng,
+    });
+    setSubCountySource('');
+  };
+
+  // Road route A -> B for the transfer summary (Google, falling back to OSRM).
+  const [referralRoute, setReferralRoute] = useState<DrivingRoute | null>(null);
+  useEffect(() => {
+    setReferralRoute(null);
+    if (!isReferral || !originFacility || !targetFacility || sameFacility) return;
+    let cancelled = false;
+    fetchDrivingRoute(
+      { lat: originFacility.lat, lng: originFacility.lng },
+      { lat: targetFacility.lat, lng: targetFacility.lng },
+    ).then(r => { if (!cancelled) setReferralRoute(r); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isReferral, originFacility?.id, targetFacility?.id]);
+
   // ── Step validation (Screen 1: Alert + Location · Screen 2: Patient + Incident · Screen 3: Review) ──
   const alertOk    = !!form.alertAt && !!form.alertMode;                 // Alert
-  const locationOk = !!form.locationName.trim() && !!form.subCounty;     // Location
+  const locationOk = isReferral                                          // Location / transfer
+    ? !!form.originFacilityId && !!form.targetFacilityId && !sameFacility
+    : !!form.locationName.trim() && !!form.subCounty;
   const incidentOk = !!form.alertNature && !!form.chiefComplaint.trim(); // Incident (Patient has no required fields)
   const step1Ok = alertOk && locationOk;    // Screen 1: Alert & Location
   const step2Ok = incidentOk;               // Screen 2: Patient & Incident
@@ -466,9 +541,18 @@ function NewIncidentWizard() {
   const missingByStep: Record<number, string[]> = {
     1: [
       !form.alertAt && 'date & time', !form.alertMode && 'alert mode',
-      !form.locationName && 'location', !form.subCounty && 'sub-county',
+      ...(isReferral
+        ? [
+            !form.originFacilityId && 'referring facility',
+            !form.targetFacilityId && 'receiving facility',
+            sameFacility && 'two different facilities',
+          ]
+        : [!form.locationName && 'location', !form.subCounty && 'sub-county']),
     ].filter(Boolean) as string[],
-    2: [!form.alertNature && 'nature of alert', !form.chiefComplaint && 'chief complaint'].filter(Boolean) as string[],
+    2: [
+      !form.alertNature && 'nature of alert',
+      !form.chiefComplaint && (isReferral ? 'reason for referral' : 'chief complaint'),
+    ].filter(Boolean) as string[],
     3: [],
   };
 
@@ -648,6 +732,10 @@ function NewIncidentWizard() {
   // ── Payload builder ────────────────────────────────────────────────────────
   const buildPayload = () => ({
     clientRef:             clientRef.current,
+    incidentType:          form.incidentType,
+    originFacilityId:      isReferral ? form.originFacilityId : undefined,
+    patientUnknown:        form.patientUnknown || undefined,
+    patientDescription:    form.patientUnknown ? (form.patientDescription.trim() || undefined) : undefined,
     alertMode:             form.alertMode,
     alertAt:               nairobiInputToISO(form.alertAt),
     originOfAlert:         form.originOfAlert || undefined,
@@ -657,9 +745,9 @@ function NewIncidentWizard() {
     subCountySource:       subCountySource || undefined,
     lat:                   form.lat,
     lng:                   form.lng,
-    patientName:           form.patientName  || undefined,
-    patientContact:        form.patientContact || undefined,
-    patientNationalId:     form.patientNationalId || undefined,
+    patientName:           patientDisplayName || undefined,
+    patientContact:        form.patientUnknown ? undefined : form.patientContact || undefined,
+    patientNationalId:     form.patientUnknown ? undefined : form.patientNationalId || undefined,
     patientAge:            form.patientAge   || undefined,
     patientGender:         form.patientGender || undefined,
     nextOfKin:             form.nextOfKin    || undefined,
@@ -807,9 +895,10 @@ function NewIncidentWizard() {
       className="incident-wizard flex-1 min-h-0 flex flex-col overflow-hidden"
       style={{ background: 'linear-gradient(180deg, var(--green-light) 0%, var(--bg) 360px)' }}
     >
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-5 sm:px-6 sm:pt-8">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-4 sm:px-5 sm:pt-5">
+        {/* Full width: on wide screens each step's sections sit side by side (.iw-grid). */}
         <div
-          className="mx-auto w-full max-w-[860px] rounded-2xl border flex flex-col mb-5 sm:mb-8"
+          className="w-full rounded-2xl border flex flex-col mb-4 sm:mb-5"
           style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: '0 12px 40px rgba(16, 33, 26, 0.08)' }}
         >
           <div className="px-5 sm:px-10 pt-5">
@@ -832,10 +921,28 @@ function NewIncidentWizard() {
 
         {/* ─────────────── STEP 1: Alert ─────────────── */}
         {step === 1 && (
-          <div className="flex flex-col gap-12">
+          <div className="iw-grid">
 
               {/* ── Card 1: Alert ── */}
               <SectionCard title="About the alert" description="Who called, and how the alert came in." icon={Phone}>
+                <Field>
+                  <Label required>Type of case</Label>
+                  <TileGroup<IncidentType>
+                    cols="grid-cols-2"
+                    value={form.incidentType}
+                    onChange={switchIncidentType}
+                    options={[
+                      { value: 'EMERGENCY', label: 'Emergency', Icon: Siren, sub: 'Respond to a scene' },
+                      { value: 'REFERRAL', label: 'Referral', Icon: ArrowRightLeft, sub: 'Facility A to facility B' },
+                    ]}
+                  />
+                  <Hint>
+                    {isReferral
+                      ? 'An ambulance collects the patient at one facility and transfers them to another.'
+                      : 'Someone needs help at a location in the community.'}
+                  </Hint>
+                </Field>
+
                 <Field>
                   <Label required>Alert date &amp; time</Label>
                   <input
@@ -881,8 +988,8 @@ function NewIncidentWizard() {
                   </Field>
                 </Row>
 
-                <Field>
-                  <Label>Referral facility</Label>
+                {!isReferral && <Field>
+                  <Label>Receiving facility</Label>
                   <select
                     className={selectCls}
                     value={form.targetFacilityId}
@@ -892,24 +999,102 @@ function NewIncidentWizard() {
                       set({ targetFacilityId: id, placeOfReferral: f?.name ?? '' });
                     }}
                   >
-                    <option value="">No referral facility</option>
+                    <option value="">Not decided yet</option>
                     {facilityOptions.map(f => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                        {f.type ? ` · ${f.type}` : ''}
-                        {f.subCounty ? ` · ${f.subCounty}` : ''}
-                      </option>
+                      <option key={f.id} value={f.id}>{facilityLabel(f)}</option>
                     ))}
                   </select>
                   <Hint>
                     {facilities.length === 0
                       ? 'No facilities configured yet. Add them under Admin → Facilities.'
-                      : 'Facilities in the selected sub-county are listed first.'}
+                      : 'Where the patient should be taken, if known. Facilities in the sub-county are listed first.'}
                   </Hint>
-                </Field>
+                </Field>}
               </SectionCard>
 
+              {/* ── Card 2 (referral): the transfer ── */}
+              {isReferral && (
+                <SectionCard title="Referral transfer" description="Where the ambulance collects the patient, and where it takes them." icon={ArrowRightLeft}>
+                  <Field>
+                    <Label required>From (referring facility)</Label>
+                    <select className={selectCls} value={form.originFacilityId} onChange={e => pickOriginFacility(e.target.value)}>
+                      <option value="">Select the facility referring the patient...</option>
+                      {facilityOptions.map(f => (
+                        <option key={f.id} value={f.id}>{facilityLabel(f)}</option>
+                      ))}
+                    </select>
+                    <Hint>The ambulance is dispatched here. This becomes the case location.</Hint>
+                  </Field>
+
+                  <Field>
+                    <Label required>To (receiving facility)</Label>
+                    <select
+                      className={selectCls}
+                      value={form.targetFacilityId}
+                      onChange={e => {
+                        const f = facilities.find(x => x.id === e.target.value);
+                        set({ targetFacilityId: e.target.value, placeOfReferral: f?.name ?? '' });
+                      }}
+                    >
+                      <option value="">Select the facility receiving the patient...</option>
+                      {facilityOptions.filter(f => f.id !== form.originFacilityId).map(f => (
+                        <option key={f.id} value={f.id}>{facilityLabel(f)}</option>
+                      ))}
+                    </select>
+                    {sameFacility && <Hint><span style={{ color: 'var(--red)' }}>Pick two different facilities.</span></Hint>}
+                  </Field>
+
+                  <Row label="Referring clinician" hint="Who at the referring facility to call about the patient.">
+                    <Field>
+                      <Label>Name</Label>
+                      <input type="text" placeholder="e.g. Dr. Mutua" className={inputCls} value={form.healthcareWorkerName} onChange={e => set({ healthcareWorkerName: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Phone</Label>
+                      <input type="tel" inputMode="tel" placeholder="0712345678" className={inputCls} value={form.healthcareWorkerContact} onChange={e => set({ healthcareWorkerContact: e.target.value })} />
+                    </Field>
+                  </Row>
+
+                  {originFacility && targetFacility && !sameFacility && (
+                    <div className="iw-row">
+                      <div className="iw-label">
+                        <span className="block text-[13px] font-medium" style={{ color: 'var(--ink)' }}>Route</span>
+                      </div>
+                      <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>Road route for the crew.</p>
+                      <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                        <div className="px-4 py-3 flex items-center gap-3 flex-wrap" style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>
+                            <Hospital size={14} style={{ color: 'var(--green)' }} /> {originFacility.name}
+                          </span>
+                          <ArrowRight size={14} style={{ color: 'var(--muted)' }} />
+                          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>
+                            <Hospital size={14} style={{ color: 'var(--red)' }} /> {targetFacility.name}
+                          </span>
+                          <span className="ml-auto text-[12px] font-medium" style={{ color: 'var(--muted)' }}>
+                            {referralRoute
+                              ? `${referralRoute.distanceText} · about ${referralRoute.durationText}`
+                              : `${straightKm(originFacility, targetFacility).toFixed(1)} km straight line`}
+                          </span>
+                        </div>
+                        <Map
+                          center={[(originFacility.lat + targetFacility.lat) / 2, (originFacility.lng + targetFacility.lng) / 2]}
+                          zoom={11}
+                          markers={[
+                            { id: 'from', lat: originFacility.lat, lng: originFacility.lng, title: `From: ${originFacility.name}`, type: 'incident' },
+                            { id: 'to', lat: targetFacility.lat, lng: targetFacility.lng, title: `To: ${targetFacility.name}`, type: 'facility' },
+                          ]}
+                          routePath={referralRoute?.path}
+                          layerType="street"
+                          className="h-72 w-full"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </SectionCard>
+              )}
+
               {/* ── Card 2: Location ── */}
+              {!isReferral && (
               <SectionCard title="Incident location" description="Pin the scene so a unit can be routed." icon={MapPin}>
                 <Field>
                   <Label required>Location of incident</Label>
@@ -1051,45 +1236,94 @@ function NewIncidentWizard() {
                   />
                 </Field>
               </SectionCard>
+              )}
           </div>
         )}
 
         {/* ─────────────── STEP 2: Patient ─────────────── */}
         {step === 2 && (
-          <div className="flex flex-col gap-12">
+          <div className="iw-grid">
               <SectionCard title="About the patient" description="Identity and who to contact. All optional." icon={User}>
-                <Field>
-                  <Label>Patient name</Label>
-                  <input type="text" placeholder="Full name" className={inputCls} value={form.patientName} onChange={e => set({ patientName: e.target.value })} />
-                </Field>
-                <Field>
-                  <Label>Patient phone</Label>
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    pattern="[0-9+\-\s]*"
-                    placeholder="0712345678"
-                    className={inputCls}
-                    value={form.patientContact}
-                    onChange={e => { const v = e.target.value.replace(/[^0-9+\-\s]/g, ''); set({ patientContact: v }); }}
-                  />
-                </Field>
-                <Field>
-                  <Label>National ID</Label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="National ID number"
-                    className={inputCls}
-                    value={form.patientNationalId}
-                    onChange={e => set({ patientNationalId: e.target.value })}
-                  />
-                </Field>
+                <div className="iw-row">
+                  <div className="iw-label">
+                    <span className="block text-[13px] font-medium" style={{ color: 'var(--ink)' }}>Identity</span>
+                  </div>
+                  <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>
+                    Unconscious, confused or no ID? Record them as unknown.
+                  </p>
+                  <label
+                    className="flex items-start gap-3 rounded-lg border px-3.5 py-3 cursor-pointer transition-colors"
+                    style={form.patientUnknown
+                      ? { borderColor: 'var(--amber)', background: 'var(--amber-soft)' }
+                      : { borderColor: 'var(--border-strong)', background: 'var(--surface)' }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 mt-0.5 shrink-0"
+                      style={{ accentColor: 'var(--amber)' }}
+                      checked={form.patientUnknown}
+                      onChange={e => set({ patientUnknown: e.target.checked })}
+                    />
+                    <span className="text-[13.5px]" style={{ color: 'var(--ink)' }}>
+                      <b className="inline-flex items-center gap-1.5"><UserX size={15} /> Unknown person (John / Jane Doe)</b>
+                      <span className="block text-[12px]" style={{ color: 'var(--muted)' }}>
+                        Identity not known. The patient is recorded as{' '}
+                        <b style={{ color: 'var(--ink)' }}>{unknownPatientName(form.patientGender)}</b>
+                        {form.patientGender ? '' : ' (pick a sex below for John or Jane Doe)'} until identified.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                {form.patientUnknown ? (
+                  <Field>
+                    <Label>Distinguishing features</Label>
+                    <textarea
+                      rows={3}
+                      placeholder="Approximate age, build, clothing, scars or tattoos, belongings, where found..."
+                      className={textareaCls}
+                      value={form.patientDescription}
+                      onChange={e => set({ patientDescription: e.target.value })}
+                    />
+                    <Hint>Helps the receiving facility and family identify the patient later.</Hint>
+                  </Field>
+                ) : (
+                  <>
+                    <Field>
+                      <Label>Patient name</Label>
+                      <input type="text" placeholder="Full name" className={inputCls} value={form.patientName} onChange={e => set({ patientName: e.target.value })} />
+                    </Field>
+                    <Field>
+                      <Label>Patient phone</Label>
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        pattern="[0-9+\-\s]*"
+                        placeholder="0712345678"
+                        className={inputCls}
+                        value={form.patientContact}
+                        onChange={e => { const v = e.target.value.replace(/[^0-9+\-\s]/g, ''); set({ patientContact: v }); }}
+                      />
+                    </Field>
+                    <Field>
+                      <Label>National ID</Label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="National ID number"
+                        className={inputCls}
+                        value={form.patientNationalId}
+                        onChange={e => set({ patientNationalId: e.target.value })}
+                      />
+                    </Field>
+                  </>
+                )}
 
                 <Field>
                   <Label>Age</Label>
                   <select className={selectCls} value={form.patientAge} onChange={e => set({ patientAge: e.target.value })}>
                       <option value="">Select age...</option>
+                      <option value="Unknown">Unknown</option>
                       <option value="Below 1 Month">Below 1 Month</option>
                       <option value="1-6 Months">1-6 Months</option>
                       <option value="6-12 Months">6-12 Months</option>
@@ -1222,10 +1456,12 @@ function NewIncidentWizard() {
                 </Row>
 
                 <Field>
-                  <Label required>Chief complaint</Label>
+                  <Label required>{isReferral ? 'Reason for referral' : 'Chief complaint'}</Label>
                   <textarea
                     rows={3}
-                    placeholder="Describe the primary complaint / reason for call..."
+                    placeholder={isReferral
+                      ? 'Why the patient is being transferred, e.g. needs CT scan / specialist / ICU bed...'
+                      : 'Describe the primary complaint / reason for call...'}
                     className={textareaCls}
                     value={form.chiefComplaint}
                     onChange={e => set({ chiefComplaint: e.target.value })}
@@ -1283,7 +1519,8 @@ function NewIncidentWizard() {
                   />
                 </Field>
 
-                <Row label="Healthcare worker contacted" hint="If a clinician was consulted.">
+                {/* For a referral the clinician is captured as the referring clinician on step 1. */}
+                {!isReferral && <Row label="Healthcare worker contacted" hint="If a clinician was consulted.">
                   <Field>
                     <Label>Name</Label>
                     <input
@@ -1305,7 +1542,7 @@ function NewIncidentWizard() {
                       onChange={e => set({ healthcareWorkerContact: e.target.value })}
                     />
                   </Field>
-                </Row>
+                </Row>}
 
               </SectionCard>
 
@@ -1474,20 +1711,32 @@ function NewIncidentWizard() {
             {/* Bento review grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ReviewCard title="Alert" onEdit={() => setStep(1)}>
+                <ReviewRow label="Case Type"  value={isReferral ? 'Referral (facility to facility)' : 'Emergency'} />
                 <ReviewRow label="Alert Time" value={form.alertAt} />
                 <ReviewRow label="Mode"       value={form.alertMode} />
                 <ReviewRow label="Origin"     value={form.originOfAlert} />
                 <ReviewRow label="Notifier"   value={form.notifierName ? `${form.notifierName} · ${form.notifierPhone}` : undefined} />
               </ReviewCard>
 
-              <ReviewCard title="Location" onEdit={() => setStep(1)}>
-                <ReviewRow label="Location"   value={form.locationName} />
-                <ReviewRow label="Sub-County" value={form.subCounty ? `${form.subCounty}${subCountySource ? ` (${subCountySource === 'AUTO' ? 'auto-filled' : 'manual'})` : ''}` : undefined} />
-                <ReviewRow label="Coords"     value={form.lat ? `${form.lat.toFixed(4)}, ${form.lng.toFixed(4)}` : undefined} />
-              </ReviewCard>
+              {isReferral ? (
+                <ReviewCard title="Referral Transfer" onEdit={() => setStep(1)}>
+                  <ReviewRow label="From"       value={originFacility?.name} />
+                  <ReviewRow label="To"         value={targetFacility?.name} />
+                  <ReviewRow label="Route"      value={referralRoute ? `${referralRoute.distanceText} · ~${referralRoute.durationText}` : undefined} />
+                  <ReviewRow label="Clinician"  value={[form.healthcareWorkerName, form.healthcareWorkerContact].filter(Boolean).join(' · ') || undefined} />
+                  <ReviewRow label="Sub-County" value={form.subCounty} />
+                </ReviewCard>
+              ) : (
+                <ReviewCard title="Location" onEdit={() => setStep(1)}>
+                  <ReviewRow label="Location"   value={form.locationName} />
+                  <ReviewRow label="Sub-County" value={form.subCounty ? `${form.subCounty}${subCountySource ? ` (${subCountySource === 'AUTO' ? 'auto-filled' : 'manual'})` : ''}` : undefined} />
+                  <ReviewRow label="Coords"     value={form.lat ? `${form.lat.toFixed(4)}, ${form.lng.toFixed(4)}` : undefined} />
+                </ReviewCard>
+              )}
 
               <ReviewCard title="Patient" onEdit={() => setStep(2)}>
-                <ReviewRow label="Name"        value={form.patientName} />
+                <ReviewRow label="Name"        value={form.patientUnknown ? `${patientDisplayName} (identity unknown)` : form.patientName} />
+                {form.patientUnknown && <ReviewRow label="Features" value={form.patientDescription} />}
                 <ReviewRow label="Patient Phone" value={form.patientContact} />
                 <ReviewRow label="Age / Sex"   value={[form.patientAge, form.patientGender].filter(Boolean).join(' · ') || undefined} />
                 <ReviewRow label="Next of Kin" value={form.nextOfKin ? `${form.nextOfKin} · ${form.nextOfKinPhone}` : undefined} />
@@ -1496,7 +1745,7 @@ function NewIncidentWizard() {
 
               <ReviewCard title="Incident Details" onEdit={() => setStep(2)}>
                 <ReviewRow label="Nature"    value={[form.alertNature, form.alertNatureDetail].filter(Boolean).join(' → ') || undefined} />
-                <ReviewRow label="Complaint" value={form.chiefComplaint} />
+                <ReviewRow label={isReferral ? 'Reason' : 'Complaint'} value={form.chiefComplaint} />
                 <ReviewRow label="Temp"      value={vitals.temperature} />
                 <ReviewRow label="Pulse"     value={vitals.pulseRate} />
                 <ReviewRow label="Resp. Rate" value={vitals.respirationRate} />

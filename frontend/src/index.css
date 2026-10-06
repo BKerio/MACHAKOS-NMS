@@ -480,6 +480,13 @@ body {
    A Field that sits directly in a section is a row: label + helper text in
    the left column, the control(s) on the right. Fields nested inside a
    multi-input row (.iw-pair) stay stacked and compact. */
+/* A step's sections: stacked, then side by side once each column can still
+   fit the label-left rows (~700px), so the form fills wide screens. */
+.iw-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 48px; align-items: start; }
+@media (min-width: 1500px) {
+  .iw-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 56px; }
+  .iw-grid > .iw-span { grid-column: 1 / -1; }
+}
 .iw-rows { display: flex; flex-direction: column; gap: 22px; }
 .iw-rows > .iw-field,
 .iw-rows > .iw-row {

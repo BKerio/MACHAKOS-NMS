@@ -37,6 +37,10 @@ const createIncidentSchema = z.object({
   healthcareWorkerName: z.string().optional(),
   healthcareWorkerContact: z.string().optional(),
   isGbvCase: z.boolean().optional(),
+  incidentType: z.enum(['EMERGENCY', 'REFERRAL']).optional(),
+  originFacilityId: z.string().optional(),
+  patientUnknown: z.boolean().optional(),
+  patientDescription: z.string().max(2000).optional(),
   clientRef: z.string().min(8).max(100).optional(),
   vitals: z.object({
   temperature: z.string().optional(),
@@ -65,6 +69,9 @@ const updateIncidentSchema = z.object({
   patientNhif: z.string().optional(),
   patientNationalId: z.string().optional(),
   patientContact: z.string().optional(),
+  // Clearing patientUnknown is how a John Doe gets identified later.
+  patientUnknown: z.boolean().optional(),
+  patientDescription: z.string().max(2000).optional(),
   nextOfKin: z.string().optional(),
   nextOfKinPhone: z.string().optional(),
   alertNature: z.string().optional(),

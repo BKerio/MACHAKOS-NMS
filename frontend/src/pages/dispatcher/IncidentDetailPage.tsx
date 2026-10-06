@@ -602,6 +602,16 @@ function IncidentDetailPage() {
               MCI
             </span>
           )}
+          {incident.incidentType === 'REFERRAL' && (
+            <span className="px-2.5 py-1 rounded-md font-medium text-xs" style={{ background: 'var(--blue-soft)', color: 'var(--blue)' }}>
+              Referral: {incident.originFacility?.name ?? incident.locationName} → {incident.targetFacility?.name ?? incident.placeOfReferral ?? '?'}
+            </span>
+          )}
+          {incident.patientUnknown && (
+            <span className="px-2.5 py-1 rounded-md font-medium text-xs" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>
+              Unknown person
+            </span>
+          )}
         </div>
         <div className="flex gap-3">
           <button
@@ -926,8 +936,17 @@ function IncidentDetailPage() {
             <div className="p-6 grid grid-cols-3 gap-4">
               <div>
                 <label className="text-xs font-medium text-slate-text block mb-1">Full Name</label>
-                <p className="text-sm font-semibold text-brand-teal">{incident.patientName || 'Unknown'}</p>
+                <p className="text-sm font-semibold text-brand-teal">
+                  {incident.patientName || 'Unknown'}
+                  {incident.patientUnknown && <span className="ml-1.5 text-xs font-medium" style={{ color: 'var(--amber)' }}>(identity unknown)</span>}
+                </p>
               </div>
+              {incident.patientUnknown && incident.patientDescription && (
+                <div className="col-span-3">
+                  <label className="text-xs font-medium text-slate-text block mb-1">Distinguishing Features</label>
+                  <p className="text-sm text-brand-teal whitespace-pre-wrap">{incident.patientDescription}</p>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-slate-text block mb-1">Age</label>
                 <p className="text-sm text-brand-teal">{incident.patientAge || 'Unknown'} yrs</p>

@@ -78,7 +78,8 @@ type Ts = string | null; // ISO timestamp
 /** Record-level rows from GET /admin/system-report/details (contacts arrive masked). */
 export interface SystemReportDetails {
   cases: {
-    caseNumber: string; status: string; createdAt: string; alertAt: Ts; alertMode: string | null;
+    caseNumber: string; status: string; incidentType: 'EMERGENCY' | 'REFERRAL'; originFacility: string | null;
+    patientUnknown: boolean; patientDescription: string | null; createdAt: string; alertAt: Ts; alertMode: string | null;
     originOfAlert: string | null; nature: string | null; natureDetail: string | null; chiefComplaint: string;
     location: string; subCounty: string; lat: number | null; lng: number | null;
     massCasualty: boolean; massCasualtyCount: number | null; gbv: boolean;

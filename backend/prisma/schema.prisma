@@ -40,6 +40,11 @@ enum IncidentStatus {
   RESOLVED          // Case closed
 }
 
+enum IncidentType {
+  EMERGENCY // a scene somewhere - the classic call
+  REFERRAL  // facility-to-facility transfer of a patient
+}
+
 enum TaskStatus {
   PENDING
   ACCEPTED
@@ -276,13 +281,26 @@ model Incident {
   assignedAgency   Agency @relation("IncidentAgency", fields: [assignedAgencyId], references: [id])
 
   targetFacilityId String?   @map("target_facility_id")
-  targetFacility   Facility? @relation(fields: [targetFacilityId], references: [id])
+  targetFacility   Facility? @relation("IncidentTargetFacility", fields: [targetFacilityId], references: [id])
+
+  // Inter-facility referral: an ambulance collects the patient at the origin
+  // facility (which also becomes the case location) and takes them to
+  // targetFacility. EMERGENCY cases have no origin facility.
+  incidentType     IncidentType @default(EMERGENCY) @map("incident_type")
+  originFacilityId String?      @map("origin_facility_id")
+  originFacility   Facility?    @relation("IncidentOriginFacility", fields: [originFacilityId], references: [id])
+
+  // Unidentified patient ("John Doe"). patientName then holds the placeholder
+  // name and patientDescription the features that will help identify them.
+  patientUnknown     Boolean @default(false) @map("patient_unknown")
+  patientDescription String? @map("patient_description") @db.Text
 
   tasks          Task[]
   forwardingLogs ForwardingLog[]
   callLogs       CallLog[]
   gbvReport      GbvReport?
 
+  @@index([originFacilityId])
   @@map("incidents")
 }
 
@@ -629,8 +647,9 @@ model Facility {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  incidents Incident[]
-  ratings   FacilityRating[]
+  incidents      Incident[] @relation("IncidentTargetFacility")
+  referralsOut   Incident[] @relation("IncidentOriginFacility")
+  ratings        FacilityRating[]
 
   @@map("facilities")
 }
