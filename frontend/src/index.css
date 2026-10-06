@@ -769,7 +769,47 @@ body {
 .content:has(.wallboard-page) { padding: 0; max-width: none; }
 .wallboard-page { min-height: 100%; flex: 1; }
 @media (max-width: 859px) {
-  .content:has(.wallboard-page) { padding-bottom: calc(72px + env(safe-area-inset-bottom)); background: var(--nav-bg); }
+  .content:has(.wallboard-page) { padding-bottom: calc(72px + env(safe-area-inset-bottom)); background: var(--wb-bg); }
+}
+
+/* Wallboard palette (WallboardPage.tsx reads these through its `C` object).
+   Light: white panels on the page plane, status hues deep enough to read on
+   white. Dark: the navy ops-room look, with the brighter status hues. */
+:root {
+  --wb-bg: var(--bg);
+  --wb-panel: var(--surface);
+  --wb-panel-shadow: var(--shadow-sm);
+  --wb-line: var(--border);
+  --wb-ink: var(--ink);
+  --wb-soft: var(--ink-2);
+  --wb-muted: var(--muted);
+  --wb-chip: rgba(0, 0, 0, .05);
+  --wb-track: rgba(0, 0, 0, .09);
+  --wb-on-alert: #FFFFFF;
+  --wb-green: #15803D;
+  --wb-amber: #B45309;
+  --wb-red: #DC2626;
+  --wb-blue: #2563EB;
+  --wb-grey: #64748B;
+  --wb-offduty: #94A3B8;
+}
+[data-theme="dark"] {
+  --wb-bg: var(--nav-bg);
+  --wb-panel: rgba(255, 255, 255, .035);
+  --wb-panel-shadow: none;
+  --wb-line: var(--nav-border);
+  --wb-ink: #FFFFFF;
+  --wb-soft: #DCE6F0;
+  --wb-muted: var(--nav-muted);
+  --wb-chip: rgba(255, 255, 255, .06);
+  --wb-track: rgba(255, 255, 255, .12);
+  --wb-on-alert: var(--nav-bg);
+  --wb-green: #4ADE80;
+  --wb-amber: #FBBF24;
+  --wb-red: #F87171;
+  --wb-blue: #60A5FA;
+  --wb-grey: #94A3B8;
+  --wb-offduty: #64748B;
 }
 
 

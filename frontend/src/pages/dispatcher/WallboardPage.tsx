@@ -24,30 +24,38 @@ import { useIncidentQueueCount } from '@/hooks/useIncidentQueueCount';
 // Aliased: a bare `Map` import shadows the global Map constructor used below.
 import OpsMap from '@/components/shared/Map';
 import { fmtDate, fmtTime } from '@/lib/datetime';
+import { useTheme } from '@/lib/theme';
 import { MIN_MEDICS, vehicleMedics } from '@/utils/crew';
 
 /**
- * Operations wallboard - built for the screen on the ops-room wall: dark, one
- * viewport, readable from across the room. Header (title, link state, clock),
- * a strip of headline numbers, the live map beside who's on duty and how the
- * fleet stands, then every ambulance as a colour-coded tile.
+ * Operations wallboard - built for the screen on the ops-room wall: one
+ * viewport, readable from across the room, in the user's light or dark theme.
+ * Header (title, link state, clock), a strip of headline numbers, the live map
+ * beside who's on duty and how the fleet stands, then every ambulance as a
+ * colour-coded tile.
  */
 
 const MACHAKOS_CENTER: [number, number] = [-1.5177, 37.2634];
 const TRACKER_STALE_MS = 5 * 60 * 1000; // no fix in 5 min -> "no signal"
 
+// Theme-aware palette: the --wb-* variables in index.css switch with data-theme.
 const C = {
-  bg: 'var(--nav-bg)',
-  panel: 'rgba(255,255,255,0.035)',
-  line: 'var(--nav-border)',
-  ink: '#FFFFFF',
-  soft: '#DCE6F0',
-  muted: 'var(--nav-muted)',
-  green: '#4ADE80',
-  amber: '#FBBF24',
-  red: '#F87171',
-  blue: '#60A5FA',
-  grey: '#94A3B8',
+  bg: 'var(--wb-bg)',
+  panel: 'var(--wb-panel)',
+  shadow: 'var(--wb-panel-shadow)',
+  line: 'var(--wb-line)',
+  ink: 'var(--wb-ink)',
+  soft: 'var(--wb-soft)',
+  muted: 'var(--wb-muted)',
+  chip: 'var(--wb-chip)',
+  track: 'var(--wb-track)',
+  onAlert: 'var(--wb-on-alert)',
+  green: 'var(--wb-green)',
+  amber: 'var(--wb-amber)',
+  red: 'var(--wb-red)',
+  blue: 'var(--wb-blue)',
+  grey: 'var(--wb-grey)',
+  offduty: 'var(--wb-offduty)',
 };
 
 type UnitState = 'ready' | 'crewing' | 'engaged' | 'service' | 'offduty';
@@ -57,7 +65,7 @@ const STATE: Record<UnitState, { label: string; color: string }> = {
   ready: { label: 'Ready', color: C.green },
   crewing: { label: 'Crewing up', color: C.amber },
   service: { label: 'Out of service', color: C.grey },
-  offduty: { label: 'No crew', color: '#64748B' },
+  offduty: { label: 'No crew', color: C.offduty },
 };
 
 function unitState(v: Vehicle): UnitState {
@@ -106,7 +114,7 @@ function Panel({ title, Icon, right, children, className, style }: {
   return (
     <section
       className={`rounded-2xl flex flex-col min-h-0 ${className ?? ''}`}
-      style={{ background: C.panel, border: `1px solid ${C.line}`, ...style }}
+      style={{ background: C.panel, border: `1px solid ${C.line}`, boxShadow: C.shadow, ...style }}
     >
       <header className="flex items-center gap-2 px-4 pt-3.5 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
         <Icon size={15} color={C.muted} />
@@ -125,15 +133,16 @@ function Stat({ label, value, sub, Icon, alert }: { label: string; value: number
     <div
       className="rounded-2xl px-4 py-3.5 flex items-center gap-3.5 min-w-0"
       style={{
-        background: hot ? `color-mix(in srgb, ${alert} 14%, transparent)` : C.panel,
+        background: hot ? `color-mix(in srgb, ${alert} 14%, ${C.panel})` : C.panel,
         border: `1px solid ${hot ? `color-mix(in srgb, ${alert} 45%, transparent)` : C.line}`,
+        boxShadow: C.shadow,
       }}
     >
       <span
         className="w-10 h-10 rounded-xl grid place-items-center shrink-0"
-        style={{ background: hot ? alert : 'rgba(255,255,255,0.06)' }}
+        style={{ background: hot ? alert : C.chip }}
       >
-        <Icon size={19} color={hot ? C.bg : C.soft} />
+        <Icon size={19} color={hot ? C.onAlert : C.soft} />
       </span>
       <div className="min-w-0">
         <div className="mono tnum text-[30px] leading-none font-bold" style={{ color: hot ? alert : C.ink }}>{value}</div>
@@ -170,7 +179,7 @@ function UnitTile({ vehicle, lastFix }: { vehicle: Vehicle; lastFix?: string | n
   return (
     <article
       className="rounded-xl overflow-hidden flex flex-col"
-      style={{ background: C.panel, border: `1px solid ${C.line}`, borderTop: `3px solid ${color}` }}
+      style={{ background: C.panel, border: `1px solid ${C.line}`, borderTop: `3px solid ${color}`, boxShadow: C.shadow }}
     >
       <div className="px-3.5 pt-3 pb-2.5 flex items-center gap-2">
         <span
@@ -200,7 +209,7 @@ function UnitTile({ vehicle, lastFix }: { vehicle: Vehicle; lastFix?: string | n
         {vehicle.currentDriver && (
           <div className="flex items-center gap-1.5" aria-label={`${medics.length} of ${MIN_MEDICS} medics`}>
             {Array.from({ length: MIN_MEDICS }, (_, i) => (
-              <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: i < medics.length ? C.green : 'rgba(255,255,255,0.12)' }} />
+              <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: i < medics.length ? C.green : C.track }} />
             ))}
             <span className="mono text-[11px] ml-1" style={{ color: medics.length >= MIN_MEDICS ? C.green : C.amber }}>
               {medics.length}/{MIN_MEDICS}
@@ -231,6 +240,7 @@ function WallboardPage() {
   const queryClient = useQueryClient();
   const now = useNow();
   const connected = useSocketConnected();
+  const theme = useTheme().resolved;
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ['dispatch', 'vehicles', 'wallboard'],
@@ -274,7 +284,7 @@ function WallboardPage() {
     <div className="wallboard-page flex flex-col gap-4 p-4 sm:p-6" style={{ background: C.bg }}>
       {/* Header */}
       <header className="flex items-center gap-4 flex-wrap">
-        <span className="w-11 h-11 rounded-xl grid place-items-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
+        <span className="w-11 h-11 rounded-xl grid place-items-center" style={{ background: C.chip }}>
           <RadioTower size={22} color={C.green} />
         </span>
         <div className="min-w-0">
@@ -316,11 +326,13 @@ function WallboardPage() {
           style={{ minHeight: 420 }}
         >
           <div className="h-full min-h-[380px] rounded-b-2xl overflow-hidden">
+            {/* Keyed on theme: the map picks its colour scheme when it is created. */}
             <OpsMap
+              key={theme}
               center={MACHAKOS_CENTER}
               zoom={11}
               vehicleMarkers={liveVehicles}
-              layerType="dark"
+              layerType={theme}
               showLiveBadge
               showLegend
               lastUpdatedAt={lastUpdatedAt}
@@ -350,7 +362,7 @@ function WallboardPage() {
           <Panel title="Fleet status" Icon={Siren}>
             <div className="px-4 py-3 flex flex-col gap-2.5">
               {/* Stacked bar: the whole fleet at a glance */}
-              <div className="flex h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <div className="flex h-2.5 rounded-full overflow-hidden" style={{ background: C.track }}>
                 {STATE_ORDER.map((s) => {
                   const n = byState(s).length;
                   return n > 0 ? <span key={s} style={{ width: `${(n / Math.max(active.length, 1)) * 100}%`, background: STATE[s].color }} /> : null;
