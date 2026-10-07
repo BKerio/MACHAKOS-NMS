@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { Prisma } from '../../generated/prisma/index.js';
 import { TaskStatus, IncidentStatus, Role, VehicleStatus } from '../../shared/types/index.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { createWriteStream, promises as fs } from 'node:fs';
@@ -855,6 +856,43 @@ export class TaskService {
       lastPcrAt: t.patientCareReports?.[0]?.createdAt ?? null,
     }));
     return { data: enriched, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
+
+  /** Vitals for the PCR form: the crew's own, and any logged with the alert. */
+  async getPatientVitals(taskId: string, user: { userId: string; role: Role }) {
+    const task = await this.app.prisma.task.findUnique({
+      where: { id: taskId },
+      include: { incident: { select: { caseNumber: true, vitals: true } } },
+    });
+    if (!task) throw new NotFoundError('Task');
+    const isCrewRole = user.role === Role.DRIVER || user.role === Role.EMT || user.role === Role.NURSE;
+    if (isCrewRole && !taskCrewIds(task).includes(user.userId)) {
+      throw new ForbiddenError('You are not assigned to this task');
+    }
+    return {
+      taskId,
+      caseNumber: task.incident.caseNumber,
+      vitals: (task.handoverVitals ?? null) as Record<string, string> | null,
+      reportedAtAlert: (task.incident.vitals ?? null) as Record<string, string> | null,
+    };
+  }
+
+  /**
+   * Saves the patient's vital signs from the crew's Patient Care Report. They
+   * live on the task (handoverVitals), next to who recorded them.
+   */
+  async savePatientVitals(taskId: string, userId: string, vitals: Record<string, string>) {
+    const task = await this.app.prisma.task.findUnique({ where: { id: taskId } });
+    if (!task) throw new NotFoundError('Task');
+    if (!taskCrewIds(task).includes(userId)) throw new ForbiddenError('You are not assigned to this task');
+
+    const updated = await this.app.prisma.task.update({
+      where: { id: taskId },
+      data: { handoverVitals: Object.keys(vitals).length ? vitals : Prisma.DbNull },
+      select: { id: true, incidentId: true, handoverVitals: true },
+    });
+    this.app.io.to(`incident:${task.incidentId}`).emit('task:vitals', { taskId, incidentId: task.incidentId, vitals: updated.handoverVitals });
+    return updated;
   }
 
   /**

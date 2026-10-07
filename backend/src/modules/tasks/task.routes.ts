@@ -79,6 +79,47 @@ export const taskRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   );
 
   /**
+   * GET /tasks/:id/vitals
+   * The crew's recorded vitals for this task, plus any taken when the alert was
+   * logged (older cases captured vitals at intake), for the PCR form.
+   */
+  app.get<{ Params: { id: string } }>(
+    '/:id/vitals',
+    { preValidation: [requireRole([Role.DRIVER, Role.EMT, Role.NURSE, Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])] },
+    async (request, reply) => {
+      const data = await taskService.getPatientVitals(request.params.id, {
+        userId: request.user.userId,
+        role: request.user.role,
+      });
+      return reply.send({ ok: true, data });
+    }
+  );
+
+  /**
+   * PUT /tasks/:id/vitals
+   * Crew records the patient's vital signs as part of the Patient Care Report.
+   * Body: { vitals: { temperature?, pulseRate?, respirationRate?, bp?, spo2?, gcs?, rbs? } }
+   */
+  app.put<{ Params: { id: string }; Body: { vitals?: Record<string, unknown> } }>(
+    '/:id/vitals',
+    { preValidation: [requireRole([Role.DRIVER, Role.EMT, Role.NURSE])] },
+    async (request, reply) => {
+      const vitals = request.body?.vitals;
+      if (!vitals || typeof vitals !== 'object' || Array.isArray(vitals)) {
+        throw new BadRequestError('vitals must be an object');
+      }
+      // Keep only short text readings; drop blanks so "cleared" fields don't linger.
+      const clean = Object.fromEntries(
+        Object.entries(vitals)
+          .filter(([k, v]) => /^[a-zA-Z0-9]{1,30}$/.test(k) && v != null && String(v).trim() !== '')
+          .map(([k, v]) => [k, String(v).trim().slice(0, 40)])
+      );
+      const result = await taskService.savePatientVitals(request.params.id, request.user.userId, clean);
+      return reply.send({ ok: true, data: result });
+    }
+  );
+
+  /**
    * POST /tasks/:id/patient-data
    * Crew logs patient vitals and pre-hospital management notes.
    */

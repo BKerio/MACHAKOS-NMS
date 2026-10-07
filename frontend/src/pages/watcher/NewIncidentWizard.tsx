@@ -284,26 +284,6 @@ function ReviewCard({
   );
 }
 
-// ── Patient vitals ────────────────────────────────────────────────────────────
-
-type VitalsForm = {
-  temperature: string;
-  pulseRate: string;
-  respirationRate: string;
-  bp: string;
-  spo2: string;
-  gcs: string;
-};
-
-const defaultVitals: VitalsForm = {
-  temperature: '',
-  pulseRate: '',
-  respirationRate: '',
-  bp: '',
-  spo2: '',
-  gcs: '',
-};
-
 // ── Maternity vitals ──────────────────────────────────────────────────────────
 
 type MaternityVitalsForm = {
@@ -418,8 +398,6 @@ function NewIncidentWizard() {
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState<FormState>(defaultForm);
-  const [vitals, setVitals] = useState<VitalsForm>(defaultVitals);
-  const setVit = (u: Partial<VitalsForm>) => setVitals(p => ({ ...p, ...u }));
   const [mv, setMV] = useState<MaternityVitalsForm>(defaultMV);
   const setMat = (u: Partial<MaternityVitalsForm>) => setMV(p => ({ ...p, ...u }));
   const [suggestions, setSuggestions]           = useState<Array<{ display_name: string; lat: string; lon: string; address?: Record<string, string> }>>([]);
@@ -759,12 +737,13 @@ function NewIncidentWizard() {
     alertNatureDetail:     form.alertNatureDetail || undefined,
     watcherComments:       form.watcherComments || undefined,
     preHospitalManagement: form.preHospitalManagement || undefined,
-    placeOfReferral:       form.placeOfReferral || undefined,
-    targetFacilityId:      form.targetFacilityId || undefined,
+    // Emergencies get their facility from the dispatcher at dispatch; only a
+    // referral names the receiving facility when it is logged.
+    placeOfReferral:       isReferral ? form.placeOfReferral || undefined : undefined,
+    targetFacilityId:      isReferral ? form.targetFacilityId || undefined : undefined,
     healthcareWorkerName:    form.healthcareWorkerName || undefined,
     healthcareWorkerContact: form.healthcareWorkerContact || undefined,
     isGbvCase:             form.isGbvCase || undefined,
-    vitals:                vitals,
     maternityVitals:       isMaternity ? mv : undefined,
   });
 
@@ -868,7 +847,7 @@ function NewIncidentWizard() {
                   clientRef.current = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
                     ? crypto.randomUUID()
                     : `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-                  setForm(defaultForm); setVitals(defaultVitals); setMV(defaultMV);
+                  setForm(defaultForm); setMV(defaultMV);
                   navigate('/watcher/new-incident', { replace: true, state: {} });
                 }}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl border transition-colors"
@@ -988,28 +967,6 @@ function NewIncidentWizard() {
                   </Field>
                 </Row>
 
-                {!isReferral && <Field>
-                  <Label>Receiving facility</Label>
-                  <select
-                    className={selectCls}
-                    value={form.targetFacilityId}
-                    onChange={e => {
-                      const id = e.target.value;
-                      const f = facilities.find(x => x.id === id);
-                      set({ targetFacilityId: id, placeOfReferral: f?.name ?? '' });
-                    }}
-                  >
-                    <option value="">Not decided yet</option>
-                    {facilityOptions.map(f => (
-                      <option key={f.id} value={f.id}>{facilityLabel(f)}</option>
-                    ))}
-                  </select>
-                  <Hint>
-                    {facilities.length === 0
-                      ? 'No facilities configured yet. Add them under Admin → Facilities.'
-                      : 'Where the patient should be taken, if known. Facilities in the sub-county are listed first.'}
-                  </Hint>
-                </Field>}
               </SectionCard>
 
               {/* ── Card 2 (referral): the transfer ── */}
@@ -1469,34 +1426,6 @@ function NewIncidentWizard() {
                   <Hint>Be as specific as possible. This is what dispatchers see first.</Hint>
                 </Field>
 
-                {/* ── Patient Vitals ── */}
-                <Row label="Patient vitals" hint="As reported by the caller, if known." cols={3}>
-                    <Field>
-                      <Label>Temperature</Label>
-                      <input type="text" placeholder="°C" className={inputCls} value={vitals.temperature} onChange={e => setVit({ temperature: e.target.value })} />
-                    </Field>
-                    <Field>
-                      <Label>Pulse rate</Label>
-                      <input type="text" placeholder="bpm" className={inputCls} value={vitals.pulseRate} onChange={e => setVit({ pulseRate: e.target.value })} />
-                    </Field>
-                    <Field>
-                      <Label>Respiration rate</Label>
-                      <input type="text" placeholder="/min" className={inputCls} value={vitals.respirationRate} onChange={e => setVit({ respirationRate: e.target.value })} />
-                    </Field>
-                    <Field>
-                      <Label>BP</Label>
-                      <input type="text" placeholder="mmHg" className={inputCls} value={vitals.bp} onChange={e => setVit({ bp: e.target.value })} />
-                    </Field>
-                    <Field>
-                      <Label>SPO₂</Label>
-                      <input type="text" placeholder="%" className={inputCls} value={vitals.spo2} onChange={e => setVit({ spo2: e.target.value })} />
-                    </Field>
-                    <Field>
-                      <Label>GCS</Label>
-                      <input type="text" placeholder="/15" className={inputCls} value={vitals.gcs} onChange={e => setVit({ gcs: e.target.value })} />
-                    </Field>
-                </Row>
-
                 <Field>
                   <Label>Caller / watcher notes</Label>
                   <textarea
@@ -1746,14 +1675,7 @@ function NewIncidentWizard() {
               <ReviewCard title="Incident Details" onEdit={() => setStep(2)}>
                 <ReviewRow label="Nature"    value={[form.alertNature, form.alertNatureDetail].filter(Boolean).join(' → ') || undefined} />
                 <ReviewRow label={isReferral ? 'Reason' : 'Complaint'} value={form.chiefComplaint} />
-                <ReviewRow label="Temp"      value={vitals.temperature} />
-                <ReviewRow label="Pulse"     value={vitals.pulseRate} />
-                <ReviewRow label="Resp. Rate" value={vitals.respirationRate} />
-                <ReviewRow label="BP"        value={vitals.bp} />
-                <ReviewRow label="SPO₂"      value={vitals.spo2} />
-                <ReviewRow label="GCS"       value={vitals.gcs} />
                 <ReviewRow label="Pre-hosp." value={form.preHospitalManagement} />
-                <ReviewRow label="Referral"  value={form.placeOfReferral} />
               </ReviewCard>
 
               {isMaternity && (

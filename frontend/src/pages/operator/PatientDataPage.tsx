@@ -51,13 +51,12 @@ function PatientDataPage() {
   const handleSubmit = () => {
     if (!taskId) return;
     if (!preHospitalManagement.trim()) {
-      addNotification({ type: 'error', title: 'Clinical notes are required', message: 'Please describe vitals, interventions and treatment given.' });
+      addNotification({ type: 'error', title: 'Clinical notes are required', message: 'Please describe the interventions and treatment given.' });
       return;
     }
     submitMutation.mutate();
   };
 
-  const vitals = task?.incident.vitals;
   const maternity = task?.incident.maternityVitals;
 
   return (
@@ -72,13 +71,6 @@ function PatientDataPage() {
       </div>
 
       <VitalsSummary
-        title="Watcher vitals (read-only)"
-        rows={[
-          ['Temp', vitals?.temperature], ['Pulse', vitals?.pulseRate], ['RR', vitals?.respirationRate],
-          ['BP', vitals?.bp], ['SPO₂', vitals?.spo2], ['FH', vitals?.fh],
-        ]}
-      />
-      <VitalsSummary
         title="Maternity vitals (read-only)"
         rows={[
           ['Parity', maternity?.parity], ['Gravid', maternity?.gravid], ['FHR', maternity?.fetalHeartRate],
@@ -90,11 +82,11 @@ function PatientDataPage() {
 
       <div className="field">
         <label className="label">Pre-hospital management *</label>
-        <p className="text-xs" style={{ color: 'var(--muted)' }}>Vitals, interventions, patient condition, and treatment given.</p>
+        <p className="text-xs" style={{ color: 'var(--muted)' }}>Interventions, patient condition, and treatment given. Record vitals on the PCR.</p>
         <textarea
           className="eoc-textarea"
           style={{ minHeight: 160 }}
-          placeholder="e.g. Patient conscious, BP 120/80, O2 administered..."
+          placeholder="e.g. Patient conscious, O2 administered, IV access obtained..."
           value={preHospitalManagement}
           onChange={(e) => setPreHospitalManagement(e.target.value)}
         />

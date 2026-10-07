@@ -1,13 +1,30 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import { Camera, Image as ImageIcon, FileUp, CloudUpload, X as XIcon, FileText } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Camera, Image as ImageIcon, FileUp, CloudUpload, X as XIcon, FileText, HeartPulse } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
-import { uploadPatientCareReport, getErrorMessage } from '@/api/responder';
+import {
+  uploadPatientCareReport,
+  getErrorMessage,
+  getPatientVitals,
+  savePatientVitals,
+  type PatientVitals,
+} from '@/api/responder';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { confirmDialog } from '@/lib/alert';
 
 type FileKind = 'image' | 'pdf' | 'docx' | 'unknown';
+
+/** Vital signs the crew records on the PCR (keys match Task.handoverVitals). */
+const VITAL_FIELDS: { key: keyof PatientVitals; label: string; unit: string; inputMode: 'decimal' | 'text' }[] = [
+  { key: 'temperature', label: 'Temperature', unit: '°C', inputMode: 'decimal' },
+  { key: 'pulseRate', label: 'Pulse', unit: 'bpm', inputMode: 'decimal' },
+  { key: 'respirationRate', label: 'Respiration', unit: '/min', inputMode: 'decimal' },
+  { key: 'bp', label: 'Blood pressure', unit: 'mmHg', inputMode: 'text' },
+  { key: 'spo2', label: 'SpO₂', unit: '%', inputMode: 'decimal' },
+  { key: 'gcs', label: 'GCS', unit: '/15', inputMode: 'decimal' },
+  { key: 'rbs', label: 'Blood sugar (RBS)', unit: 'mmol/L', inputMode: 'decimal' },
+];
 
 function fileKindOf(mimeType: string): FileKind {
   if (mimeType.startsWith('image/')) return 'image';
@@ -24,6 +41,25 @@ function PatientCareReportPage() {
   const { addNotification } = useNotificationStore();
 
   const [note, setNote] = useState('');
+  const [vitals, setVitals] = useState<PatientVitals>({});
+  const [vitalsTouched, setVitalsTouched] = useState(false);
+
+  // Pre-fill with what the crew already saved; show any vitals logged with the alert.
+  const { data: savedVitals, isLoading: vitalsLoading } = useQuery({
+    queryKey: ['operator', 'task-vitals', taskId],
+    queryFn: () => getPatientVitals(taskId!),
+    enabled: !!taskId,
+  });
+  useEffect(() => {
+    if (savedVitals?.vitals && !vitalsTouched) setVitals(savedVitals.vitals);
+  }, [savedVitals]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setVital = (key: keyof PatientVitals, value: string) => {
+    setVitalsTouched(true);
+    setVitals((v) => ({ ...v, [key]: value }));
+  };
+  const hasVitals = Object.values(vitals).some((v) => v && v.trim());
+  const alertVitals = Object.entries(savedVitals?.reportedAtAlert ?? {}).filter(([, v]) => v);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -38,9 +74,16 @@ function PatientCareReportPage() {
   };
 
   const uploadMutation = useMutation({
-    mutationFn: () => uploadPatientCareReport(taskId!, { note: note.trim() || undefined, file: file! }),
+    mutationFn: async () => {
+      if (vitalsTouched) await savePatientVitals(taskId!, vitals);
+      if (file) await uploadPatientCareReport(taskId!, { note: note.trim() || undefined, file });
+    },
     onSuccess: () => {
-      addNotification({ type: 'success', title: 'PCR uploaded', message: 'Case saved to History.' });
+      addNotification({
+        type: 'success',
+        title: file ? 'PCR uploaded' : 'Vitals saved',
+        message: 'Case saved to History.',
+      });
       navigate('/operator/history', { replace: true });
     },
     onError: (err) => addNotification({ type: 'error', title: 'Upload failed', message: getErrorMessage(err) }),
@@ -51,8 +94,8 @@ function PatientCareReportPage() {
       addNotification({ type: 'error', title: 'Missing task', message: 'Please return to Assignment and try again.' });
       return;
     }
-    if (!file) {
-      addNotification({ type: 'error', title: 'Add a report', message: 'Take a photo, choose an image, or pick a PDF/DOCX file.' });
+    if (!file && !hasVitals) {
+      addNotification({ type: 'error', title: 'Add the report', message: 'Record the patient vitals, or attach a photo / PDF / DOCX of the PCR.' });
       return;
     }
     uploadMutation.mutate();
@@ -74,7 +117,45 @@ function PatientCareReportPage() {
       <div>
         <p className="eyebrow">Field Operations</p>
         <h2 className="text-2xl font-bold mt-1" style={{ color: 'var(--ink)' }}>{title}</h2>
-        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Upload image or document + note</p>
+        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Patient vitals, the report file, and a note</p>
+      </div>
+
+      <div className="card card-pad">
+        <p className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--ink)' }}>
+          <HeartPulse size={18} style={{ color: 'var(--red)' }} /> Patient vitals
+        </p>
+        <p className="text-sm mt-1.5" style={{ color: 'var(--muted)' }}>
+          Your readings for this patient. Leave a field blank if it wasn't taken.
+        </p>
+        {vitalsLoading ? (
+          <div className="py-6 flex justify-center"><AppLoader size={22} /></div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            {VITAL_FIELDS.map((f) => (
+              <label key={f.key} className="flex flex-col gap-1">
+                <span className="text-xs font-semibold" style={{ color: 'var(--ink-2)' }}>{f.label}</span>
+                <span className="relative">
+                  <input
+                    className="input w-full"
+                    style={{ paddingRight: 58 }}
+                    inputMode={f.inputMode}
+                    placeholder={f.key === 'bp' ? '120/80' : ''}
+                    value={vitals[f.key] ?? ''}
+                    onChange={(e) => setVital(f.key, e.target.value)}
+                    disabled={uploadMutation.isPending}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--muted)' }}>{f.unit}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+        {alertVitals.length > 0 && (
+          <p className="text-xs mt-3" style={{ color: 'var(--muted)' }}>
+            Reported when the alert was logged:{' '}
+            {alertVitals.map(([k, v]) => `${VITAL_FIELDS.find((f) => f.key === k)?.label ?? k} ${v}`).join(' · ')}
+          </p>
+        )}
       </div>
 
       <div className="card card-pad">
@@ -140,7 +221,7 @@ function PatientCareReportPage() {
         </button>
         <button onClick={submit} disabled={uploadMutation.isPending} className="btn flex-1" style={{ background: 'var(--nav-bg)', color: '#fff' }}>
           {uploadMutation.isPending ? <AppLoader size={22} /> : <CloudUpload size={18} />}
-          {uploadMutation.isPending ? 'Uploading…' : 'Upload report'}
+          {uploadMutation.isPending ? 'Saving…' : file ? 'Save & upload report' : 'Save report'}
         </button>
       </div>
     </div>

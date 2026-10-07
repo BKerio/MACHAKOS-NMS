@@ -102,6 +102,22 @@ export async function uploadPatientCareReport(
   return res.data.data as PatientCareReport;
 }
 
+export type PatientVitals = Partial<Record<'temperature' | 'pulseRate' | 'respirationRate' | 'bp' | 'spo2' | 'gcs' | 'rbs', string>>;
+
+/** Vitals for the PCR form: the crew's saved readings and any logged with the alert. */
+export async function getPatientVitals(taskId: string): Promise<{
+  caseNumber: string;
+  vitals: PatientVitals | null;
+  reportedAtAlert: PatientVitals | null;
+}> {
+  const res = await api.get(`/tasks/${taskId}/vitals`);
+  return res.data.data;
+}
+
+export async function savePatientVitals(taskId: string, vitals: PatientVitals): Promise<void> {
+  await api.put(`/tasks/${taskId}/vitals`, { vitals });
+}
+
 export async function getPatientCareReports(taskId: string): Promise<PatientCareReport[]> {
   const res = await api.get(`/tasks/${taskId}/patient-care-reports`);
   return res.data.data as PatientCareReport[];

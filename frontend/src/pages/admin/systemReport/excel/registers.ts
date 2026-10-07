@@ -129,7 +129,7 @@ export function tasksRegister(ws: Worksheet, d: SystemReport, x: D): Reg {
     { header: 'Handed Over', width: 17, kind: 'date', get: (r) => r.handedOverAt },
     { header: 'Handover Reason', width: 26, kind: 'wrap', get: (r) => r.handoverReason },
     { header: 'Handed Over By', width: 20, kind: 'text', get: (r) => r.handoverBy },
-    { header: 'Handover Vitals', width: 36, kind: 'wrap', get: (r) => r.handoverVitals },
+    { header: 'Patient Vitals (PCR)', width: 36, kind: 'wrap', get: (r) => r.handoverVitals },
   ], x.tasks, 2, 'One row per ambulance task. Intervals are minutes from when the task was received.');
   statusFormats(ws, reg, 'Task Status', [
     ['Completed', GOOD], ['Cancelled', BAD], ['Handed over', WARN], ['Pending', WARN],

@@ -327,6 +327,8 @@ export interface Incident {
   healthcareWorkerContact?: string;
   targetFacilityId?: string | null;
   targetFacility?: Facility | null;
+  /** Minimum KEPH level the patient needs (1-6), when the dispatcher set it. */
+  hospitalLevelRequired?: number | null;
   /** REFERRAL = facility-to-facility transfer: pickup at originFacility, delivery to targetFacility. */
   incidentType?: 'EMERGENCY' | 'REFERRAL';
   originFacilityId?: string | null;

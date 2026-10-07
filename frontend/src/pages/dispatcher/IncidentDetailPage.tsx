@@ -79,6 +79,9 @@ function IncidentDetailPage() {
 
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [dispatcherComments, setDispatcherComments] = useState('');
+  // Facility the dispatcher recommends while dispatching; null = not touched yet
+  // (falls back to the case's current facility, else the nearest in its sub-county).
+  const [dispatchFacilityId, setDispatchFacilityId] = useState<string | null>(null);
   const [isEditingBrief, setIsEditingBrief] = useState(false);
   const [editedComplaint, setEditedComplaint] = useState('');
   const [editedLocation, setEditedLocation] = useState('');
@@ -221,10 +224,13 @@ function IncidentDetailPage() {
     socket.on('incident:update', onIncidentUpdate);
     socket.on('task:assigned', onTaskAssigned);
     socket.on('task:updated', onTaskUpdated);
+    // Crew saved vitals on the PCR - refetch so the handover vitals panel updates.
+    socket.on('task:vitals', onTaskUpdated);
     return () => {
       socket.off('incident:update', onIncidentUpdate);
       socket.off('task:assigned', onTaskAssigned);
       socket.off('task:updated', onTaskUpdated);
+      socket.off('task:vitals', onTaskUpdated);
     };
   }, [id, queryClient]);
 
@@ -257,11 +263,13 @@ function IncidentDetailPage() {
     : undefined;
 
   const offlineDispatchMutation = useMutation({
-    mutationFn: async () =>
-      api.post(`/dispatch/assign-offline/${id}`, {
+    mutationFn: async () => {
+      await saveRecommendedFacility();
+      return api.post(`/dispatch/assign-offline/${id}`, {
         partnerAmbulanceId: selectedVehicleId.slice(OFFLINE_PREFIX.length),
         notes: dispatcherComments || undefined,
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.setQueryData(['incident', id], (old: any) => ({ ...old, status: 'DISPATCHED' }));
       queryClient.invalidateQueries({ queryKey: ['incident', id] });
@@ -284,6 +292,7 @@ function IncidentDetailPage() {
 
   const dispatchMutation = useMutation({
     mutationFn: async () => {
+      await saveRecommendedFacility();
       return api.post('/tasks', {
         incidentId: id,
         vehicleId: selectedVehicleId,
@@ -543,6 +552,25 @@ function IncidentDetailPage() {
       if (a.inRegion !== b.inRegion) return a.inRegion ? -1 : 1;
       return (a.km ?? Infinity) - (b.km ?? Infinity);
     });
+
+  // ── Recommended facility, chosen at dispatch ──────────────────────────────
+  // Referrals fix the receiving facility when the case is logged; emergencies
+  // get it here: the dispatcher's pick, else the case's current one, else the
+  // nearest facility in the case's sub-county as a suggestion.
+  const isReferralCase = incident?.incidentType === 'REFERRAL';
+  const suggestedFacility = facilitiesByDistance[0];
+  const recommendedFacilityId =
+    dispatchFacilityId ?? incident?.targetFacilityId ?? suggestedFacility?.facility.id ?? '';
+  const recommendedFacility = facilitiesByDistance.find(x => x.facility.id === recommendedFacilityId);
+
+  async function saveRecommendedFacility() {
+    if (isReferralCase || !recommendedFacilityId || recommendedFacilityId === incident?.targetFacilityId) return;
+    await api.patch(`/incidents/${id}`, {
+      targetFacilityId: recommendedFacilityId,
+      placeOfReferral: recommendedFacility?.facility.name,
+    });
+    queryClient.invalidateQueries({ queryKey: ['incident', id] });
+  }
 
   const selectedFacilityDistanceKm = scenePoint && incident?.targetFacility
     ? haversineKm(scenePoint, { lat: incident.targetFacility.lat, lng: incident.targetFacility.lng })
@@ -1299,6 +1327,39 @@ function IncidentDetailPage() {
                 );
               })()}
 
+              {/* Recommended facility - decided here, at dispatch, not when the case is logged */}
+              <div>
+                <label className="text-xs font-medium text-slate-text block mb-1">Recommended Facility</label>
+                {isReferralCase ? (
+                  <div className="rounded-lg px-4 py-2.5 text-sm border border-surface-border bg-slate-50 text-brand-teal">
+                    {incident.targetFacility?.name ?? incident.placeOfReferral ?? '-'}
+                    <span className="block text-[11px] text-slate-400 mt-0.5">Referral: receiving facility set when the case was logged.</span>
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      className="w-full bg-white border border-surface-border rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-green outline-none"
+                      value={recommendedFacilityId}
+                      onChange={e => setDispatchFacilityId(e.target.value)}
+                    >
+                      <option value="">No facility yet - decide later</option>
+                      {facilitiesByDistance.map(({ facility, km, inRegion }) => (
+                        <option key={facility.id} value={facility.id}>
+                          {inRegion ? '★ ' : ''}{facility.name} · KEPH {facility.kephLevel}
+                          {km != null ? ` · ~${km.toFixed(1)} km` : ''}
+                          {incident.hospitalLevelRequired && facility.kephLevel < incident.hospitalLevelRequired ? ' · below required level' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {dispatchFacilityId === null && !incident.targetFacilityId && suggestedFacility
+                        ? `Suggested: nearest ${suggestedFacility.inRegion ? `in ${incident.subCounty}` : 'facility'}. Change it if the patient needs a different level of care.`
+                        : '★ = in the case\'s sub-county. The crew is routed here after picking up the patient.'}
+                    </p>
+                  </>
+                )}
+              </div>
+
               <div>
                 <label className="text-xs font-medium text-slate-text block mb-1">Dispatcher Notes</label>
                 <textarea
@@ -1442,12 +1503,12 @@ function IncidentDetailPage() {
               <FacilityRatingPanel facilityName={incident.targetFacility.name} ratings={activeTask.facilityRatings ?? []} />
             )}
 
-            {/* Hospital Handover Vitals - captured by crew at handover (#7) */}
+            {/* Patient vitals - recorded by the crew on the PCR */}
             {activeTask.handoverVitals && Object.values(activeTask.handoverVitals).some(Boolean) && (
               <div className="border border-surface-border rounded-xl overflow-hidden">
                 <div className="px-5 py-3 bg-slate-50 border-b border-surface-border flex items-center gap-2">
                   <FirstAid size={14} className="text-brand-teal" />
-                  <p className="text-xs font-semibold text-slate-600 tracking-wide">Vitals at Hospital Handover</p>
+                  <p className="text-xs font-semibold text-slate-600 tracking-wide">Patient Vitals (crew PCR)</p>
                 </div>
                 <div className="p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {Object.entries(activeTask.handoverVitals)
