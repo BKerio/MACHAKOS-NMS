@@ -48,6 +48,7 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
 import { toNairobiInput, nairobiInputToISO } from '@/lib/datetime';
 import { fetchDrivingRoute, type DrivingRoute } from '@/lib/directions';
+import { inMachakos, nearestSubCounty, subCountyFromText } from '@/lib/machakosPlaces';
 import type { Facility } from '@/types/api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -702,8 +703,14 @@ function NewIncidentWizard() {
     return '';
   }
 
-  function detectSubCounty(address: Record<string, string>): string {
-    const canonical = matchSubCounty([
+  /**
+   * Official sub-county for a geocoded address, strongest signal first:
+   * an official name in the address -> a known Machakos place in it (Syokimau,
+   * Tala...) -> the sub-county nearest the pin. Never an arbitrary area name:
+   * that is how "Westlands" / "Add" ended up stored as sub-counties.
+   */
+  function detectSubCounty(address: Record<string, string>, lat?: number, lng?: number): string {
+    const parts = [
       address.city_district,
       address.suburb,
       address.county,
@@ -711,16 +718,63 @@ function NewIncidentWizard() {
       address.municipality,
       address.neighbourhood,
       address.town,
-    ]);
-    if (canonical) return canonical;
-    // No official sub-county matched - fall back to the most specific area name
-    // so the field still auto-fills (it's free-text; the watcher can adjust).
-    // A bare direction word is useless here, so skip it.
-    const fallback = [address.city_district, address.suburb, address.neighbourhood, address.municipality]
-      .filter(Boolean)
-      .find(v => !DIRECTION_WORDS.has(normalizePlace(v)));
-    return fallback ?? '';
+      address.village,
+      address.city,
+    ].filter(Boolean) as string[];
+    return matchSubCounty(parts)
+      || subCountyFromText(parts.join(' , '), subCounties)
+      || (lat != null && lng != null ? nearestSubCounty(lat, lng, subCounties) : '');
   }
+
+  // ── Auto-fill from what was typed (no paid API needed) ─────────────────────
+  // Where the pin came from: only a pin the watcher placed is never moved for them.
+  const pinSource = useRef<'default' | 'auto' | 'user'>('default');
+  // locationName values set by picking a suggestion / the map - already resolved.
+  const resolvedName = useRef('');
+  const [autoFillNote, setAutoFillNote] = useState('');
+
+  useEffect(() => {
+    const name = form.locationName.trim();
+    if (isReferral || name.length < 3 || name === resolvedName.current) return;
+    const keepSub = subCountySource === 'MANUAL';
+
+    // 1. Instant and offline: a Machakos town / ward / estate in the text.
+    const fromText = subCountyFromText(name, subCounties);
+    if (fromText && !keepSub) {
+      set({ subCounty: fromText });
+      setSubCountySource('AUTO');
+      setAutoFillNote(`From "${name}"`);
+    }
+
+    // 2. Free OpenStreetMap lookup: pin the place (unless the watcher pinned it)
+    //    and, if the text alone didn't say, read the sub-county from the result.
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&countrycodes=ke` +
+          `&viewbox=36.85,-0.75,37.85,-1.9&q=${encodeURIComponent(`${name}, Machakos County`)}`,
+        );
+        const [hit] = (await res.json()) as Array<{ lat: string; lon: string; address?: Record<string, string> }>;
+        if (!hit || form.locationName.trim() !== name) return;
+        const lat = parseFloat(hit.lat);
+        const lng = parseFloat(hit.lon);
+        if (pinSource.current !== 'user' && inMachakos(lat, lng)) {
+          set({ lat, lng });
+          pinSource.current = 'auto';
+        }
+        if (!fromText && !keepSub) {
+          const sub = detectSubCounty(hit.address ?? {}, lat, lng);
+          if (sub) {
+            set({ subCounty: sub });
+            setSubCountySource('AUTO');
+            setAutoFillNote(`From the map location of "${name}"`);
+          }
+        }
+      } catch { /* offline: the text match above (if any) stands */ }
+    }, 900);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.locationName, subCounties.length, isReferral]);
 
   // ── Location autocomplete - Google Places when key present, Nominatim fallback ──
   useEffect(() => {
@@ -748,9 +802,9 @@ function NewIncidentWizard() {
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`);
       const data = await res.json();
-      return detectSubCounty(data.address ?? {});
+      return detectSubCounty(data.address ?? {}, lat, lng);
     } catch {
-      return '';
+      return nearestSubCounty(lat, lng, subCounties);
     }
   }
 
@@ -765,13 +819,16 @@ function NewIncidentWizard() {
         detectedSub = await reverseDetectSubCounty(details.lat, details.lng);
         setIsReverseGeocoding(false);
       }
+      const pickedName = details.name || description.split(',').slice(0, 2).join(',').trim();
+      resolvedName.current = pickedName;
+      pinSource.current = 'user';
       set({
-        locationName: details.name || description.split(',').slice(0, 2).join(',').trim(),
+        locationName: pickedName,
         lat: details.lat,
         lng: details.lng,
         ...(detectedSub ? { subCounty: detectedSub } : {}),
       });
-      if (detectedSub) setSubCountySource('AUTO');
+      if (detectedSub) { setSubCountySource('AUTO'); setAutoFillNote(`From "${pickedName}"`); }
     } catch {
       set({ locationName: description.split(',').slice(0, 2).join(',').trim() });
     }
@@ -781,30 +838,43 @@ function NewIncidentWizard() {
 
   const selectSuggestion = (s: { display_name: string; lat: string; lon: string; address?: Record<string, string> }) => {
     const name        = s.display_name.split(',').slice(0, 2).join(',').trim();
-    const detectedSub = detectSubCounty(s.address ?? {});
-    set({ locationName: name, lat: parseFloat(s.lat), lng: parseFloat(s.lon), ...(detectedSub ? { subCounty: detectedSub } : {}) });
-    if (detectedSub) setSubCountySource('AUTO');
+    const lat         = parseFloat(s.lat);
+    const lng         = parseFloat(s.lon);
+    const detectedSub = detectSubCounty(s.address ?? {}, lat, lng) || subCountyFromText(s.display_name, subCounties);
+    resolvedName.current = name;
+    pinSource.current = 'user';
+    set({ locationName: name, lat, lng, ...(detectedSub ? { subCounty: detectedSub } : {}) });
+    if (detectedSub) { setSubCountySource('AUTO'); setAutoFillNote(`From "${name}"`); }
     setSuggestions([]);
     setShowSuggestions(false);
   };
 
   // ── Map click reverse geocode ──────────────────────────────────────────────
   const handleMapClick = async (lat: number, lng: number) => {
+    pinSource.current = 'user';
     set({ lat, lng });
     setSuggestions([]);
     setShowSuggestions(false);
     setIsReverseGeocoding(true);
+    let detectedSub = '';
     try {
       const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`);
       const data = await res.json();
       if (data?.display_name) {
-        const name        = data.display_name.split(',').slice(0, 2).join(',').trim();
-        const detectedSub = detectSubCounty(data.address ?? {});
-        set({ locationName: name, ...(detectedSub ? { subCounty: detectedSub } : {}) });
-        if (detectedSub) setSubCountySource('AUTO');
+        const name  = data.display_name.split(',').slice(0, 2).join(',').trim();
+        detectedSub = detectSubCounty(data.address ?? {}, lat, lng);
+        resolvedName.current = name;
+        set({ locationName: name });
       }
-    } catch {} finally {
+    } catch { /* offline - fall through to the nearest sub-county */ } finally {
       setIsReverseGeocoding(false);
+    }
+    // The pin itself always counts, even when the address lookup failed.
+    detectedSub ||= nearestSubCounty(lat, lng, subCounties);
+    if (detectedSub) {
+      set({ subCounty: detectedSub });
+      setSubCountySource('AUTO');
+      setAutoFillNote('From the pin on the map');
     }
   };
 
@@ -970,6 +1040,7 @@ function NewIncidentWizard() {
                     ? crypto.randomUUID()
                     : `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
                   setForm(defaultForm); setMV(defaultMV);
+                  pinSource.current = 'default'; resolvedName.current = ''; setAutoFillNote(''); setSubCountySource('');
                   navigate('/watcher/new-incident', { replace: true, state: {} });
                 }}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl border transition-colors"
@@ -1293,8 +1364,9 @@ function NewIncidentWizard() {
                       <span
                         className="text-[11px] font-medium px-2 py-0.5 rounded-full"
                         style={{ background: 'var(--green-light)', color: 'var(--green)' }}
+                        title={autoFillNote ? `${autoFillNote}. Pick another to change it.` : undefined}
                       >
-                        Auto-filled
+                        Auto-filled{autoFillNote ? ` · ${autoFillNote.replace(/^From /, 'from ')}` : ''}
                       </span>
                     )}
                     {form.subCounty && subCountySource === 'MANUAL' && (

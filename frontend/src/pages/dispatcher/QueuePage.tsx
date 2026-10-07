@@ -260,7 +260,10 @@ function QueuePage() {
               {(searching ? isSearching : isLoading) ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--muted)' }}>
-                    {searching ? 'Searching case history…' : 'Synchronising feed…'}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                      <AppLoader size={34} color="var(--green)" />
+                      {searching ? 'Searching case history…' : 'Synchronising feed…'}
+                    </div>
                   </td>
                 </tr>
               ) : filteredIncidents.length === 0 ? (
