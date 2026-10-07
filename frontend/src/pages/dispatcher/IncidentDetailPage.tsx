@@ -14,7 +14,6 @@ import {
   RotateCcw as ClockCounterClockwise,
   ChevronDown as CaretDown,
   Share2 as ShareNetwork,
-  Timer,
   TriangleAlert as Warning,
   CircleArrowDown as ArrowCircleDown,
   Link as LinkIcon,
@@ -41,11 +40,12 @@ import Map from '@/components/shared/Map';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useVehicleTracking } from '@/hooks/useVehicleTracking';
 import { socket } from '@/lib/socket';
-import { fmtDateTime, NBO_TZ } from '@/lib/datetime';
+import { fmtDateTime } from '@/lib/datetime';
 import { confirmDialog } from '@/lib/alert';
 import { checkInLocationWarning, CREW_RULE, crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
 import LoadingState from '@/components/shared/LoadingState';
 import CaseHeader from '@/components/dispatcher/CaseHeader';
+import ResponseTimeline from '@/components/dispatcher/ResponseTimeline';
 import { caseSlug, isIncidentId } from '@/lib/incidentPath';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
@@ -639,15 +639,6 @@ function IncidentDetailPage() {
 
   const step = getStatusStep();
 
-  const fmtDuration = (ms: number): string => {
-    const totalSecs = Math.floor(ms / 1000);
-    const h = Math.floor(totalSecs / 3600);
-    const m = Math.floor((totalSecs % 3600) / 60);
-    const s = totalSecs % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
-    return `${s}s`;
-  };
 
   return (
     <div className="p-6 flex flex-col gap-6">
@@ -1768,68 +1759,7 @@ function IncidentDetailPage() {
       </div>
 
       {/* TAT Timeline */}
-      <div className="bg-white border border-surface-border rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-surface-border bg-slate-50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Timer size={16} className="text-brand-teal" />
-            <h3 className="font-semibold text-brand-teal text-sm">Response Timeline (TAT)</h3>
-          </div>
-          {tatData?.totalMs != null && (
-            <span className="text-xs font-semibold bg-brand-teal/10 text-brand-teal px-2.5 py-1 rounded-md">
-              Total: {fmtDuration(tatData.totalMs)}
-            </span>
-          )}
-        </div>
-        <div className="p-6">
-          {!tatData ? (
-            <LoadingState inline label="Loading timeline…" className="py-4" />
-          ) : (
-            <div className="flex flex-col">
-              {tatData.steps.map((s, i) => {
-                const done = s.timestamp !== null;
-                const isLast = i === tatData.steps.length - 1;
-                return (
-                  <div key={s.key} className="flex gap-4">
-                    {/* Left: dot + connector */}
-                    <div className="flex flex-col items-center">
-                      <div className={`w-3 h-3 rounded-full mt-0.5 flex-shrink-0 ${done ? 'bg-brand-green' : 'border-2 border-slate-200 bg-white'}`} />
-                      {!isLast && <div className={`w-px flex-1 mt-1 mb-1 min-h-[24px] ${done ? 'bg-brand-green/30' : 'bg-slate-100'}`} />}
-                    </div>
-                    {/* Right: step info */}
-                    <div className={`flex-1 pb-4 ${isLast ? '' : ''}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className={`text-sm font-semibold ${done ? 'text-brand-teal' : 'text-slate-300'}`}>{s.label}</p>
-                          {s.timestamp && (
-                            <p className="text-xs text-slate-400 mt-0.5">
-                              {new Date(s.timestamp).toLocaleString('en-GB', {
-                                timeZone: NBO_TZ,
-                                day: '2-digit', month: 'short', year: 'numeric',
-                                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                              })}
-                            </p>
-                          )}
-                        </div>
-                        {s.durationFromPreviousMs != null && s.durationFromPreviousMs > 0 && (
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-md flex-shrink-0 ${
-                            s.durationFromPreviousMs > 10 * 60_000
-                              ? 'bg-status-danger/10 text-status-danger'
-                              : s.durationFromPreviousMs > 5 * 60_000
-                              ? 'bg-status-warning/10 text-status-warning'
-                              : 'bg-brand-green/10 text-brand-green'
-                          }`}>
-                            +{fmtDuration(s.durationFromPreviousMs)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+      <ResponseTimeline steps={tatData?.steps ?? null} totalMs={tatData?.totalMs ?? null} />
 
       {/* Audit Log */}
       <div className="bg-white border border-surface-border rounded-xl shadow-sm overflow-hidden">
