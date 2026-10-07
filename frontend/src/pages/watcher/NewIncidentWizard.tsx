@@ -24,6 +24,21 @@ import {
   ArrowRightLeft,
   Hospital,
   UserX,
+  HeartPulse,
+  Scissors,
+  Stethoscope,
+  CarFront,
+  ShieldAlert,
+  HeartCrack,
+  Headphones,
+  Video,
+  MessageCircleQuestion,
+  Megaphone,
+  MessageSquareWarning,
+  Info,
+  Mars,
+  Venus,
+  Users,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
@@ -147,26 +162,136 @@ function TileGroup<T extends string>({
   );
 }
 
-/** Vertical radio list (the design's "Company type"). */
-function RadioList({ name, options, value, onChange }: { name: string; options: string[]; value: string; onChange: (v: string) => void }) {
+// ── Fast inputs: one tap instead of open-scroll-pick ──────────────────────────
+
+/** Icon for a nature-of-alert category, matched on its name (categories are admin-configured). */
+const NATURE_ICONS: [RegExp, ElementType][] = [
+  [/maternity|neonat/i, Baby],
+  [/gyn/i, HeartPulse],
+  [/surgical/i, Scissors],
+  [/medical\)|illness/i, Stethoscope],
+  [/accident/i, CarFront],
+  [/violence/i, ShieldAlert],
+  [/self/i, HeartCrack],
+  [/tele ?counsel/i, Headphones],
+  [/telemed/i, Video],
+  [/advice/i, MessageCircleQuestion],
+  [/public/i, Megaphone],
+  [/complain|compliment/i, MessageSquareWarning],
+  [/inquiry|enquiry/i, Info],
+];
+const natureIcon = (n: string): ElementType => NATURE_ICONS.find(([re]) => re.test(n))?.[1] ?? MoreHorizontal;
+/** "Maternity (maternal & neonatal disorders)" -> "Maternity" for the chip face. */
+const chipLabel = (n: string) => n.replace(/\s*\(.*\)\s*$/, '').trim() || n;
+
+/** Wrap of selectable chips; tapping the selected chip again clears it. */
+function ChipPicker({
+  options, value, onChange, icon, label = (o: string) => o, columns,
+}: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  icon?: (o: string) => ElementType;
+  label?: (o: string) => string;
+  /** Equal-width grid instead of a free wrap. */
+  columns?: string;
+}) {
   return (
-    <div role="radiogroup" className="flex flex-col gap-2.5 pt-2">
-      {options.map((o) => (
-        <label key={o} className="flex items-center gap-2.5 text-[13.5px] cursor-pointer" style={{ color: 'var(--ink)' }}>
-          <input
-            type="radio"
-            name={name}
-            className="w-4 h-4"
-            style={{ accentColor: 'var(--green)' }}
-            checked={value === o}
-            onChange={() => onChange(o)}
-          />
-          {o}
-        </label>
-      ))}
+    <div role="radiogroup" className={columns ? `grid ${columns} gap-2` : 'flex flex-wrap gap-2'}>
+      {options.map((o) => {
+        const on = value === o;
+        const Icon = icon?.(o);
+        return (
+          <button
+            key={o}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            title={o}
+            onClick={() => onChange(on ? '' : o)}
+            className="inline-flex items-center gap-2 min-h-[40px] px-3 rounded-lg border text-[13px] font-medium transition-all text-left"
+            style={on
+              ? { borderColor: 'var(--green)', background: 'var(--green-light)', color: 'var(--green)', boxShadow: '0 0 0 1px var(--green)' }
+              : { borderColor: 'var(--border-strong)', background: 'var(--surface)', color: 'var(--ink-2)' }}
+          >
+            {Icon && <Icon size={15} className="shrink-0" />}
+            <span className="leading-tight">{label(o)}</span>
+            {on && <Check size={13} className="ml-auto shrink-0" />}
+          </button>
+        );
+      })}
     </div>
   );
 }
+
+const AGE_PRESETS = ['Below 1 Month', '1-6 Months', '6-12 Months', 'Unknown'] as const;
+
+/** Type years, or tap an infant / unknown preset. Stores the same strings as before. */
+function AgePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const years = /^\d+$/.test(value) ? value : '';
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative w-[120px]">
+        <input
+          type="text"
+          inputMode="numeric"
+          aria-label="Age in years"
+          placeholder="Age"
+          className={`${inputCls} pr-12 text-[15px] font-semibold`}
+          value={years}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 3);
+            onChange(v && Number(v) > 150 ? '150' : v);
+          }}
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px]" style={{ color: 'var(--muted)' }}>yrs</span>
+      </div>
+      <span className="text-[12px] px-1" style={{ color: 'var(--muted-2)' }}>or</span>
+      <ChipPicker options={[...AGE_PRESETS]} value={value} onChange={onChange} label={(o) => (o === 'Below 1 Month' ? '< 1 month' : o.replace(' Months', ' mo'))} />
+    </div>
+  );
+}
+
+/** A flag the watcher switches on: big, colour-coded when active. */
+function ToggleCard({
+  on, onChange, title, sub, color, Icon, children,
+}: {
+  on: boolean;
+  onChange: (on: boolean) => void;
+  title: string;
+  sub: string;
+  color: string;
+  Icon: ElementType;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-xl border transition-all"
+      style={on
+        ? { borderColor: color, background: `color-mix(in srgb, ${color} 8%, var(--surface))`, boxShadow: `0 0 0 1px ${color}` }
+        : { borderColor: 'var(--border-strong)', background: 'var(--surface)' }}
+    >
+      <button type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)} className="w-full flex items-center gap-3 px-3.5 py-3 text-left">
+        <span
+          className="w-9 h-9 rounded-lg grid place-items-center shrink-0"
+          style={on ? { background: color, color: '#fff' } : { background: 'var(--surface-3)', color: 'var(--muted)' }}
+        >
+          <Icon size={17} />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-[13.5px] font-semibold" style={{ color: on ? color : 'var(--ink)' }}>{title}</span>
+          <span className="block text-[12px]" style={{ color: 'var(--muted)' }}>{sub}</span>
+        </span>
+        {/* Switch track */}
+        <span className="w-10 h-6 rounded-full relative shrink-0 transition-colors" style={{ background: on ? color : 'var(--border-strong)' }}>
+          <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" style={{ left: on ? 18 : 2 }} />
+        </span>
+      </button>
+      {on && children && <div className="px-3.5 pb-3.5 pl-[60px]">{children}</div>}
+    </div>
+  );
+}
+
 
 // ── Review row ────────────────────────────────────────────────────────────────
 
@@ -340,7 +465,6 @@ type FormState = {
   chiefComplaint: string;
   alertNature: string;
   alertNatureDetail: string;
-  watcherComments: string;
   preHospitalManagement: string;
   placeOfReferral: string;
   targetFacilityId: string;
@@ -375,7 +499,6 @@ const defaultForm: FormState = {
   chiefComplaint: '',
   alertNature: '',
   alertNatureDetail: '',
-  watcherComments: '',
   preHospitalManagement: '',
   placeOfReferral: '',
   targetFacilityId: '',
@@ -735,7 +858,6 @@ function NewIncidentWizard() {
     chiefComplaint:        form.chiefComplaint,
     alertNature:           form.alertNature  || undefined,
     alertNatureDetail:     form.alertNatureDetail || undefined,
-    watcherComments:       form.watcherComments || undefined,
     preHospitalManagement: form.preHospitalManagement || undefined,
     // Emergencies get their facility from the dispatcher at dispatch; only a
     // referral names the receiving facility when it is logged.
@@ -1278,25 +1400,19 @@ function NewIncidentWizard() {
 
                 <Field>
                   <Label>Age</Label>
-                  <select className={selectCls} value={form.patientAge} onChange={e => set({ patientAge: e.target.value })}>
-                      <option value="">Select age...</option>
-                      <option value="Unknown">Unknown</option>
-                      <option value="Below 1 Month">Below 1 Month</option>
-                      <option value="1-6 Months">1-6 Months</option>
-                      <option value="6-12 Months">6-12 Months</option>
-                      {Array.from({ length: 149 }, (_, i) => i + 2).map(yr => (
-                        <option key={yr} value={String(yr)}>{yr}</option>
-                      ))}
-                    </select>
+                  <AgePicker value={form.patientAge} onChange={(v) => set({ patientAge: v })} />
                 </Field>
 
                 <Field>
                   <Label>Sex</Label>
-                  <RadioList
-                    name="patientGender"
-                    options={['Male', 'Female', 'Other']}
+                  <TileGroup
+                    cols="grid-cols-2 max-w-[340px]"
                     value={form.patientGender}
-                    onChange={(v) => set({ patientGender: v })}
+                    onChange={(v) => set({ patientGender: form.patientGender === v ? '' : v })}
+                    options={[
+                      { value: 'Male', label: 'Male', Icon: Mars },
+                      { value: 'Female', label: 'Female', Icon: Venus },
+                    ]}
                   />
                 </Field>
 
@@ -1323,94 +1439,78 @@ function NewIncidentWizard() {
                   <div className="iw-label">
                     <span className="block text-[13px] font-medium" style={{ color: 'var(--ink)' }}>Flags</span>
                   </div>
-                  <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>Tick any that apply.</p>
-                  <div className="flex flex-col gap-3 pt-2">
-                    <label className="flex items-start gap-2.5 cursor-pointer">
+                  <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>Switch on any that apply.</p>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <ToggleCard
+                      on={form.massCasualty}
+                      onChange={(on) => set({ massCasualty: on, ...(on ? {} : { massCasualtyCount: '' }) })}
+                      title="Mass casualty (MCI)"
+                      sub="Several victims, heavy response"
+                      color="var(--red)"
+                      Icon={Users}
+                    >
                       <input
-                        type="checkbox"
-                        className="w-4 h-4 mt-0.5 shrink-0"
-                        style={{ accentColor: 'var(--red)' }}
-                        checked={form.massCasualty}
-                        onChange={e => set({ massCasualty: e.target.checked })}
-                      />
-                      <span className="text-[13.5px]" style={{ color: 'var(--ink)' }}>
-                        <b style={{ color: form.massCasualty ? 'var(--red)' : undefined }}>Mass casualty incident (MCI)</b>
-                        <span className="block text-[12px]" style={{ color: 'var(--muted)' }}>Several victims needing a heavy response.</span>
-                      </span>
-                    </label>
-                    {form.massCasualty && (
-                      <input
-                        type="number"
-                        min="2"
+                        type="text"
                         inputMode="numeric"
-                        placeholder="Approximate number of casualties, e.g. 5"
-                        className={`${inputCls} ml-6 max-w-[340px]`}
+                        autoFocus
+                        placeholder="How many casualties? e.g. 5"
+                        className={inputCls}
                         value={form.massCasualtyCount}
-                        onKeyDown={e => ['e', 'E', '+', '-', '.'].includes(e.key) && e.preventDefault()}
-                        onChange={e => set({ massCasualtyCount: e.target.value.replace(/[^0-9]/g, '') })}
+                        onChange={e => set({ massCasualtyCount: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })}
                       />
-                    )}
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 mt-0.5 shrink-0"
-                        style={{ accentColor: '#7e22ce' }}
-                        checked={form.isGbvCase}
-                        onChange={e => set({ isGbvCase: e.target.checked })}
-                      />
-                      <span className="text-[13.5px]" style={{ color: 'var(--ink)' }}>
-                        <b style={{ color: form.isGbvCase ? '#7e22ce' : undefined }}>Gender-based violence (GBV)</b>
-                        <span className="block text-[12px]" style={{ color: 'var(--muted)' }}>Adds the case to the GBV Register.</span>
-                      </span>
-                    </label>
+                    </ToggleCard>
+                    <ToggleCard
+                      on={form.isGbvCase}
+                      onChange={(on) => set({ isGbvCase: on })}
+                      title="Gender-based violence"
+                      sub="Adds the case to the GBV Register"
+                      color="#7e22ce"
+                      Icon={ShieldAlert}
+                    />
                   </div>
                 </div>
               </SectionCard>
 
               <SectionCard title="Incident details" description="What happened, and the clinical picture." icon={FirstAid}>
-                <Row label="Nature of alert" required hint="Pick the category, then the specific type.">
-                  {/* Nature of Alert */}
-                  <Field>
-                    <Label>Category</Label>
-                    <select
-                      className={selectCls}
+                <div className="iw-row">
+                  <div className="iw-label">
+                    <Label required>Nature of alert</Label>
+                  </div>
+                  <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>Tap the category, then the specific type.</p>
+                  <div className="flex flex-col gap-3">
+                    <ChipPicker
+                      columns="grid-cols-2 sm:grid-cols-3"
+                      options={uniqueNatures}
                       value={form.alertNature}
-                      onChange={e => set({ alertNature: e.target.value, alertNatureDetail: '' })}
-                    >
-                      <option value="">Select nature...</option>
-                      {uniqueNatures.map(n => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                  </Field>
-
-                  {/* Specific Nature - dropdown if DB has details, else free text */}
-                  <Field>
-                    <Label>Specific</Label>
-                    {detailsForNature.length > 0 ? (
-                      <select
-                        className={selectCls}
-                        value={form.alertNatureDetail}
-                        disabled={!form.alertNature}
-                        onChange={e => set({ alertNatureDetail: e.target.value })}
-                      >
-                        <option value="">Select specific...</option>
-                        {detailsForNature.map(d => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        className={inputCls}
-                        placeholder={form.alertNature ? 'Describe further...' : 'Pick nature first'}
-                        disabled={!form.alertNature}
-                        value={form.alertNatureDetail}
-                        onChange={e => set({ alertNatureDetail: e.target.value })}
-                      />
+                      onChange={(v) => set({ alertNature: v, alertNatureDetail: '' })}
+                      icon={natureIcon}
+                      label={chipLabel}
+                    />
+                    {form.alertNature && (
+                      <div className="rounded-lg p-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                        <p className="text-[11.5px] font-medium mb-2" style={{ color: 'var(--muted)' }}>
+                          Specific {chipLabel(form.alertNature).toLowerCase()}
+                        </p>
+                        {detailsForNature.length > 0 && detailsForNature.length <= 12 ? (
+                          <ChipPicker options={detailsForNature} value={form.alertNatureDetail} onChange={(v) => set({ alertNatureDetail: v })} />
+                        ) : detailsForNature.length > 12 ? (
+                          <select className={selectCls} value={form.alertNatureDetail} onChange={e => set({ alertNatureDetail: e.target.value })}>
+                            <option value="">Select specific type...</option>
+                            {detailsForNature.map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            className={inputCls}
+                            placeholder="Describe further..."
+                            value={form.alertNatureDetail}
+                            onChange={e => set({ alertNatureDetail: e.target.value })}
+                          />
+                        )}
+                      </div>
                     )}
-                  </Field>
-                </Row>
+                  </div>
+                </div>
 
                 <Field>
                   <Label required>{isReferral ? 'Reason for referral' : 'Chief complaint'}</Label>
@@ -1426,16 +1526,6 @@ function NewIncidentWizard() {
                   <Hint>Be as specific as possible. This is what dispatchers see first.</Hint>
                 </Field>
 
-                <Field>
-                  <Label>Caller / watcher notes</Label>
-                  <textarea
-                    rows={3}
-                    placeholder="Any additional observations from the caller..."
-                    className={textareaCls}
-                    value={form.watcherComments}
-                    onChange={e => set({ watcherComments: e.target.value })}
-                  />
-                </Field>
 
                 <Field>
                   <Label>Pre-hospital management given</Label>
@@ -1448,30 +1538,6 @@ function NewIncidentWizard() {
                   />
                 </Field>
 
-                {/* For a referral the clinician is captured as the referring clinician on step 1. */}
-                {!isReferral && <Row label="Healthcare worker contacted" hint="If a clinician was consulted.">
-                  <Field>
-                    <Label>Name</Label>
-                    <input
-                      type="text"
-                      placeholder="Name of HCW contacted"
-                      className={inputCls}
-                      value={form.healthcareWorkerName}
-                      onChange={e => set({ healthcareWorkerName: e.target.value })}
-                    />
-                  </Field>
-                  <Field>
-                    <Label>Phone</Label>
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      placeholder="0712345678"
-                      className={inputCls}
-                      value={form.healthcareWorkerContact}
-                      onChange={e => set({ healthcareWorkerContact: e.target.value })}
-                    />
-                  </Field>
-                </Row>}
 
               </SectionCard>
 
