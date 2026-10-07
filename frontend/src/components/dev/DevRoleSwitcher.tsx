@@ -3,15 +3,17 @@ import api from '@/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/api';
 
+/** Where each role lands after sign-in (and when switching roles). */
 export const ROLE_ROUTES: Record<Role, string> = {
-  SUPER_ADMIN: '/admin/users',
-  ADMIN: '/admin/users',
+  SUPER_ADMIN: '/dashboard',
+  ADMIN: '/dashboard',
   DISPATCHER: '/dashboard',
   WATCHER: '/watcher/new-incident',
   PARTNER: '/partner/dashboard',
   DRIVER: '/driver/dashboard',
-  EMT: '/emt/dashboard',
-  NURSE: '/nurse/dashboard',
+  // EMTs and nurses share the crew pages (there is no /emt or /nurse route).
+  EMT: '/operator/assignment',
+  NURSE: '/operator/assignment',
 };
 
 const ROLE_COLORS: Record<Role, string> = {

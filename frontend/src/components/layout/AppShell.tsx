@@ -1,6 +1,6 @@
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import AppLoader from '@/components/shared/AppLoader';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
 import { socket } from '@/lib/socket';
@@ -139,6 +139,13 @@ function AppShell() {
       import('@/lib/firebasePush').then(({ unregisterWebPush }) => unregisterWebPush(session));
     };
   }, [addNotification, token, userId, userRole]);
+
+  const location = useLocation();
+  // Every page opens at the top. Keyed on the path only, so changing a filter
+  // or search (?query) on the same page doesn't jump the user back up.
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+  }, [location.pathname]);
 
   if (!token) return <Navigate to="/login" replace />;
 

@@ -527,6 +527,11 @@ function NewIncidentWizard() {
   const surveillance  = (location.state as any)?.surveillance;
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  // The form scrolls inside its own panel, so each new step starts at its top.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [mv, setMV] = useState<MaternityVitalsForm>(defaultMV);
   const setMat = (u: Partial<MaternityVitalsForm>) => setMV(p => ({ ...p, ...u }));
@@ -1068,7 +1073,7 @@ function NewIncidentWizard() {
       className="incident-wizard flex-1 min-h-0 flex flex-col overflow-hidden"
       style={{ background: 'linear-gradient(180deg, var(--green-light) 0%, var(--bg) 360px)' }}
     >
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-4 sm:px-5 sm:pt-5">
+      <div ref={scrollerRef} className="flex-1 min-h-0 overflow-y-auto px-3 pt-4 sm:px-5 sm:pt-5">
         {/* Full width: on wide screens each step's sections sit side by side (.iw-grid). */}
         <div
           className="w-full rounded-2xl border flex flex-col mb-4 sm:mb-5"
