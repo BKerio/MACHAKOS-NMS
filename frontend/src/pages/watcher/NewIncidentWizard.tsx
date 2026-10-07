@@ -48,6 +48,7 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
 import { toNairobiInput, nairobiInputToISO } from '@/lib/datetime';
 import { inMachakos, nearestSubCounty, subCountyFromText } from '@/lib/machakosPlaces';
+import { caseTitle } from '@/lib/incidentPath';
 import type { Facility } from '@/types/api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -77,11 +78,9 @@ const REFERRAL_REASONS = [
 const facilityLabel = (f: Facility) =>
   [f.name, f.type, f.subCounty].filter(Boolean).join(' · ');
 
-/** Placeholder name for an unidentified patient, by recorded sex. */
-function unknownPatientName(gender: string) {
-  if (gender === 'Male') return 'John Doe';
-  if (gender === 'Female') return 'Jane Doe';
-  return 'Unknown person';
+/** What an unidentified patient is called until saved - the server then assigns "Unknown N". */
+function unknownPatientName(_gender?: string) {
+  return 'Unknown (numbered when saved)';
 }
 
 // ── Style tokens ─────────────────────────────────────────────────────────────
@@ -923,7 +922,7 @@ function NewIncidentWizard() {
     subCountySource:       subCountySource || undefined,
     lat:                   form.lat,
     lng:                   form.lng,
-    patientName:           patientDisplayName || undefined,
+    patientName:           form.patientUnknown ? undefined : patientDisplayName || undefined,
     patientContact:        form.patientUnknown ? undefined : form.patientContact || undefined,
     patientNationalId:     form.patientUnknown ? undefined : form.patientNationalId || undefined,
     patientAge:            form.patientAge   || undefined,
@@ -950,7 +949,9 @@ function NewIncidentWizard() {
   const mutation = useMutation({
     mutationFn: () => api.post('/incidents', buildPayload()),
     onSuccess: (res) => {
-      const caseNumber = res?.data?.data?.caseNumber ?? '';
+      const saved = res?.data?.data;
+      // e.g. "Case 023 (Unknown 4)" so the watcher can quote the unknown label.
+      const caseNumber = saved ? caseTitle(saved) : '';
       navigate('/incidents/new', { state: { submitted: true, caseNumber } });
     },
     onError: (err: any) => {
@@ -985,7 +986,9 @@ function NewIncidentWizard() {
   const surveillanceMutation = useMutation({
     mutationFn: () => api.post('/incidents', { ...buildPayload(), surveillanceNote }),
     onSuccess: (res) => {
-      const caseNumber = res?.data?.data?.caseNumber ?? '';
+      const saved = res?.data?.data;
+      // e.g. "Case 023 (Unknown 4)" so the watcher can quote the unknown label.
+      const caseNumber = saved ? caseTitle(saved) : '';
       navigate('/incidents/new', { state: { submitted: true, caseNumber, surveillance: true } });
     },
     onError: (err: any) => {
@@ -1414,11 +1417,10 @@ function NewIncidentWizard() {
                       onChange={e => set({ patientUnknown: e.target.checked })}
                     />
                     <span className="text-[13.5px]" style={{ color: 'var(--ink)' }}>
-                      <b className="inline-flex items-center gap-1.5"><UserX size={15} /> Unknown person (John / Jane Doe)</b>
+                      <b className="inline-flex items-center gap-1.5"><UserX size={15} /> Unknown person</b>
                       <span className="block text-[12px]" style={{ color: 'var(--muted)' }}>
-                        Identity not known. The patient is recorded as{' '}
-                        <b style={{ color: 'var(--ink)' }}>{unknownPatientName(form.patientGender)}</b>
-                        {form.patientGender ? '' : ' (pick a sex below for John or Jane Doe)'} until identified.
+                        Identity not known. The case gets the next unknown number, e.g.{' '}
+                        <b style={{ color: 'var(--ink)' }}>Unknown 4</b>, and their details can be added from the case page once they're identified.
                       </span>
                     </span>
                   </label>
@@ -1802,7 +1804,7 @@ function NewIncidentWizard() {
               )}
 
               <ReviewCard title="Patient" onEdit={() => setStep(2)}>
-                <ReviewRow label="Name"        value={form.patientUnknown ? `${patientDisplayName} (identity unknown)` : form.patientName} />
+                <ReviewRow label="Name"        value={form.patientUnknown ? 'Unknown person - numbered when saved' : form.patientName} />
                 {form.patientUnknown && <ReviewRow label="Features" value={form.patientDescription} />}
                 <ReviewRow label="Patient Phone" value={form.patientContact} />
                 <ReviewRow label="Age / Sex"   value={[form.patientAge, form.patientGender].filter(Boolean).join(' · ') || undefined} />

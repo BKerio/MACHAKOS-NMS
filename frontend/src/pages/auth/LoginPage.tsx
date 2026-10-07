@@ -56,12 +56,11 @@ interface PendingRoleSelection {
 type LoginMode = 'staff' | 'field';
 
 /**
- * Field crew (Driver/EMT/Nurse) sign in on the mobile app. The web phone + SMS
- * code login was for development and testing only, so it's hidden; flip this
- * to bring the "Field Crew Login" tab back. The server's OTP endpoints stay on
- * either way - the app uses them.
+ * Field crew (Driver/EMT/Nurse) can also sign in on the web with phone + SMS
+ * code - the web crew pages mirror the app. Set to false to hide the
+ * "Field Crew Login" tab; the server's OTP endpoints stay on either way.
  */
-const SHOW_FIELD_CREW_LOGIN = false;
+const SHOW_FIELD_CREW_LOGIN = true;
 
 function LoginPage() {
   const {

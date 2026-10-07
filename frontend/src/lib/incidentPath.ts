@@ -18,3 +18,16 @@ export function caseSlug(caseNumber?: string | null): string | null {
 export function incidentPath(incident: { id: string; caseNumber?: string | null }): string {
   return `/incidents/${caseSlug(incident.caseNumber) ?? incident.id}`;
 }
+
+type PatientIdentity = { patientUnknown?: boolean; unknownSeq?: number | null };
+
+/** "Unknown 3" for an unidentified patient (also after they're identified), else null. */
+export function unknownLabel(i: PatientIdentity): string | null {
+  return i.unknownSeq != null ? `Unknown ${i.unknownSeq}` : null;
+}
+
+/** "Case 022 (Unknown 1)" while unidentified, plain "Case 022" otherwise. */
+export function caseTitle(i: PatientIdentity & { caseNumber: string }): string {
+  const label = unknownLabel(i);
+  return i.patientUnknown && label ? `${i.caseNumber} (${label})` : i.caseNumber;
+}

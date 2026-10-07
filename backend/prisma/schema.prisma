@@ -298,6 +298,12 @@ model Incident {
   // name and patientDescription the features that will help identify them.
   patientUnknown     Boolean @default(false) @map("patient_unknown")
   patientDescription String? @map("patient_description") @db.Text
+  // Running number for unidentified patients: "Unknown 1", "Unknown 2"...
+  // Drawn from the incidents_unknown_seq sequence when the case is logged and
+  // kept after the patient is identified, so "Unknown 3" stays traceable.
+  unknownSeq         Int?      @unique @map("unknown_seq")
+  identifiedAt       DateTime? @map("identified_at")
+  identifiedById     String?   @map("identified_by_id")
 
   tasks          Task[]
   forwardingLogs ForwardingLog[]

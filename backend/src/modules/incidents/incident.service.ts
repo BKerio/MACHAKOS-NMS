@@ -95,6 +95,12 @@ export class IncidentService {
       if (!data.originFacilityId) {
         throw new BadRequestError('A referral needs the referring facility');
       }
+      const reasons = (data.referralReasons ?? []).map((r) => r.trim()).filter(Boolean);
+      if (!reasons.length) throw new BadRequestError('Give at least one reason for the referral');
+      if (reasons.includes('Other') && !data.referralReasonOther?.trim()) {
+        throw new BadRequestError('Describe the "Other" referral reason');
+      }
+      data = { ...data, referralReasons: [...new Set(reasons)] };
       if (data.targetFacilityId && data.originFacilityId === data.targetFacilityId) {
         throw new BadRequestError('Referring and receiving facility must be different');
       }
@@ -131,6 +137,14 @@ export class IncidentService {
 
     // Create with a unique placeholder, then set the human "Case NNN" from the
     // DB-assigned caseSeq - this is collision-free and always in ascending order.
+    // Unidentified patient: next running label from the sequence ("Unknown 7").
+    let unknownSeq: number | undefined;
+    if (data.patientUnknown) {
+      const [row] = await this.app.prisma.$queryRaw<{ n: bigint }[]>`SELECT nextval('incidents_unknown_seq') AS n`;
+      unknownSeq = Number(row.n);
+      data = { ...data, patientName: `Unknown ${unknownSeq}`, patientNationalId: undefined, patientContact: undefined };
+    }
+
     const created = await this.app.prisma.incident.create({
       data: {
         caseNumber: `PENDING-${randomUUID()}`,
@@ -172,6 +186,7 @@ export class IncidentService {
         referralReasons: data.referralReasons ?? [],
         referralReasonOther: data.referralReasonOther,
         patientUnknown: data.patientUnknown ?? false,
+        unknownSeq,
         patientDescription: data.patientDescription,
         vitals: data.vitals ?? undefined,
         maternityVitals: data.maternityVitals ?? undefined,
@@ -246,6 +261,8 @@ export class IncidentService {
         { locationName: { contains: search, mode: 'insensitive' } },
         { chiefComplaint: { contains: search, mode: 'insensitive' } },
         { alertNature: { contains: search, mode: 'insensitive' } },
+        // "unknown 3" / "unknown3" finds that unidentified patient's case.
+        ...(/^unknown\s*(\d+)$/i.test(search) ? [{ unknownSeq: Number(/(\d+)$/.exec(search)![1]) }] : []),
       ];
     }
 
@@ -308,6 +325,57 @@ export class IncidentService {
         },
       },
     });
+  }
+
+  /**
+   * Identifies a patient logged as "Unknown N": fills in who they are and
+   * clears the unknown flag. The running number stays on the case so the
+   * "Unknown N" label remains traceable in history and reports.
+   */
+  async identifyPatient(
+    incidentId: string,
+    userId: string,
+    data: {
+      patientName: string;
+      patientAge?: string;
+      patientGender?: string;
+      patientNationalId?: string;
+      patientContact?: string;
+      nextOfKin?: string;
+      nextOfKinPhone?: string;
+      note?: string;
+    },
+  ) {
+    const incident = await this.app.prisma.incident.findUnique({ where: { id: incidentId } });
+    if (!incident) throw new NotFoundError('Incident not found');
+    if (!incident.patientUnknown) throw new BadRequestError('This patient is already identified');
+
+    const clean = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+    const updates = {
+      patientName: data.patientName.trim(),
+      patientAge: clean(data.patientAge) ?? incident.patientAge,
+      patientGender: clean(data.patientGender) ?? incident.patientGender,
+      patientNationalId: clean(data.patientNationalId) ?? null,
+      patientContact: clean(data.patientContact) ?? null,
+      nextOfKin: clean(data.nextOfKin) ?? incident.nextOfKin,
+      nextOfKinPhone: clean(data.nextOfKinPhone) ?? incident.nextOfKinPhone,
+    };
+
+    const updated = await this.app.prisma.incident.update({
+      where: { id: incidentId },
+      data: { ...updates, patientUnknown: false, identifiedAt: new Date(), identifiedById: userId },
+    });
+
+    await this.writeAudit({
+      userId,
+      action: 'IDENTIFY_PATIENT',
+      subjectId: incidentId,
+      oldValues: { patientName: incident.patientName, unknownLabel: incident.unknownSeq ? `Unknown ${incident.unknownSeq}` : null },
+      newValues: { ...updates, ...(clean(data.note) ? { note: clean(data.note) } : {}) },
+    });
+
+    this.app.io?.to(`incident:${incidentId}`).emit('incident:update', updated);
+    return updated;
   }
 
   /**
@@ -408,6 +476,15 @@ export class IncidentService {
 
     const incident = await this.app.prisma.incident.findUnique({ where: { id } });
     if (!incident) throw new NotFoundError('Incident not found');
+
+    // A referral can't be "transferred" to the facility it is being referred from.
+    if (
+      incident.incidentType === 'REFERRAL' &&
+      (data as { targetFacilityId?: string }).targetFacilityId &&
+      (data as { targetFacilityId?: string }).targetFacilityId === incident.originFacilityId
+    ) {
+      throw new BadRequestError('The receiving facility must be different from the referring facility');
+    }
 
     // Build a diff of only the fields that are actually changing
     const oldValues: Record<string, unknown> = {};

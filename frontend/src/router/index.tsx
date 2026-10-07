@@ -48,6 +48,8 @@ const OperatorPatientCareReportPage = lazy(() => import('@/pages/operator/Patien
 const OperatorInventoryPage = lazy(() => import('@/pages/operator/InventoryPage'));
 const OperatorChecklistPage = lazy(() => import('@/pages/operator/ChecklistPage'));
 const OperatorTransferCasePage = lazy(() => import('@/pages/operator/TransferCasePage'));
+const OperatorFacilityRatingPage = lazy(() => import('@/pages/operator/FacilityRatingPage'));
+const OperatorStatisticsPage = lazy(() => import('@/pages/operator/StatisticsPage'));
 const ProfilePage = lazy(() => import('@/pages/shared/ProfilePage'));
 // Unauthenticated read-only display for the call-centre TV (token-gated).
 const WallboardDisplayPage = lazy(() => import('@/pages/public/WallboardDisplayPage'));
@@ -353,7 +355,7 @@ export const router = createBrowserRouter([
       {
         path: 'operator/navigate',
         element: (
-          <RoleGuard allowed={['DRIVER']}>
+          <RoleGuard allowed={['DRIVER', 'EMT', 'NURSE']}>
             <OperatorNavigatePage />
           </RoleGuard>
         ),
@@ -412,6 +414,23 @@ export const router = createBrowserRouter([
         element: (
           <RoleGuard allowed={['DRIVER']}>
             <OperatorTransferCasePage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'operator/statistics',
+        element: (
+          <RoleGuard allowed={['DRIVER', 'EMT', 'NURSE']}>
+            <OperatorStatisticsPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        // Rate the receiving facility after a case - every crew member, as in the app.
+        path: 'operator/tasks/:taskId/rate-facility',
+        element: (
+          <RoleGuard allowed={['DRIVER', 'EMT', 'NURSE']}>
+            <OperatorFacilityRatingPage />
           </RoleGuard>
         ),
       },

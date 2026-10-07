@@ -137,6 +137,7 @@ const menuSections: NavSection[] = [
       { label: 'Crew', path: '/operator/crew', Icon: UserCheck, roles: CREW },
       { label: 'Activity', path: '/operator/activity', Icon: Activity, roles: CREW },
       { label: 'History', path: '/operator/history', Icon: HistoryIcon, roles: CREW },
+      { label: 'Statistics', path: '/operator/statistics', Icon: ChartLineUp, roles: CREW },
       { label: 'Inventory', path: '/operator/inventory', Icon: Package, roles: CREW },
       { label: 'Vehicle Checklist', path: '/operator/checklist', Icon: ClipboardText, roles: CREW },
     ],

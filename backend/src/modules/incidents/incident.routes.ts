@@ -56,6 +56,17 @@ const createIncidentSchema = z.object({
   maternityVitals: z.record(z.string(), z.unknown()).optional(),
 });
 
+const identifySchema = z.object({
+  patientName: z.string().trim().min(2, "Enter the patient's name"),
+  patientAge: z.string().max(40).optional(),
+  patientGender: z.string().max(20).optional(),
+  patientNationalId: z.string().max(40).optional(),
+  patientContact: z.string().max(40).optional(),
+  nextOfKin: z.string().max(120).optional(),
+  nextOfKinPhone: z.string().max(40).optional(),
+  note: z.string().max(1000).optional(),
+});
+
 const updateIncidentSchema = z.object({
   chiefComplaint: z.string().min(3).optional(),
   locationName: z.string().min(2).optional(),
@@ -262,6 +273,21 @@ export const incidentRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
         .header('Content-Type', 'text/csv; charset=utf-8')
         .header('Content-Disposition', `attachment; filename="EOC_Incident_Report_${stamp}.csv"`)
         .send(csv);
+    }
+  );
+
+  /**
+   * PATCH /incidents/:id/identify
+   * Fill in an unidentified patient's details once known ("Unknown 3" -> a name).
+   */
+  app.patch<{ Params: { id: string }; Body: unknown }>(
+    '/:id/identify',
+    { preValidation: [requireRole([Role.WATCHER, Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])] },
+    async (request, reply) => {
+      const parsed = identifySchema.safeParse(request.body);
+      if (!parsed.success) throw new BadRequestError(parsed.error.issues[0].message);
+      const incident = await incidentService.identifyPatient(request.params.id, request.user.userId, parsed.data);
+      return reply.send({ ok: true, data: incident });
     }
   );
 

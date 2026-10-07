@@ -67,6 +67,7 @@ export function casesRegister(ws: Worksheet, d: SystemReport, x: D): Reg {
     { header: 'Pre-Hospital Management', width: 36, kind: 'wrap', get: (r) => r.preHospitalManagement },
     { header: 'KEPH Level Required', width: 10, kind: 'int', get: (r) => r.hospitalLevelRequired },
     { header: 'Referred From', width: 26, kind: 'text', get: (r) => r.originFacility },
+    { header: 'Referral Reasons', width: 34, kind: 'wrap', get: (r) => r.referralReasons },
     { header: 'Target Facility', width: 26, kind: 'text', get: (r) => r.targetFacility },
     { header: 'Place of Referral', width: 22, kind: 'text', get: (r) => r.placeOfReferral },
     { header: 'Ambulance Used', width: 14, kind: 'text', get: (r) => r.ambulanceUsed },

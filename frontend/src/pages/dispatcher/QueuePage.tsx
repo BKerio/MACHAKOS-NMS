@@ -17,7 +17,7 @@ import { socket } from '@/lib/socket';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { incidentPath } from '@/lib/incidentPath';
+import { incidentPath, unknownLabel } from '@/lib/incidentPath';
 
 const statusPill: Record<string, string> = {
   SUBMITTED: 'pill-red',
@@ -284,7 +284,7 @@ function QueuePage() {
                           <span className="pill pill-blue" style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px' }}>Referral</span>
                         )}
                         {inc.patientUnknown && (
-                          <span className="pill pill-amber" style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px' }}>Unknown person</span>
+                          <span className="pill pill-amber" style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px' }}>{unknownLabel(inc) ?? 'Unknown person'}</span>
                         )}
                         {inc.massCasualty && (
                           <span className="pill pill-red" style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px' }}>

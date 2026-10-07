@@ -469,6 +469,7 @@ export class AdminService {
         status: i.status,
         incidentType: i.incidentType,
         originFacility: i.originFacility?.name ?? null,
+        referralReasons: i.referralReasons.map((r) => (r === 'Other' && i.referralReasonOther ? `Other: ${i.referralReasonOther}` : r)).join('; ') || null,
         patientUnknown: i.patientUnknown,
         patientDescription: i.patientDescription,
         createdAt: i.createdAt,

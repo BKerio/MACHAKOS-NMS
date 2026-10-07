@@ -2,12 +2,14 @@ import api from '@/api/client';
 import type {
   AssignableCrewMember,
   CrewTask,
+  FacilityRating,
   PaginatedMeta,
   PartnerAmbulance,
   PatientCareReport,
   Task,
   TaskHistoryItem,
   TaskStatus,
+  TaskStop,
   User,
   Vehicle,
 } from '@/types/api';
@@ -44,6 +46,39 @@ export async function getTaskHistory(page = 1, limit = 15): Promise<{ data: Task
 export async function updateTaskStatus(taskId: string, status: TaskStatus, reason?: string): Promise<Task> {
   const res = await api.patch(`/tasks/${taskId}/status`, { status, reason });
   return res.data.data as Task;
+}
+
+// ── Stops & re-routes (same endpoints as the crew app) ────────────────────────
+
+export async function getTaskStops(taskId: string): Promise<TaskStop[]> {
+  const res = await api.get(`/tasks/${taskId}/stops`);
+  return res.data.data as TaskStop[];
+}
+
+export async function addTaskStop(taskId: string, data: { name: string; note?: string }): Promise<TaskStop> {
+  const res = await api.post(`/tasks/${taskId}/stops`, {
+    name: data.name.trim(),
+    ...(data.note?.trim() ? { note: data.note.trim() } : {}),
+  });
+  return res.data.data as TaskStop;
+}
+
+export async function markTaskStopArrived(taskId: string, stopId: string): Promise<TaskStop> {
+  const res = await api.patch(`/tasks/${taskId}/stops/${stopId}/arrived`);
+  return res.data.data as TaskStop;
+}
+
+/** Rates the receiving facility for a case (1-5 stars, quick tags, note). One per crew member; resubmitting replaces it. */
+export async function rateFacility(
+  taskId: string,
+  data: { stars: number; tags: string[]; comment?: string }
+): Promise<FacilityRating> {
+  const res = await api.post(`/tasks/${taskId}/facility-rating`, {
+    stars: data.stars,
+    tags: data.tags,
+    ...(data.comment?.trim() ? { comment: data.comment.trim() } : {}),
+  });
+  return res.data.data as FacilityRating;
 }
 
 export async function closeIncident(incidentId: string, reason: string): Promise<void> {

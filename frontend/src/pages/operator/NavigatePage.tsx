@@ -10,6 +10,7 @@ import type { LiveVehicle } from '@/hooks/useVehicleTracking';
 import { fetchDrivingRoute, type DrivingRoute } from '@/lib/directions';
 import { ACTION_LABELS, getNextStatus } from '@/utils/taskStatus';
 import type { TaskStatus } from '@/types/api';
+import { afterCompletePath } from '@/utils/caseFlow';
 
 /** Straight-line distance (km) - shown while a real route is still loading, or
  * as a fallback when no Google Maps key is configured and routing is unavailable. */
@@ -52,6 +53,14 @@ function NavigatePage() {
     return null;
   }, [params, task]);
 
+  // The hospital leg is routed from the scene (fromLat/fromLng), like the app -
+  // not from wherever the ambulance happens to be when the page opens.
+  const fixedOrigin = useMemo(() => {
+    const lat = Number(params.get('fromLat'));
+    const lng = Number(params.get('fromLng'));
+    return params.has('fromLat') && Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  }, [params]);
+
   const [origin, setOrigin] = useState<{ lat: number; lng: number } | null>(null);
   const [locError, setLocError] = useState<string | null>(null);
   const [route, setRoute] = useState<DrivingRoute | null>(null);
@@ -77,16 +86,17 @@ function NavigatePage() {
     };
   }, []);
 
+  const routeFrom = fixedOrigin ?? origin;
   useEffect(() => {
-    if (!origin || !destination) return;
+    if (!routeFrom || !destination) return;
     let cancelled = false;
     setRouteLoading(true);
-    fetchDrivingRoute(origin, destination)
+    fetchDrivingRoute(routeFrom, destination)
       .then((r) => { if (!cancelled) setRoute(r); })
       .catch(() => { if (!cancelled) setRoute(null); })
       .finally(() => { if (!cancelled) setRouteLoading(false); });
     return () => { cancelled = true; };
-  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng]);
+  }, [routeFrom?.lat, routeFrom?.lng, destination?.lat, destination?.lng]);
 
   const statusMutation = useMutation({
     mutationFn: (status: TaskStatus) => updateTaskStatus(task!.id, status),
@@ -94,7 +104,7 @@ function NavigatePage() {
       queryClient.invalidateQueries({ queryKey: ['operator', 'active-task'] });
       addNotification({ type: 'success', title: 'Status updated', message: ACTION_LABELS[task!.status] ?? '' });
       if (status === 'COMPLETED') {
-        navigate(`/operator/tasks/${task!.id}/patient-care-report?caseNumber=${encodeURIComponent(task!.incident.caseNumber)}`);
+        navigate(afterCompletePath(task!));
       } else if (status === 'AT_HOSPITAL') {
         navigate('/operator/activity');
       }
@@ -119,11 +129,11 @@ function NavigatePage() {
       ? [destination.lat, destination.lng]
       : [-1.2921, 36.8219];
 
-  const straightLineKm = origin && destination ? haversineKm(origin, destination) : null;
+  const straightLineKm = routeFrom && destination ? haversineKm(routeFrom, destination) : null;
 
   const statusLine = route
     ? `${route.durationText} · ${route.distanceText}`
-    : routeLoading && origin
+    : routeLoading && routeFrom
       ? 'Calculating route…'
       : straightLineKm != null
         ? `${straightLineKm < 1 ? `${Math.round(straightLineKm * 1000)} m` : `${straightLineKm.toFixed(1)} km`} away · straight line`

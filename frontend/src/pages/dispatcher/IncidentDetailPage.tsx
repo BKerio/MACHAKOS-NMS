@@ -46,7 +46,8 @@ import { checkInLocationWarning, CREW_RULE, crewShortfall, isCrewComplete, medic
 import LoadingState from '@/components/shared/LoadingState';
 import CaseHeader from '@/components/dispatcher/CaseHeader';
 import ResponseTimeline from '@/components/dispatcher/ResponseTimeline';
-import { caseSlug, isIncidentId } from '@/lib/incidentPath';
+import IdentifyPatient from '@/components/dispatcher/IdentifyPatient';
+import { caseSlug, caseTitle, isIncidentId, unknownLabel } from '@/lib/incidentPath';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -645,7 +646,7 @@ function IncidentDetailPage() {
       {/* Header - case identity + command bar. Resolve / End Case always visible;
           the rest sit inline on wide screens and fold into "More" otherwise. */}
       <CaseHeader
-        caseNumber={incident.caseNumber}
+        caseNumber={caseTitle(incident)}
         status={incident.status}
         createdAt={incident.createdAt}
         badges={[
@@ -655,7 +656,7 @@ function IncidentDetailPage() {
           ...(incident.incidentType === 'REFERRAL'
             ? [{ key: 'ref', tone: 'blue' as const, label: `Referral: ${incident.originFacility?.name ?? incident.locationName} → ${incident.targetFacility?.name ?? incident.placeOfReferral ?? 'facility chosen at dispatch'}` }]
             : []),
-          ...(incident.patientUnknown ? [{ key: 'unknown', label: 'Unknown person', tone: 'amber' as const }] : []),
+          ...(incident.patientUnknown ? [{ key: 'unknown', label: `${unknownLabel(incident) ?? 'Unknown person'} · not identified`, tone: 'amber' as const }] : []),
           ...(incident.isGbvCase ? [{ key: 'gbv', label: 'GBV case', tone: 'purple' as const }] : []),
         ]}
         secondary={[
@@ -958,12 +959,13 @@ function IncidentDetailPage() {
             <div className="px-6 py-4 border-b border-surface-border bg-slate-50">
               <h3 className="font-semibold text-brand-teal">Patient Information</h3>
             </div>
+            <IdentifyPatient incident={incident} />
             <div className="p-6 grid grid-cols-3 gap-4">
               <div>
                 <label className="text-xs font-medium text-slate-text block mb-1">Full Name</label>
                 <p className="text-sm font-semibold text-brand-teal">
                   {incident.patientName || 'Unknown'}
-                  {incident.patientUnknown && <span className="ml-1.5 text-xs font-medium" style={{ color: 'var(--amber)' }}>(identity unknown)</span>}
+                  {incident.patientUnknown && <span className="ml-1.5 text-xs font-medium" style={{ color: 'var(--amber)' }}>(not identified)</span>}
                 </p>
               </div>
               {incident.patientUnknown && incident.patientDescription && (
@@ -1327,14 +1329,29 @@ function IncidentDetailPage() {
               {/* Recommended facility - decided here, at dispatch, not when the case is logged */}
               <div>
                 <label className="text-xs font-medium text-slate-text block mb-1">
-                  {isReferralCase ? 'Transfer Facility (receiving)' : 'Recommended Facility'}
+                  {isReferralCase ? <>Transfer Facility (receiving) <span style={{ color: 'var(--red)' }}>*</span></> : 'Recommended Facility'}
                 </label>
+                {/* Why the patient is being referred - the main input for choosing where to. */}
+                {isReferralCase && (incident.referralReasons?.length ?? 0) > 0 && (
+                  <div className="mb-2 rounded-lg px-3 py-2" style={{ background: 'var(--blue-soft)' }}>
+                    <p className="text-[11px] font-semibold mb-1.5" style={{ color: 'var(--blue)' }}>
+                      Referred from {incident.originFacility?.name ?? incident.locationName} for:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {incident.referralReasons!.map(r => (
+                        <span key={r} className="text-[11.5px] font-medium px-2 py-0.5 rounded-md" style={{ background: 'var(--surface)', color: 'var(--ink)' }}>
+                          {r === 'Other' && incident.referralReasonOther ? `Other: ${incident.referralReasonOther}` : r}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <select
                   className="w-full bg-white border border-surface-border rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-green outline-none"
                   value={recommendedFacilityId}
                   onChange={e => setDispatchFacilityId(e.target.value)}
                 >
-                  <option value="">No facility yet - decide later</option>
+                  <option value="">{isReferralCase ? 'Select the receiving facility…' : 'No facility yet - decide later'}</option>
                   {dispatchFacilities.map(({ facility, km, inRegion }) => (
                     <option key={facility.id} value={facility.id}>
                       {inRegion ? '★ ' : ''}{facility.name} · KEPH {facility.kephLevel}
@@ -1343,8 +1360,10 @@ function IncidentDetailPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  {dispatchFacilityId === null && !incident.targetFacilityId && suggestedFacility
+                <p className="text-[11px] mt-1" style={{ color: isReferralCase && !recommendedFacilityId ? 'var(--red)' : 'var(--muted-2)' }}>
+                  {isReferralCase && !recommendedFacilityId
+                    ? 'A referral needs a receiving facility before the ambulance can be dispatched.'
+                    : dispatchFacilityId === null && !incident.targetFacilityId && suggestedFacility
                     ? isReferralCase
                       ? `Suggested: nearest higher-level facility than ${incident.originFacility?.name ?? 'the referring facility'}. Confirm it can take the patient.`
                       : `Suggested: nearest ${suggestedFacility.inRegion ? `in ${incident.subCounty}` : 'facility'}. Change it if the patient needs a different level of care.`
@@ -1367,6 +1386,8 @@ function IncidentDetailPage() {
                 onClick={() => (isOfflineSelected ? offlineDispatchMutation.mutate() : dispatchMutation.mutate())}
                 disabled={
                   !selectedVehicleId ||
+                  // A transfer has to know where it is going.
+                  (isReferralCase && !recommendedFacilityId) ||
                   // Offline units have no driver account by design - only tracked
                   // vehicles require a complete crew and a complete checklist.
                   (!isOfflineSelected && (() => {

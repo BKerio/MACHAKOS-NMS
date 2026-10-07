@@ -17,7 +17,7 @@ import {
 import api from '@/api/client';
 import LoadingState from '@/components/shared/LoadingState';
 import { useAuthStore } from '@/stores/authStore';
-import { incidentPath } from '@/lib/incidentPath';
+import { caseTitle, incidentPath, unknownLabel } from '@/lib/incidentPath';
 import type { Incident, IncidentStatus } from '@/types/api';
 
 /*
@@ -123,7 +123,12 @@ function Flags({ inc }: { inc: Row }) {
       )}
       {inc.massCasualty && <span className="pill pill-red" style={{ fontSize: 10, padding: '2px 6px' }}>MCI</span>}
       {inc.patientUnknown && (
-        <span className="pill pill-amber" style={{ fontSize: 10, padding: '2px 6px' }}><UserX size={10} /> Unknown</span>
+        <span className="pill pill-amber" style={{ fontSize: 10, padding: '2px 6px' }}><UserX size={10} /> Not identified</span>
+      )}
+      {!inc.patientUnknown && unknownLabel(inc) && (
+        <span className="pill pill-gray" style={{ fontSize: 10, padding: '2px 6px' }} title="Identified after being logged as unknown">
+          was {unknownLabel(inc)}
+        </span>
       )}
     </span>
   );
@@ -280,7 +285,7 @@ export default function IncidentHistoryPage() {
             <input
               className="input w-full"
               style={{ paddingLeft: 36, paddingRight: q ? 34 : undefined }}
-              placeholder="Search case no., patient, ID / phone, location, complaint…"
+              placeholder="Search case no., patient, Unknown 3, ID / phone, location, complaint…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -377,7 +382,7 @@ export default function IncidentHistoryPage() {
                     <tr key={inc.id} onClick={() => navigate(incidentPath(inc))}>
                       <td>
                         <Link to={incidentPath(inc)} onClick={(e) => e.stopPropagation()} className="mono strong whitespace-nowrap" style={{ color: 'var(--blue)' }}>
-                          {inc.caseNumber}
+                          {caseTitle(inc)}
                         </Link>
                         <div className="mt-1"><Flags inc={inc} /></div>
                       </td>
@@ -408,7 +413,7 @@ export default function IncidentHistoryPage() {
                 <li key={inc.id}>
                   <Link to={incidentPath(inc)} className="block px-4 py-3.5" style={{ color: 'inherit' }}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="mono font-semibold" style={{ color: 'var(--blue)' }}>{inc.caseNumber}</span>
+                      <span className="mono font-semibold" style={{ color: 'var(--blue)' }}>{caseTitle(inc)}</span>
                       <StatusPill status={inc.status} />
                     </div>
                     <p className="text-[13.5px] font-semibold mt-1.5" style={{ color: 'var(--ink)' }}>{inc.alertNature ?? inc.chiefComplaint}</p>

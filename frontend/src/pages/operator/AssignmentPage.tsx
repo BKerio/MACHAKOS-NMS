@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   RotateCcw as RefreshIcon, MapPin, Navigation as NavigationIcon, Phone, Users, FileText,
-  ArrowRight, XCircle, ArrowLeftRight, Ambulance, ShieldAlert,
+  ArrowRight, XCircle, ArrowLeftRight, Ambulance, ShieldAlert, Hospital, ChevronRight, Truck,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import { getActiveTask, getMyCheckIn, updateTaskStatus, closeIncident, getErrorMessage } from '@/api/responder';
@@ -16,6 +16,9 @@ import { ACTION_LABELS, STATUS_LABELS, getNextStatus } from '@/utils/taskStatus'
 import { inAppNavigateUrl } from '@/utils/navigateUrl';
 import type { PatientVitals, MaternityVitals } from '@/types/api';
 import LoadingState from '@/components/shared/LoadingState';
+import { CaseProgress, JourneyCard } from '@/components/operator/CaseJourney';
+import TaskStopsCard from '@/components/operator/TaskStopsCard';
+import { afterCompletePath, formatKm, hospitalRouteUrl, pcrPath } from '@/utils/caseFlow';
 
 function hasAnyVitals(v?: PatientVitals | null): boolean {
   if (!v) return false;
@@ -63,21 +66,39 @@ function AssignmentPage() {
 
   const statusMutation = useMutation({
     mutationFn: (status: string) => updateTaskStatus(task!.id, status as any),
-    onSuccess: (updated, status) => {
-      queryClient.invalidateQueries({ queryKey: ['operator', 'active-task'] });
-      if (status === 'ACCEPTED' && collectsFromAmbulance) {
-        // Transfer with the patient on board: the case resumed at "patient on board".
-        const km = updated?.distanceToSceneKm;
+    // Same follow-ups as the app's case screen after each step is saved.
+    onSuccess: async (_updated, status) => {
+      if (status === 'COMPLETED') {
+        addNotification({ type: 'success', title: 'Case completed', message: 'Rate the facility, then file the PCR.' });
+        queryClient.invalidateQueries({ queryKey: ['operator', 'active-task'] });
+        navigate(afterCompletePath(task!));
+        return;
+      }
+      const fresh = await queryClient.fetchQuery({ queryKey: ['operator', 'active-task'], queryFn: getActiveTask, staleTime: 0 });
+      if (status === 'ACCEPTED') {
+        const km = fresh?.distanceToSceneKm;
+        const away = km != null ? ` · ${formatKm(km)} away` : '';
+        addNotification(
+          collectsFromAmbulance
+            ? { type: 'success', title: 'Transfer accepted', message: `Collect the patient from ${firstStopName}${away}.` }
+            : { type: 'success', title: 'Call accepted', message: km != null ? `The scene is ${formatKm(km)} away.` : 'Head to the scene.' },
+        );
+        if (inAppMapsUrl) navigate(inAppMapsUrl);
+      } else if (status === 'PATIENT_PICKED') {
+        const km = fresh?.sceneToFacilityKm;
+        const facility = fresh?.incident.targetFacility?.name ?? 'The facility';
         addNotification({
-          type: 'success',
-          title: 'Transfer accepted',
-          message: `Collect the patient from ${firstStopName}${km != null ? ` · ${km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`} away` : ''}.`,
+          type: 'success', title: 'Patient on board',
+          message: km != null ? `${facility} is ${formatKm(km)} from the scene.` : ACTION_LABELS[task!.status] ?? '',
         });
+      } else if (status === 'EN_ROUTE_TO_FACILITY') {
+        const f = fresh?.incident.targetFacility;
+        const km = fresh?.sceneToFacilityKm;
+        addNotification({ type: 'success', title: 'Leaving for the hospital', message: f ? `On the way to ${f.name}${km != null ? ` · ${formatKm(km)}` : ''}.` : '' });
+        const url = fresh ? hospitalRouteUrl(fresh) : null;
+        if (url) navigate(url);
       } else {
         addNotification({ type: 'success', title: 'Status updated', message: ACTION_LABELS[task!.status] ?? '' });
-      }
-      if (status === 'COMPLETED') {
-        navigate(`/operator/tasks/${task!.id}/patient-care-report?caseNumber=${encodeURIComponent(task!.incident.caseNumber)}`);
       }
     },
     onError: (err) => addNotification({ type: 'error', title: 'Update failed', message: getErrorMessage(err) }),
@@ -90,7 +111,7 @@ function AssignmentPage() {
       queryClient.invalidateQueries({ queryKey: ['operator', 'active-task'] });
       addNotification({ type: 'success', title: 'Case ended', message: 'Saved to History with stage timestamps.' });
       if (user?.role === 'DRIVER') {
-        navigate(`/operator/tasks/${task!.id}/patient-care-report?caseNumber=${encodeURIComponent(task!.incident.caseNumber)}`);
+        navigate(pcrPath(task!.id, task!.incident.caseNumber));
       } else {
         navigate('/operator/history');
       }
@@ -109,9 +130,10 @@ function AssignmentPage() {
   const actionLabel = task
     ? task.status === 'PENDING' && transferredFrom ? 'Accept transfer' : ACTION_LABELS[task.status]
     : null;
-  // Drivers get the in-app map (see NavigatePage); other crew still open Google Maps.
+  // Every crew member gets the in-app map (see NavigatePage), as in the app.
   const inAppMapsUrl = task ? inAppNavigateUrl(destLat, destLng, firstStopName) : null;
-  const externalMapsUrl = destLat != null && destLng != null ? `https://maps.google.com/?q=${destLat},${destLng}` : null;
+  const afterPickup = !!task && ['PATIENT_PICKED', 'EN_ROUTE_TO_FACILITY', 'AT_HOSPITAL'].includes(task.status);
+  const hospitalUrl = task && afterPickup ? hospitalRouteUrl(task) : null;
 
   return (
     <div className="col" style={{ gap: 20 }}>
@@ -155,6 +177,7 @@ function AssignmentPage() {
         </>
       ) : (
         <>
+          <CaseProgress task={task} />
           <div className="card card-pad">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xl font-bold" style={{ color: 'var(--ink)' }}>{task.incident.caseNumber}</p>
@@ -205,15 +228,30 @@ function AssignmentPage() {
                   {task.incident.subCounty}{task.incident.placeOfReferral ? ` · Referral: ${task.incident.placeOfReferral}` : ''}
                 </p>
               </div>
-              {user?.role === 'DRIVER' && inAppMapsUrl ? (
-                <button onClick={() => navigate(inAppMapsUrl)} className="icon-btn flex-shrink-0" title="Navigate">
+              {inAppMapsUrl && (
+                <button onClick={() => navigate(inAppMapsUrl)} className="icon-btn flex-shrink-0" title="Route to the scene">
                   <NavigationIcon size={16} />
                 </button>
-              ) : externalMapsUrl && (
-                <a href={externalMapsUrl} target="_blank" rel="noreferrer" className="icon-btn flex-shrink-0" title="Open in Google Maps">
-                  <NavigationIcon size={16} />
-                </a>
               )}
+            </div>
+
+            {/* After pickup the next leg starts at the scene. */}
+            {hospitalUrl && (
+              <button
+                onClick={() => navigate(hospitalUrl)}
+                className="w-full flex items-center gap-3 rounded-xl p-3.5 mb-3 text-left"
+                style={{ background: 'var(--green-light)' }}
+              >
+                <Hospital size={18} style={{ color: 'var(--green)' }} className="flex-shrink-0" />
+                <span className="flex-1 min-w-0 text-sm font-bold" style={{ color: 'var(--green)' }}>
+                  Route to {task.incident.targetFacility?.name}
+                </span>
+                <ChevronRight size={16} style={{ color: 'var(--green)' }} />
+              </button>
+            )}
+
+            <div className="flex items-center gap-2 mb-2.5 text-sm" style={{ color: 'var(--muted)' }}>
+              <Truck size={15} /> <span className="mono font-semibold" style={{ color: 'var(--ink)' }}>{task.vehicle.registrationNumber}</span>
             </div>
 
             {task.incident.patientName && (
@@ -280,6 +318,15 @@ function AssignmentPage() {
             )}
           </div>
 
+          <JourneyCard task={task} />
+          <TaskStopsCard taskId={task.id} isActive={task.status !== 'COMPLETED' && task.status !== 'CANCELLED'} />
+
+          <button onClick={() => navigate(`/operator/tasks/${task.id}/patient-data`)} className="btn btn-soft btn-block">
+            <FileText size={18} /> Patient / Clinical Notes
+          </button>
+
+          {/* Pinned so the next step is always one tap away mid-call (as in the app). */}
+          <div className="case-actions">
           {nextStatus && actionLabel && (
             <button
               onClick={() => statusMutation.mutate(nextStatus)}
@@ -290,10 +337,6 @@ function AssignmentPage() {
               {actionLabel}
             </button>
           )}
-
-          <button onClick={() => navigate(`/operator/tasks/${task.id}/patient-data`)} className="btn btn-soft btn-block">
-            <FileText size={18} /> Patient / Clinical Notes
-          </button>
 
           {user?.role === 'DRIVER' && (
             <div className="grid grid-cols-2 gap-3">
@@ -309,6 +352,7 @@ function AssignmentPage() {
               </button>
             </div>
           )}
+          </div>
         </>
       )}
 

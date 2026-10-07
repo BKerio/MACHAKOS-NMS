@@ -338,6 +338,10 @@ export interface Incident {
   /** Unidentified patient - patientName holds the John/Jane Doe placeholder. */
   patientUnknown?: boolean;
   patientDescription?: string | null;
+  /** Running number of an unidentified patient ("Unknown 3"); kept after identification. */
+  unknownSeq?: number | null;
+  /** When an "Unknown N" patient was identified. */
+  identifiedAt?: string | null;
   massCasualty: boolean;
   massCasualtyCount?: number;
   watcherComments?: string;
@@ -450,8 +454,16 @@ export interface TaskHistoryItem {
   lastPcrAt?: string | null;
   incidentId: string;
   vehicleId: string;
-  incident: Pick<Incident, 'id' | 'caseNumber' | 'chiefComplaint' | 'locationName' | 'subCounty'>;
+  handoverStage?: TaskStatus | null;
+  incident: Pick<Incident, 'id' | 'caseNumber' | 'chiefComplaint' | 'locationName' | 'subCounty'> & {
+    targetFacility?: { id: string; name: string } | null;
+  };
   vehicle: Pick<Vehicle, 'id' | 'registrationNumber'>;
+  /** The crew's ratings of the receiving facility for this case. */
+  facilityRatings?: FacilityRating[];
+  /** The ambulance this case was transferred from / to, when it was. */
+  previousTask?: { id: string; vehicle?: { id: string; registrationNumber: string } | null } | null;
+  nextTask?: { id: string; vehicle?: { id: string; registrationNumber: string } | null } | null;
 }
 
 /** EMT/nurse in the driver's agency, for the crew-assignment picker (GET /fleet/crew-members). */
