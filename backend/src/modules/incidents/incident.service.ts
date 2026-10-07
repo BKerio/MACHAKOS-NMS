@@ -211,7 +211,10 @@ export class IncidentService {
     return new Date(`${value}T${edge === 'start' ? '00:00:00.000' : '23:59:59.999'}+03:00`);
   }
 
-  async getIncidents(filters: { status?: IncidentStatus; watcherId?: string; caseNumber?: string; search?: string; from?: string; to?: string; page?: number; limit?: number }) {
+  async getIncidents(filters: {
+    status?: IncidentStatus; watcherId?: string; caseNumber?: string; search?: string; from?: string; to?: string;
+    incidentType?: 'EMERGENCY' | 'REFERRAL'; subCounty?: string; page?: number; limit?: number;
+  }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
@@ -220,6 +223,8 @@ export class IncidentService {
     if (filters.status) whereClause.status = filters.status;
     if (filters.watcherId) whereClause.watcherId = filters.watcherId;
     if (filters.caseNumber) whereClause.caseNumber = { contains: filters.caseNumber, mode: 'insensitive' };
+    if (filters.incidentType) whereClause.incidentType = filters.incidentType;
+    if (filters.subCounty) whereClause.subCounty = { equals: filters.subCounty, mode: 'insensitive' };
 
     // Date range - inclusive of both endpoints, evaluated as Nairobi days.
     const range: any = {};
@@ -238,6 +243,9 @@ export class IncidentService {
         { patientNhif: { contains: search, mode: 'insensitive' } },
         { patientContact: { contains: search, mode: 'insensitive' } },
         { nextOfKinPhone: { contains: search, mode: 'insensitive' } },
+        { locationName: { contains: search, mode: 'insensitive' } },
+        { chiefComplaint: { contains: search, mode: 'insensitive' } },
+        { alertNature: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -250,6 +258,14 @@ export class IncidentService {
         include: {
           watcher: { select: { id: true, name: true } },
           dispatcher: { select: { id: true, name: true } },
+          targetFacility: { select: { id: true, name: true } },
+          originFacility: { select: { id: true, name: true } },
+          // Latest ambulance on the case, for list views.
+          tasks: {
+            select: { status: true, vehicle: { select: { registrationNumber: true } } },
+            orderBy: { receivedAt: 'desc' },
+            take: 1,
+          },
         },
       }),
       this.app.prisma.incident.count({ where: whereClause }),

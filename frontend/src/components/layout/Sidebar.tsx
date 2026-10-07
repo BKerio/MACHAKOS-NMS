@@ -83,6 +83,7 @@ const menuSections: NavSection[] = [
     items: [
       { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard, roles: COMMAND },
       { label: 'Report Incident', path: '/incidents/new', Icon: CirclePlus, roles: REPORTERS },
+      { label: 'Incident History', path: '/incidents/history', Icon: HistoryIcon, roles: REPORTERS },
       { label: 'My Alerts', path: '/watcher', Icon: Inbox, roles: ['WATCHER'] },
       { label: 'Wallboard', path: '/wallboard', Icon: MonitorPlay, roles: COMMAND },
     ],
@@ -208,7 +209,11 @@ function Sidebar({ collapsed: collapsedPref, onToggleCollapse, connected, drawer
   const activePath = visibleItems
     .map((item) => item.path)
     .filter((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
-    .sort((a, b) => b.length - a.length)[0];
+    .sort((a, b) => b.length - a.length)[0]
+    // A single case (/incidents/case-021) belongs under Incident History.
+    ?? (/^\/incidents\/[^/]+$/.test(location.pathname) && visibleItems.some((i) => i.path === '/incidents/history')
+      ? '/incidents/history'
+      : undefined);
 
   const badgeFor = (path: string): Badge | null => {
     if (path === '/queue') {

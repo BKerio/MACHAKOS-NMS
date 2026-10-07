@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment, type ReactNode, type ElementType } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   CircleCheck as CheckCircle,
@@ -21,6 +21,7 @@ import {
   Footprints,
   MoreHorizontal,
   Siren,
+  History,
   ArrowRightLeft,
   UserX,
   HeartPulse,
@@ -1088,6 +1089,13 @@ function NewIncidentWizard() {
             >
               <ArrowLeft size={15} /> Back to dashboard
             </button>
+            <Link
+              to="/incidents/history"
+              className="float-right inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
+              style={{ color: 'var(--blue)' }}
+            >
+              <History size={14} /> View incident history
+            </Link>
           </div>
 
           <div className="px-5 sm:px-10 pt-7 pb-12 flex justify-center">

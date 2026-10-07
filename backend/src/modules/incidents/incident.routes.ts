@@ -166,15 +166,19 @@ export const incidentRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
   /**
    * GET /incidents
    */
-  app.get<{ Querystring: { status?: IncidentStatus; watcherId?: string; caseNumber?: string; search?: string; from?: string; to?: string; page?: string; limit?: string } }>(
+  app.get<{ Querystring: { status?: IncidentStatus; watcherId?: string; caseNumber?: string; search?: string; from?: string; to?: string; type?: string; subCounty?: string; page?: string; limit?: string } }>(
     '/',
     async (request, reply) => {
       const page = request.query.page ? parseInt(request.query.page, 10) : 1;
-      const limit = request.query.limit ? parseInt(request.query.limit, 10) : 20;
+      const limit = Math.min(200, request.query.limit ? parseInt(request.query.limit, 10) : 20);
+      const type = request.query.type === 'EMERGENCY' || request.query.type === 'REFERRAL' ? request.query.type : undefined;
 
       const result = await incidentService.getIncidents({
         status: request.query.status,
-        watcherId: request.query.watcherId,
+        // Watchers only ever see the cases they logged themselves.
+        watcherId: request.user.role === Role.WATCHER ? request.user.userId : request.query.watcherId,
+        incidentType: type,
+        subCounty: request.query.subCounty?.trim() || undefined,
         caseNumber: request.query.caseNumber,
         search: request.query.search,
         from: request.query.from,

@@ -171,7 +171,7 @@ export default function CaseHeader({
       {/* Identity */}
       <div className="min-w-0 flex-1">
         <nav className="flex items-center gap-1 text-[12px]" style={{ color: 'var(--muted)' }} aria-label="Breadcrumb">
-          <Link to="/queue" className="hover:underline">Incidents</Link>
+          <Link to="/incidents/history" className="hover:underline">Incident history</Link>
           <ChevronRight size={12} />
           <span>Case detail</span>
         </nav>

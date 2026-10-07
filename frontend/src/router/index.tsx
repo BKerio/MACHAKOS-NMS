@@ -17,6 +17,7 @@ const FleetChecklistsPage = lazy(() => import('@/pages/dispatcher/FleetChecklist
 const FuelPage = lazy(() => import('@/pages/dispatcher/FuelPage'));
 const CallLogPage = lazy(() => import('@/pages/dispatcher/CallLogPage'));
 const NewIncidentWizard = lazy(() => import('@/pages/watcher/NewIncidentWizard'));
+const IncidentHistoryPage = lazy(() => import('@/pages/incidents/IncidentHistoryPage'));
 const WatcherDashboardPage = lazy(() => import('@/pages/watcher/WatcherDashboardPage'));
 const UserManagementPage = lazy(() => import('@/pages/admin/UserManagementPage'));
 const SystemSettingsPage = lazy(() => import('@/pages/admin/SystemSettingsPage'));
@@ -279,6 +280,15 @@ export const router = createBrowserRouter([
         element: (
           <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN', 'WATCHER', 'DISPATCHER']}>
             <WatcherDashboardPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        // Every case, searchable (sidebar: Incident History). Watchers see only their own.
+        path: 'incidents/history',
+        element: (
+          <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN', 'WATCHER', 'DISPATCHER']}>
+            <IncidentHistoryPage />
           </RoleGuard>
         ),
       },
