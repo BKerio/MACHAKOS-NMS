@@ -15,6 +15,8 @@ function AppShell() {
   const user = useAuthStore((s) => s.user);
 
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true');
+  // Phones: the sidebar is a slide-in drawer instead of a fixed column.
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [reconnectedFlash, setReconnectedFlash] = useState(false);
 
@@ -146,10 +148,14 @@ function AppShell() {
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
         connected={isConnected}
+        drawerOpen={drawerOpen}
+        onCloseDrawer={() => setDrawerOpen(false)}
       />
       <div className="main">
         <TopBar
-          onToggleSidebar={() => setCollapsed((c) => !c)}
+          onToggleSidebar={() =>
+            window.matchMedia('(max-width: 859px)').matches ? setDrawerOpen((o) => !o) : setCollapsed((c) => !c)
+          }
         />
         {!isConnected && (
           <div className="banner-warn">

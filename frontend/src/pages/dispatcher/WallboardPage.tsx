@@ -25,7 +25,7 @@ import { useIncidentQueueCount } from '@/hooks/useIncidentQueueCount';
 import OpsMap from '@/components/shared/Map';
 import { fmtDate, fmtTime } from '@/lib/datetime';
 import { useTheme } from '@/lib/theme';
-import { MIN_MEDICS, vehicleMedics } from '@/utils/crew';
+import { MIN_MEDICS, medicCountLabel, vehicleMedics } from '@/utils/crew';
 
 /**
  * Operations wallboard - built for the screen on the ops-room wall: one
@@ -207,12 +207,10 @@ function UnitTile({ vehicle, lastFix }: { vehicle: Vehicle; lastFix?: string | n
           </div>
         )}
         {vehicle.currentDriver && (
-          <div className="flex items-center gap-1.5" aria-label={`${medics.length} of ${MIN_MEDICS} medics`}>
-            {Array.from({ length: MIN_MEDICS }, (_, i) => (
-              <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: i < medics.length ? C.green : C.track }} />
-            ))}
-            <span className="mono text-[11px] ml-1" style={{ color: medics.length >= MIN_MEDICS ? C.green : C.amber }}>
-              {medics.length}/{MIN_MEDICS}
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: medics.length >= MIN_MEDICS ? C.green : C.amber }} />
+            <span className="text-[11px] font-semibold" style={{ color: medics.length >= MIN_MEDICS ? C.green : C.amber }}>
+              {medicCountLabel(medics.length)}
             </span>
           </div>
         )}

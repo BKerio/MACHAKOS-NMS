@@ -13,7 +13,7 @@ import api from '@/api/client';
 import { Vehicle, Incident } from '@/types/api';
 import { LiveVehicle, getVehicleTrackingStatus } from '@/hooks/useVehicleTracking';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { crewShortfall, isCrewComplete, MIN_MEDICS, vehicleMedics } from '@/utils/crew';
+import { CREW_RULE, crewShortfall, isCrewComplete, MIN_MEDICS, vehicleMedics } from '@/utils/crew';
 import LoadingState from '@/components/shared/LoadingState';
 
 // ── Haversine (km) ────────────────────────────────────────────────────────────
@@ -366,7 +366,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
             {!hasDriver
               ? 'Driver must check in via mobile before dispatching'
               : !crewReady
-                ? `Crew incomplete (${crewShortfall(dbVehicle!)}) - needs an EMT and a nurse, two EMTs, or two nurses`
+                ? `Crew incomplete (${crewShortfall(dbVehicle!)}) - needs ${CREW_RULE}`
                 : standby
                   ? 'Vehicle is on standby - end the standby first'
                   : 'Vehicle is currently on an active task'}

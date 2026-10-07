@@ -12,6 +12,7 @@ import {
 } from '@/api/responder';
 import type { Role, Vehicle } from '@/types/api';
 import LoadingState from '@/components/shared/LoadingState';
+import { MIN_MEDICS, medicCountLabel } from '@/utils/crew';
 
 // Medics have two slots each (a crew can be two EMTs or two nurses).
 const ROLE_SLOTS: Record<'DRIVER' | 'EMT' | 'NURSE', (keyof Vehicle)[]> = {
@@ -31,8 +32,6 @@ function formatCheckInTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
-
-const MIN_MEDICS = 2;
 
 /**
  * An ambulance another driver is already checked in to - the web twin of the
@@ -87,7 +86,7 @@ function CrewedVehicleCard({ vehicle }: { vehicle: Vehicle }) {
           <p className="text-xs" style={{ color: 'var(--muted)' }}>Driver on shift</p>
         </div>
         <span className="text-xs font-bold flex-shrink-0" style={{ color: complete ? 'var(--color-status-success)' : 'var(--amber)' }}>
-          {medics}/{MIN_MEDICS} medics
+          {medicCountLabel(medics)}
         </span>
         {phone && (
           <a href={`tel:${phone}`} className="icon-btn flex-shrink-0" title={`Call ${driver.name.split(' ')[0]}`} aria-label={`Call ${driver.name}`}>

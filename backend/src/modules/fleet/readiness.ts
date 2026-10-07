@@ -45,7 +45,7 @@ export async function assertNotOnStandby(prisma: PrismaClient, vehicleId: string
  * never cut off by a "nearest N" limit.
  *
  * Ready means: active, status READY (not BUSY, not MAINTENANCE), not on standby, a driver and
- * two medics checked in, this shift's equipment checklist confirmed, and no
+ * at least one medic (EMT or nurse) checked in, this shift's equipment checklist confirmed, and no
  * task still open on it (guards against a status left READY by mistake).
  */
 export async function findReadyUnits(

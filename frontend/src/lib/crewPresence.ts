@@ -1,11 +1,12 @@
 import type { PresenceUser } from '@/hooks/usePresence';
+import { MIN_MEDICS } from '@/utils/crew';
 
 /** Field roles that make up an ambulance crew. */
 export const CREW_ROLES = ['DRIVER', 'EMT', 'NURSE'] as const;
 export type CrewRole = (typeof CREW_ROLES)[number];
 
-/** Each ambulance needs one driver and two medics (EMTs and/or nurses). */
-export const MEDICS_PER_CREW = 2;
+/** Each ambulance needs one driver and at least one medic (EMT or nurse). */
+export const MEDICS_PER_CREW = MIN_MEDICS;
 
 export interface CrewSummary {
   total: number;
@@ -13,7 +14,7 @@ export interface CrewSummary {
   emts: number;
   nurses: number;
   medics: number;
-  /** Complete crews (1 driver + 2 medics) the people online could form. */
+  /** Complete crews (1 driver + MEDICS_PER_CREW medics) the people online could form. */
   fullCrews: number;
   /** What's holding back one more full crew, or null when nothing is. */
   shortBy: { drivers: number; medics: number } | null;

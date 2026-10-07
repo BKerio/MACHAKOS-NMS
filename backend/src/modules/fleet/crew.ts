@@ -2,11 +2,11 @@ import { Prisma } from '../../generated/prisma/index.js';
 import { Role } from '../../shared/types/index.js';
 
 /**
- * Crew rule: an ambulance is dispatch-ready only with a driver plus two medics
- * in any mix - an EMT and a nurse, two EMTs, or two nurses. Each vehicle (and
- * task) therefore has two EMT slots and two nurse slots.
+ * Crew rule: an ambulance is dispatch-ready with a driver plus at least one
+ * medic, in any mix - one EMT, one nurse, two EMTs, two nurses, or an EMT and
+ * a nurse. Each vehicle (and task) has two EMT slots and two nurse slots.
  */
-export const MIN_MEDICS = 2;
+export const MIN_MEDICS = 1;
 
 export const EMT_SLOTS = ['currentEmtId', 'currentEmt2Id'] as const;
 export const NURSE_SLOTS = ['currentNurseId', 'currentNurse2Id'] as const;
@@ -76,7 +76,7 @@ export function crewIncompleteMessage(v: VehicleCrewIds): string | null {
   if (!v.currentDriverId) return 'No driver is checked in to this vehicle';
   const medics = medicCount(v);
   if (medics >= MIN_MEDICS) return null;
-  return `Crew incomplete: needs two medics (an EMT and a nurse, two EMTs, or two nurses) - ${medics} on board`;
+  return 'Crew incomplete: needs at least one medic (an EMT or a nurse) checked in';
 }
 
 /** Everyone on a task's crew, driver first. */

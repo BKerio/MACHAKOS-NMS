@@ -177,7 +177,7 @@ function CrewReadiness({
         {fullCrews > 0 ? `Enough for ${fullCrews} full crew${fullCrews === 1 ? '' : 's'}` : 'No complete crew yet'}
       </span>
       <span className="crew-air-ready-sub">
-        {missing ? `${missing} more for ${fullCrews > 0 ? 'another' : 'a full crew'}` : 'Everyone online is in a full crew'} · 1 driver + 2 medics each
+        {missing ? `${missing} more for ${fullCrews > 0 ? 'another' : 'a full crew'}` : 'Everyone online is in a full crew'} · 1 driver + at least 1 medic each
       </span>
     </div>
   );

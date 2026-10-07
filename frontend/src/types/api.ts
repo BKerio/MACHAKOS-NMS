@@ -90,7 +90,7 @@ export interface Vehicle {
   currentEmt2?: CrewMember | null;
   currentNurse?: CrewMember | null;
   currentNurse2?: CrewMember | null;
-  /** Driver plus two medics (EMT + nurse, two EMTs, or two nurses) - computed
+  /** Driver plus at least one medic (EMT or nurse, any mix) - computed
    * by the backend on dispatcher-facing lists; see utils/crew.ts otherwise. */
   crewComplete?: boolean;
   medicCount?: number;

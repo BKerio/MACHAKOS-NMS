@@ -44,7 +44,7 @@ import { useVehicleTracking } from '@/hooks/useVehicleTracking';
 import { socket } from '@/lib/socket';
 import { fmtDateTime, NBO_TZ } from '@/lib/datetime';
 import { confirmDialog } from '@/lib/alert';
-import { checkInLocationWarning, crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
+import { checkInLocationWarning, CREW_RULE, crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
 import LoadingState from '@/components/shared/LoadingState';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
@@ -1280,8 +1280,7 @@ function IncidentDetailPage() {
                     )}
                     {hasDriver && !crewReady && (
                       <p className="text-xs text-status-warning font-medium mt-3">
-                        Crew incomplete - an ambulance needs two medics (an EMT and a nurse, two EMTs, or two
-                        nurses) before it can be dispatched.
+                        Crew incomplete - an ambulance needs {CREW_RULE} before it can be dispatched.
                       </p>
                     )}
                     {checkInLocationWarning(sv) && (

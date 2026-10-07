@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import {
@@ -47,6 +47,23 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   /** Live socket link to dispatch; drives the header status and the avatar dot. */
   connected: boolean;
+  /** Phones: whether the slide-in drawer is open. */
+  drawerOpen: boolean;
+  onCloseDrawer: () => void;
+}
+
+const MOBILE_QUERY = '(max-width: 859px)';
+
+/** True on phone-width screens, where the sidebar is a drawer. */
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const on = () => setMobile(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return mobile;
 }
 
 type NavItem = { label: string; path: string; Icon: LucideIcon; roles: string[] };
@@ -127,7 +144,7 @@ const menuSections: NavSection[] = [
 
 type Badge = { count: number; hot: boolean; title: string };
 
-function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
+function Sidebar({ collapsed: collapsedPref, onToggleCollapse, connected, drawerOpen, onCloseDrawer }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const addNotification = useNotificationStore((s) => s.addNotification);
@@ -138,6 +155,27 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
   // When collapsed, hovering the rail temporarily expands it as an overlay.
   const [peek, setPeek] = useState(false);
   const [query, setQuery] = useState('');
+  const isMobile = useIsMobile();
+  // The drawer is always the full menu; the icon rail is a desktop-only mode.
+  const collapsed = collapsedPref && !isMobile;
+  const drawer = isMobile && drawerOpen;
+
+  // Close the drawer whenever the page changes (a link was tapped)...
+  useEffect(() => { onCloseDrawer(); }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ...on Escape, and stop the page behind it from scrolling while open.
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseDrawer();
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [drawer, onCloseDrawer]);
+  // Leaving phone width with the drawer open: just close it.
+  useEffect(() => { if (!isMobile && drawerOpen) onCloseDrawer(); }, [isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visibleSections = menuSections
     .map((section) => ({
@@ -207,20 +245,27 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
 
   return (
     <>
+      {isMobile && (
+        <div className={`sidebar-backdrop${drawer ? ' open' : ''}`} onClick={onCloseDrawer} aria-hidden="true" />
+      )}
       <aside
-        className={`sidebar${collapsed ? ' collapsed' : ''}${collapsed && peek ? ' peek' : ''}`}
+        className={`sidebar${collapsed ? ' collapsed' : ''}${collapsed && peek ? ' peek' : ''}${drawer ? ' drawer-open' : ''}`}
+        aria-hidden={isMobile && !drawer ? true : undefined}
+        {...(isMobile && !drawer ? { inert: true } : {})}
+        // Close as soon as a link is tapped, not when a lazy page finishes loading.
+        onClickCapture={(e) => { if (drawer && (e.target as HTMLElement).closest('a')) onCloseDrawer(); }}
         onMouseEnter={() => collapsed && setPeek(true)}
         onMouseLeave={() => setPeek(false)}
       >
         <div className="sidebar-inner">
           <div className="sidebar-head">
             <button
-              onClick={onToggleCollapse}
+              onClick={isMobile ? onCloseDrawer : onToggleCollapse}
               className="sidebar-collapse-btn"
-              title={collapsed ? 'Pin sidebar open' : 'Collapse sidebar'}
-              aria-label={collapsed ? 'Pin sidebar open' : 'Collapse sidebar'}
+              title={isMobile ? 'Close menu' : collapsed ? 'Pin sidebar open' : 'Collapse sidebar'}
+              aria-label={isMobile ? 'Close menu' : collapsed ? 'Pin sidebar open' : 'Collapse sidebar'}
             >
-              {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+              {isMobile ? <X size={18} /> : collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             </button>
 
             <div className="brand-crest">
@@ -314,27 +359,6 @@ function Sidebar({ collapsed, onToggleCollapse, connected }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Mobile bottom nav */}
-      <nav className="bottomnav" aria-label="Main">
-        {visibleItems.slice(0, 5).map((item) => {
-          const isActive = item.path === activePath;
-          const badge = badgeFor(item.path);
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`bn-item${isActive ? ' on' : ''}`}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              {badge && (
-                <span className="bn-badge" style={{ background: badge.hot ? 'var(--red)' : 'var(--green)' }} />
-              )}
-              <item.Icon size={22} />
-              <span>{item.label.split(' ')[0]}</span>
-            </Link>
-          );
-        })}
-      </nav>
     </>
   );
 }

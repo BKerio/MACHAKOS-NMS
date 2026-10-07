@@ -470,11 +470,6 @@ body {
   padding: 0; max-width: none; flex: 1; min-height: 0;
   display: flex; flex-direction: column; overflow: hidden;
 }
-@media (max-width: 859px) {
-  .content:has(.incident-wizard) {
-    padding-bottom: calc(72px + env(safe-area-inset-bottom));
-  }
-}
 
 /* ── New Incident form: label-left rows in a centred card ──────────────────
    A Field that sits directly in a section is a row: label + helper text in
@@ -680,22 +675,29 @@ body {
 .alert-error svg { flex-shrink: 0; margin-top: 1px; }
 @keyframes alertIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
-/* ── Mobile bottom nav ── */
-.bottomnav { display: none; }
+/* ── Phones: the sidebar becomes a slide-in drawer (opened from the top bar) ── */
+.sidebar-backdrop { display: none; }
 @media (max-width: 859px) {
-  .sidebar { display: none; }
-  .bottomnav {
-    display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-    background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(12px);
-    border-top: 1px solid var(--border); padding: 7px 6px calc(7px + env(safe-area-inset-bottom));
-    justify-content: space-around;
+  .sidebar {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 70;
+    width: min(300px, 86vw); height: 100dvh;
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform .28s cubic-bezier(.32,.72,0,1), visibility 0s linear .28s;
   }
-  .bn-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 2px; border: 0; background: transparent; color: var(--muted); cursor: pointer; position: relative; border-radius: 9px; }
-  .bn-item svg { width: 22px; height: 22px; }
-  .bn-item span { font-size: 10px; font-weight: 600; }
-  .bn-item.on { color: var(--green); }
-  .bn-badge { position: absolute; top: 2px; right: calc(50% - 18px); width: 8px; height: 8px; border-radius: 99px; background: var(--red); border: 1.5px solid var(--surface); }
-  .content { padding: 16px 14px 96px; }
+  .sidebar.drawer-open {
+    transform: none; visibility: visible;
+    transition: transform .28s cubic-bezier(.32,.72,0,1), visibility 0s;
+  }
+  .sidebar.drawer-open .sidebar-inner { box-shadow: 18px 0 48px rgba(0, 0, 0, .22); }
+  .sidebar .sidebar-foot { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .sidebar .nav-item { min-height: 44px; }
+  .sidebar-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 69;
+    background: rgba(8, 16, 12, .45); backdrop-filter: blur(2px);
+    opacity: 0; pointer-events: none; transition: opacity .24s;
+  }
+  .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+  .content { padding: 16px 14px 24px; }
   .topbar { padding: 10px 14px; }
   .stat-grid { grid-template-columns: repeat(2,1fr); }
 }
@@ -750,7 +752,6 @@ body {
 .alert-error svg.lucide,
 .banner-warn svg.lucide,
 .banner-ok svg.lucide,
-.bn-item svg.lucide,
 .status-chip svg.lucide,
 .live-badge svg.lucide,
 .tab svg.lucide,
@@ -776,7 +777,7 @@ body {
 .content:has(.wallboard-page) { padding: 0; max-width: none; }
 .wallboard-page { min-height: 100%; flex: 1; }
 @media (max-width: 859px) {
-  .content:has(.wallboard-page) { padding-bottom: calc(72px + env(safe-area-inset-bottom)); background: var(--wb-bg); }
+  .content:has(.wallboard-page) { background: var(--wb-bg); }
 }
 
 /* Wallboard palette (WallboardPage.tsx reads these through its `C` object).

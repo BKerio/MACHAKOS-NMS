@@ -174,8 +174,8 @@ function CrewAssignmentCard({ myVehicle }: { myVehicle: Vehicle }) {
         <div className="flex-1">
           <p className="text-base font-bold" style={{ color: 'var(--ink)' }}>Assign crew</p>
           <p className="text-sm mt-0.5" style={{ color: 'var(--muted)' }}>
-            {myVehicle.registrationNumber} needs two medics to take calls: an EMT and a nurse, two EMTs, or two
-            nurses. Medics already on another ambulance are locked until their driver removes them.
+            {myVehicle.registrationNumber} needs at least one medic to take calls - an EMT or a nurse; add up to
+            four in any mix. Medics already on another ambulance are locked until their driver removes them.
           </p>
         </div>
       </div>
