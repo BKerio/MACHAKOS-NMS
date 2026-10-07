@@ -150,7 +150,7 @@ function StandbyPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-6 lg:ml-auto">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-4 lg:ml-auto">
           {[
             { label: 'On standby now', value: active.length, accent: active.length > 0 },
             { label: 'Crew on standby', value: crewOnStandby },
@@ -161,7 +161,7 @@ function StandbyPage() {
               <div className="text-xs whitespace-nowrap" style={{ color: 'var(--muted)' }}>{s.label}</div>
             </div>
           ))}
-          <button onClick={() => setShowModal(true)} className="btn btn-primary" style={{ height: 44 }}>
+          <button onClick={() => setShowModal(true)} className="btn btn-primary w-full justify-center sm:w-auto" style={{ height: 44 }}>
             <Plus size={17} /> Place on standby
           </button>
         </div>

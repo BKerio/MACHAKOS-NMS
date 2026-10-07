@@ -175,10 +175,10 @@ function FleetPage() {
         {/* Vehicle table */}
         <div className="card" style={{ marginBottom: 16 }}>
           {/* Toolbar */}
-          <div className="card-head">
+          <div className="card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
             <span className="card-title">Active Vehicles</span>
-            <div className="row" style={{ gap: 8 }}>
-              <div className="searchbox" style={{ minWidth: 180 }}>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', flex: '1 1 260px', justifyContent: 'flex-end' }}>
+              <div className="searchbox" style={{ minWidth: 0, flex: '1 1 160px' }}>
                 <MagnifyingGlass size={15} />
                 <input
                   placeholder="Registration or IMEI…"
@@ -299,7 +299,7 @@ function FleetPage() {
         </div>
 
         {/* Telemetry + Live Map */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+        <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           {/* Telemetry */}
           <div className="card card-pad">
             <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
@@ -323,7 +323,7 @@ function FleetPage() {
               )}
             </div>
             <div className="divider" style={{ margin: '12px 0' }} />
-            <div className="row" style={{ gap: 24 }}>
+            <div className="row" style={{ gap: '12px 24px', flexWrap: 'wrap' }}>
               {[
                 { label: 'Ready',       value: readyCount,       color: 'var(--green)' },
                 { label: 'Engaged',     value: engagedCount,     color: 'var(--red)' },

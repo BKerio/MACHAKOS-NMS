@@ -149,7 +149,7 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
     !dispatch.isPending;
 
   return (
-    <div className="fixed right-0 top-0 h-screen w-[400px] bg-white border-l border-surface-border shadow-2xl z-[200] flex flex-col">
+    <div className="fixed right-0 top-0 h-dvh w-full sm:w-[400px] bg-white border-l border-surface-border shadow-2xl z-[200] flex flex-col">
 
       {/* ── Header ── */}
       <div className="px-6 py-5 border-b border-surface-border flex items-center justify-between bg-brand-sidebar flex-shrink-0">

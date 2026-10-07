@@ -121,7 +121,7 @@ function NatureOptionsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* Page header */}
-      <div style={{ borderLeft: '4px solid var(--green)', paddingLeft: 16, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+      <div style={{ borderLeft: '4px solid var(--green)', paddingLeft: 16, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 4 }}>
             Incident Classification
@@ -130,7 +130,7 @@ function NatureOptionsPage() {
             Nature Options
           </h1>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             onClick={() => openAddDetail()}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
@@ -289,7 +289,7 @@ function NatureOptionsPage() {
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => setShowModal(false)}>
-          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 32, width: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 'clamp(20px, 5vw, 32px)', width: 440, maxWidth: 'calc(100vw - 32px)', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
               <h2 style={{ fontSize: 20, fontWeight: 900, color: 'var(--ink)' }}>

@@ -92,7 +92,7 @@ function RoleSwitcher() {
         title="Preview console as a different role"
       >
         <UserCog size={16} />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>{ROLE_LABEL[activeRole]}</span>
+        <span className="role-switch-label" style={{ fontSize: 12.5, fontWeight: 600 }}>{ROLE_LABEL[activeRole]}</span>
         <ChevronDown size={14} style={{ opacity: .6, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }} />
       </button>
 

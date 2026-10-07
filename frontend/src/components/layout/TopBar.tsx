@@ -5,7 +5,7 @@ import {
   Phone,
   Search as MagnifyingGlass,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import NotificationDrawer from '@/components/shared/NotificationDrawer';
@@ -22,7 +22,7 @@ interface TopBarProps {
 function TopBar({ onToggleSidebar }: TopBarProps) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [show, setShow] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const lastScrollY = useRef(0);
 
   const { notifications, addNotification } = useNotificationStore();
   const logout = useAuthStore((s) => s.logout);
@@ -32,15 +32,17 @@ function TopBar({ onToggleSidebar }: TopBarProps) {
   const user = useAuthStore((s) => s.user);
   const canSeeCalls = user && ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'].includes(user.role);
 
+  // Hide on scroll down, show on scroll up. The last position lives in a ref
+  // so scrolling only re-renders when the bar actually shows or hides.
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
-      setShow(!(currentScrollY > lastScrollY && currentScrollY > 60));
-      setLastScrollY(currentScrollY);
+      setShow(!(currentScrollY > lastScrollY.current && currentScrollY > 60));
+      lastScrollY.current = currentScrollY;
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
+  }, []);
 
   const requestSignOut = async () => {
     const confirmed = await confirmDialog({
@@ -76,7 +78,7 @@ function TopBar({ onToggleSidebar }: TopBarProps) {
           <List size={20} />
         </button>
 
-        <div className="searchbox" style={{ display: 'flex' }}>
+        <div className="searchbox topbar-search">
           <MagnifyingGlass size={16} />
           <input placeholder="Search incidents, units…" />
         </div>
@@ -88,12 +90,12 @@ function TopBar({ onToggleSidebar }: TopBarProps) {
         {canSeeCalls && activeCalls.length > 0 && (
           <Link
             to="/call-logs"
-            className="status-chip"
+            className="status-chip topbar-calls"
             style={{ gap: 6, textDecoration: 'none', color: 'var(--blue)', background: 'var(--blue-soft)', borderColor: 'color-mix(in srgb, var(--blue) 18%, transparent)' }}
           >
             <span style={{ width: 7, height: 7, borderRadius: '99px', background: 'var(--blue)', display: 'inline-block', animation: 'pulse-ring 2s infinite' }} />
             <Phone size={13} />
-            {activeCalls.length} active call{activeCalls.length > 1 ? 's' : ''}
+            {activeCalls.length}<span className="topbar-calls-label"> active call{activeCalls.length > 1 ? 's' : ''}</span>
           </Link>
         )}
 
@@ -122,9 +124,9 @@ function TopBar({ onToggleSidebar }: TopBarProps) {
           )}
         </button>
 
-        {/* Sign out */}
+        {/* Sign out (phones use the one in the drawer footer) */}
         <button
-          className="icon-btn"
+          className="icon-btn topbar-signout"
           onClick={requestSignOut}
           title="Sign Out"
           style={{ borderColor: 'transparent' }}
