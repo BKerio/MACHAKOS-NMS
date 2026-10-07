@@ -22,7 +22,6 @@ import {
   MoreHorizontal,
   Siren,
   ArrowRightLeft,
-  Hospital,
   UserX,
   HeartPulse,
   Scissors,
@@ -47,7 +46,6 @@ import CreatableCombobox from '@/components/shared/CreatableCombobox';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
 import { toNairobiInput, nairobiInputToISO } from '@/lib/datetime';
-import { fetchDrivingRoute, type DrivingRoute } from '@/lib/directions';
 import { inMachakos, nearestSubCounty, subCountyFromText } from '@/lib/machakosPlaces';
 import type { Facility } from '@/types/api';
 
@@ -59,16 +57,24 @@ const ORIGIN_OPTIONS = [
 
 type IncidentType = 'EMERGENCY' | 'REFERRAL';
 
+/** Why a patient is being transferred. "Other" asks for a short description. */
+const REFERRAL_REASONS = [
+  'Specialist review / care',
+  'Diagnostic services (lab / imaging)',
+  'Surgery / theatre',
+  'ICU / HDU bed',
+  'Obstetric / maternity complication',
+  'Neonatal care',
+  'Blood transfusion',
+  'Lack of equipment',
+  'Lack of drugs / supplies',
+  'Lack of skilled staff',
+  'Patient / family request',
+  'Other',
+];
+
 const facilityLabel = (f: Facility) =>
   [f.name, f.type, f.subCounty].filter(Boolean).join(' · ');
-
-/** Great-circle distance in km - a fallback while the road route loads. */
-function straightKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  const r = (d: number) => (d * Math.PI) / 180;
-  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2
-    + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.sqrt(h));
-}
 
 /** Placeholder name for an unidentified patient, by recorded sex. */
 function unknownPatientName(gender: string) {
@@ -467,8 +473,8 @@ type FormState = {
   alertNature: string;
   alertNatureDetail: string;
   preHospitalManagement: string;
-  placeOfReferral: string;
-  targetFacilityId: string;
+  referralReasons: string[];
+  referralReasonOther: string;
   healthcareWorkerName: string;
   healthcareWorkerContact: string;
   isGbvCase: boolean;
@@ -501,8 +507,8 @@ const defaultForm: FormState = {
   alertNature: '',
   alertNatureDetail: '',
   preHospitalManagement: '',
-  placeOfReferral: '',
-  targetFacilityId: '',
+  referralReasons: [],
+  referralReasonOther: '',
   healthcareWorkerName: '',
   healthcareWorkerContact: '',
   isGbvCase: false,
@@ -593,8 +599,15 @@ function NewIncidentWizard() {
   // ── Referral (facility A -> facility B) ────────────────────────────────────
   const isReferral = form.incidentType === 'REFERRAL';
   const originFacility = facilities.find(f => f.id === form.originFacilityId);
-  const targetFacility = facilities.find(f => f.id === form.targetFacilityId);
-  const sameFacility = !!form.originFacilityId && form.originFacilityId === form.targetFacilityId;
+  const otherReasonTicked = form.referralReasons.includes('Other');
+  const referralReasonsOk = form.referralReasons.length > 0
+    && (!otherReasonTicked || !!form.referralReasonOther.trim());
+  const toggleReferralReason = (r: string) =>
+    set({
+      referralReasons: form.referralReasons.includes(r)
+        ? form.referralReasons.filter(x => x !== r)
+        : [...form.referralReasons, r],
+    });
   const patientDisplayName = form.patientUnknown ? unknownPatientName(form.patientGender) : form.patientName;
 
   // The referring facility is the pickup point, so it becomes the case location.
@@ -610,29 +623,17 @@ function NewIncidentWizard() {
     if (t === form.incidentType) return;
     // Facility-filled location must not leak into an emergency scene, or vice versa.
     set({
-      incidentType: t, originFacilityId: '', targetFacilityId: '', placeOfReferral: '',
+      incidentType: t, originFacilityId: '', referralReasons: [], referralReasonOther: '',
       locationName: '', subCounty: '', lat: defaultForm.lat, lng: defaultForm.lng,
     });
     setSubCountySource('');
   };
 
-  // Road route A -> B for the transfer summary (Google, falling back to OSRM).
-  const [referralRoute, setReferralRoute] = useState<DrivingRoute | null>(null);
-  useEffect(() => {
-    setReferralRoute(null);
-    if (!isReferral || !originFacility || !targetFacility || sameFacility) return;
-    let cancelled = false;
-    fetchDrivingRoute(
-      { lat: originFacility.lat, lng: originFacility.lng },
-      { lat: targetFacility.lat, lng: targetFacility.lng },
-    ).then(r => { if (!cancelled) setReferralRoute(r); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [isReferral, originFacility?.id, targetFacility?.id]);
-
   // ── Step validation (Screen 1: Alert + Location · Screen 2: Patient + Incident · Screen 3: Review) ──
+  // The receiving facility of a referral is chosen by the dispatcher at dispatch.
   const alertOk    = !!form.alertAt && !!form.alertMode;                 // Alert
   const locationOk = isReferral                                          // Location / transfer
-    ? !!form.originFacilityId && !!form.targetFacilityId && !sameFacility
+    ? !!form.originFacilityId && referralReasonsOk
     : !!form.locationName.trim() && !!form.subCounty;
   const incidentOk = !!form.alertNature && !!form.chiefComplaint.trim(); // Incident (Patient has no required fields)
   const step1Ok = alertOk && locationOk;    // Screen 1: Alert & Location
@@ -646,14 +647,14 @@ function NewIncidentWizard() {
       ...(isReferral
         ? [
             !form.originFacilityId && 'referring facility',
-            !form.targetFacilityId && 'receiving facility',
-            sameFacility && 'two different facilities',
+            form.referralReasons.length === 0 && 'reason for referral',
+            otherReasonTicked && !form.referralReasonOther.trim() && 'other reason details',
           ]
         : [!form.locationName && 'location', !form.subCounty && 'sub-county']),
     ].filter(Boolean) as string[],
     2: [
       !form.alertNature && 'nature of alert',
-      !form.chiefComplaint && (isReferral ? 'reason for referral' : 'chief complaint'),
+      !form.chiefComplaint && (isReferral ? 'clinical summary' : 'chief complaint'),
     ].filter(Boolean) as string[],
     3: [],
   };
@@ -929,10 +930,10 @@ function NewIncidentWizard() {
     alertNature:           form.alertNature  || undefined,
     alertNatureDetail:     form.alertNatureDetail || undefined,
     preHospitalManagement: form.preHospitalManagement || undefined,
-    // Emergencies get their facility from the dispatcher at dispatch; only a
-    // referral names the receiving facility when it is logged.
-    placeOfReferral:       isReferral ? form.placeOfReferral || undefined : undefined,
-    targetFacilityId:      isReferral ? form.targetFacilityId || undefined : undefined,
+    // The receiving facility (emergency or referral) is chosen by the dispatcher
+    // at dispatch; a referral records why the patient is being transferred.
+    referralReasons:       isReferral ? form.referralReasons : undefined,
+    referralReasonOther:   isReferral && otherReasonTicked ? form.referralReasonOther.trim() || undefined : undefined,
     healthcareWorkerName:    form.healthcareWorkerName || undefined,
     healthcareWorkerContact: form.healthcareWorkerContact || undefined,
     isGbvCase:             form.isGbvCase || undefined,
@@ -1164,7 +1165,7 @@ function NewIncidentWizard() {
 
               {/* ── Card 2 (referral): the transfer ── */}
               {isReferral && (
-                <SectionCard title="Referral transfer" description="Where the ambulance collects the patient, and where it takes them." icon={ArrowRightLeft}>
+                <SectionCard title="Referral transfer" description="Where the ambulance collects the patient, and why they are being transferred." icon={ArrowRightLeft}>
                   <Field>
                     <Label required>From (referring facility)</Label>
                     <select className={selectCls} value={form.originFacilityId} onChange={e => pickOriginFacility(e.target.value)}>
@@ -1177,21 +1178,40 @@ function NewIncidentWizard() {
                   </Field>
 
                   <Field>
-                    <Label required>To (receiving facility)</Label>
-                    <select
-                      className={selectCls}
-                      value={form.targetFacilityId}
-                      onChange={e => {
-                        const f = facilities.find(x => x.id === e.target.value);
-                        set({ targetFacilityId: e.target.value, placeOfReferral: f?.name ?? '' });
-                      }}
-                    >
-                      <option value="">Select the facility receiving the patient...</option>
-                      {facilityOptions.filter(f => f.id !== form.originFacilityId).map(f => (
-                        <option key={f.id} value={f.id}>{facilityLabel(f)}</option>
-                      ))}
-                    </select>
-                    {sameFacility && <Hint><span style={{ color: 'var(--red)' }}>Pick two different facilities.</span></Hint>}
+                    <Label required>Reason for referral</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {REFERRAL_REASONS.map(r => {
+                        const on = form.referralReasons.includes(r);
+                        return (
+                          <label
+                            key={r}
+                            className="flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer transition-colors text-[13px]"
+                            style={on
+                              ? { borderColor: 'var(--green)', background: 'var(--green-light)', color: 'var(--ink)' }
+                              : { borderColor: 'var(--border-strong)', background: 'var(--surface)', color: 'var(--ink)' }}
+                          >
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 shrink-0"
+                              style={{ accentColor: 'var(--green)' }}
+                              checked={on}
+                              onChange={() => toggleReferralReason(r)}
+                            />
+                            {r}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {otherReasonTicked && (
+                      <input
+                        type="text"
+                        className={`${inputCls} mt-2`}
+                        placeholder="Describe the other reason..."
+                        value={form.referralReasonOther}
+                        onChange={e => set({ referralReasonOther: e.target.value })}
+                      />
+                    )}
+                    <Hint>Tick every reason that applies. The dispatcher chooses the receiving facility at dispatch.</Hint>
                   </Field>
 
                   <Row label="Referring clinician" hint="Who at the referring facility to call about the patient.">
@@ -1205,41 +1225,6 @@ function NewIncidentWizard() {
                     </Field>
                   </Row>
 
-                  {originFacility && targetFacility && !sameFacility && (
-                    <div className="iw-row">
-                      <div className="iw-label">
-                        <span className="block text-[13px] font-medium" style={{ color: 'var(--ink)' }}>Route</span>
-                      </div>
-                      <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>Road route for the crew.</p>
-                      <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-                        <div className="px-4 py-3 flex items-center gap-3 flex-wrap" style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>
-                            <Hospital size={14} style={{ color: 'var(--green)' }} /> {originFacility.name}
-                          </span>
-                          <ArrowRight size={14} style={{ color: 'var(--muted)' }} />
-                          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>
-                            <Hospital size={14} style={{ color: 'var(--red)' }} /> {targetFacility.name}
-                          </span>
-                          <span className="ml-auto text-[12px] font-medium" style={{ color: 'var(--muted)' }}>
-                            {referralRoute
-                              ? `${referralRoute.distanceText} · about ${referralRoute.durationText}`
-                              : `${straightKm(originFacility, targetFacility).toFixed(1)} km straight line`}
-                          </span>
-                        </div>
-                        <Map
-                          center={[(originFacility.lat + targetFacility.lat) / 2, (originFacility.lng + targetFacility.lng) / 2]}
-                          zoom={11}
-                          markers={[
-                            { id: 'from', lat: originFacility.lat, lng: originFacility.lng, title: `From: ${originFacility.name}`, type: 'incident' },
-                            { id: 'to', lat: targetFacility.lat, lng: targetFacility.lng, title: `To: ${targetFacility.name}`, type: 'facility' },
-                          ]}
-                          routePath={referralRoute?.path}
-                          layerType="street"
-                          className="h-72 w-full"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </SectionCard>
               )}
 
@@ -1585,11 +1570,11 @@ function NewIncidentWizard() {
                 </div>
 
                 <Field>
-                  <Label required>{isReferral ? 'Reason for referral' : 'Chief complaint'}</Label>
+                  <Label required>{isReferral ? 'Clinical summary' : 'Chief complaint'}</Label>
                   <textarea
                     rows={3}
                     placeholder={isReferral
-                      ? 'Why the patient is being transferred, e.g. needs CT scan / specialist / ICU bed...'
+                      ? 'Diagnosis and current condition, e.g. head injury, GCS 12, needs CT scan...'
                       : 'Describe the primary complaint / reason for call...'}
                     className={textareaCls}
                     value={form.chiefComplaint}
@@ -1788,8 +1773,10 @@ function NewIncidentWizard() {
               {isReferral ? (
                 <ReviewCard title="Referral Transfer" onEdit={() => setStep(1)}>
                   <ReviewRow label="From"       value={originFacility?.name} />
-                  <ReviewRow label="To"         value={targetFacility?.name} />
-                  <ReviewRow label="Route"      value={referralRoute ? `${referralRoute.distanceText} · ~${referralRoute.durationText}` : undefined} />
+                  <ReviewRow label="Reasons"    value={form.referralReasons.length
+                    ? form.referralReasons.map(r => (r === 'Other' && form.referralReasonOther.trim() ? `Other: ${form.referralReasonOther.trim()}` : r)).join(', ')
+                    : undefined} />
+                  <ReviewRow label="To"         value="Chosen by dispatcher" />
                   <ReviewRow label="Clinician"  value={[form.healthcareWorkerName, form.healthcareWorkerContact].filter(Boolean).join(' · ') || undefined} />
                   <ReviewRow label="Sub-County" value={form.subCounty} />
                 </ReviewCard>
@@ -1812,7 +1799,7 @@ function NewIncidentWizard() {
 
               <ReviewCard title="Incident Details" onEdit={() => setStep(2)}>
                 <ReviewRow label="Nature"    value={[form.alertNature, form.alertNatureDetail].filter(Boolean).join(' → ') || undefined} />
-                <ReviewRow label={isReferral ? 'Reason' : 'Complaint'} value={form.chiefComplaint} />
+                <ReviewRow label={isReferral ? 'Clinical' : 'Complaint'} value={form.chiefComplaint} />
                 <ReviewRow label="Pre-hosp." value={form.preHospitalManagement} />
               </ReviewCard>
 

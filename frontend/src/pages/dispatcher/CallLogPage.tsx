@@ -20,6 +20,7 @@ import { useActiveCalls } from '@/hooks/useActiveCalls';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { socket } from '@/lib/socket';
 import LoadingState from '@/components/shared/LoadingState';
+import { incidentPath } from '@/lib/incidentPath';
 
 const DIRECTION_ICONS: Record<CallDirection, ReactElement> = {
   INBOUND: <PhoneIncoming size={15} color="var(--green)" />,
@@ -229,7 +230,7 @@ function CallLogPage() {
                     </td>
                     <td>
                       {log.incident ? (
-                        <a href={`/incidents/${log.incident.id}`} className="mono strong" style={{ fontSize: 12.5, color: 'var(--green)', textDecoration: 'none' }}>
+                        <a href={incidentPath(log.incident)} className="mono strong" style={{ fontSize: 12.5, color: 'var(--green)', textDecoration: 'none' }}>
                           {log.incident.caseNumber}
                         </a>
                       ) : (

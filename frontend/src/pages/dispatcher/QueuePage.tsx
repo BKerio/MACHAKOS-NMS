@@ -17,6 +17,7 @@ import { socket } from '@/lib/socket';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { incidentPath } from '@/lib/incidentPath';
 
 const statusPill: Record<string, string> = {
   SUBMITTED: 'pill-red',
@@ -276,7 +277,7 @@ function QueuePage() {
                 filteredIncidents.map((inc) => {
                   const late = Date.now() - new Date(inc.createdAt).getTime() > 600_000;
                   return (
-                    <tr key={inc.id} onClick={() => navigate(`/incidents/${inc.id}`)}>
+                    <tr key={inc.id} onClick={() => navigate(incidentPath(inc))}>
                       <td>
                         <span className="mono strong" style={{ fontSize: 13 }}>{inc.caseNumber}</span>
                         {inc.incidentType === 'REFERRAL' && (

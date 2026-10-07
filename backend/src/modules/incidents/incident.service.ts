@@ -69,6 +69,8 @@ export class IncidentService {
       isGbvCase?: boolean;
       incidentType?: 'EMERGENCY' | 'REFERRAL';
       originFacilityId?: string;
+      referralReasons?: string[];
+      referralReasonOther?: string;
       patientUnknown?: boolean;
       patientDescription?: string;
       vitals?: {
@@ -86,19 +88,23 @@ export class IncidentService {
     // Referral (facility A -> B): the pickup facility is the case location, so
     // dispatch, crew navigation and distances all work unchanged. Taken from the
     // facility registry rather than the client so the pin is always the facility.
+    // The receiving facility is normally chosen by the dispatcher at dispatch,
+    // so it is optional here.
     const isReferral = data.incidentType === 'REFERRAL';
     if (isReferral) {
-      if (!data.originFacilityId || !data.targetFacilityId) {
-        throw new BadRequestError('A referral needs both the referring and the receiving facility');
+      if (!data.originFacilityId) {
+        throw new BadRequestError('A referral needs the referring facility');
       }
-      if (data.originFacilityId === data.targetFacilityId) {
+      if (data.targetFacilityId && data.originFacilityId === data.targetFacilityId) {
         throw new BadRequestError('Referring and receiving facility must be different');
       }
       const [origin, target] = await Promise.all([
         this.app.prisma.facility.findUnique({ where: { id: data.originFacilityId } }),
-        this.app.prisma.facility.findUnique({ where: { id: data.targetFacilityId } }),
+        data.targetFacilityId
+          ? this.app.prisma.facility.findUnique({ where: { id: data.targetFacilityId } })
+          : Promise.resolve(null),
       ]);
-      if (!origin || !target) throw new BadRequestError('Referral facility not found');
+      if (!origin || (data.targetFacilityId && !target)) throw new BadRequestError('Referral facility not found');
       data = {
         ...data,
         locationName: origin.name,
@@ -106,10 +112,10 @@ export class IncidentService {
         subCountySource: 'AUTO',
         lat: origin.lat,
         lng: origin.lng,
-        placeOfReferral: target.name,
+        placeOfReferral: target?.name,
       };
     } else {
-      data = { ...data, originFacilityId: undefined };
+      data = { ...data, originFacilityId: undefined, referralReasons: undefined, referralReasonOther: undefined };
     }
 
     const initialStatus = user.role === Role.WATCHER
@@ -163,6 +169,8 @@ export class IncidentService {
         isGbvCase: data.isGbvCase ?? false,
         incidentType: isReferral ? 'REFERRAL' : 'EMERGENCY',
         originFacilityId: data.originFacilityId,
+        referralReasons: data.referralReasons ?? [],
+        referralReasonOther: data.referralReasonOther,
         patientUnknown: data.patientUnknown ?? false,
         patientDescription: data.patientDescription,
         vitals: data.vitals ?? undefined,
@@ -286,9 +294,19 @@ export class IncidentService {
     });
   }
 
-  async getIncidentById(id: string) {
+  /**
+   * Turns a case reference from a URL ("case-021", "021", "21") into the
+   * unique where-clause for that case; anything else is treated as the id.
+   */
+  private incidentWhere(idOrRef: string): { id: string } | { caseNumber: string } {
+    const m = /^(?:case[-_ ]?)?(\d{1,7})$/i.exec(idOrRef.trim());
+    return m ? { caseNumber: this.formatCaseNumber(Number(m[1])) } : { id: idOrRef };
+  }
+
+  /** Accepts the incident id or its case reference (see incidentWhere). */
+  async getIncidentById(idOrRef: string) {
     const incident = await this.app.prisma.incident.findUnique({
-      where: { id },
+      where: this.incidentWhere(idOrRef),
       include: {
         watcher: { select: { id: true, name: true, phone: true } },
         dispatcher: { select: { id: true, name: true, phone: true } },
@@ -355,6 +373,8 @@ export class IncidentService {
       alertNature?: string;
       alertNatureDetail?: string;
       placeOfReferral?: string;
+      referralReasons?: string[];
+      referralReasonOther?: string;
       targetFacilityId?: string;
       hospitalLevelRequired?: number;
       healthcareWorkerName?: string;
@@ -384,7 +404,8 @@ export class IncidentService {
       'dispatcherChallenges', 'patientName', 'patientAge', 'patientGender',
       'patientNhif', 'patientNationalId', 'patientUnknown', 'patientDescription',
       'patientContact', 'nextOfKin', 'nextOfKinPhone', 'alertNature',
-      'alertNatureDetail', 'placeOfReferral', 'targetFacilityId', 'hospitalLevelRequired',
+      'alertNatureDetail', 'placeOfReferral', 'referralReasons', 'referralReasonOther',
+      'targetFacilityId', 'hospitalLevelRequired',
       'healthcareWorkerName', 'healthcareWorkerContact',
       'preHospitalManagement', 'partnerNotes', 'pcrUrl', 'vitals', 'maternityVitals',
     ] as const;
@@ -394,8 +415,12 @@ export class IncidentService {
       if (value === undefined) continue;
       // targetFacilityId is an optional FK - an empty string clears the referral
       if (field === 'targetFacilityId' && value === '') value = null;
-      if ((incident as Record<string, unknown>)[field] !== value) {
-        oldValues[field] = (incident as Record<string, unknown>)[field];
+      const current = (incident as Record<string, unknown>)[field];
+      const changed = Array.isArray(value)
+        ? JSON.stringify(current) !== JSON.stringify(value)
+        : current !== value;
+      if (changed) {
+        oldValues[field] = current;
         newValues[field] = value;
       }
       updateData[field] = value;

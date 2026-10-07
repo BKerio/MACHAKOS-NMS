@@ -243,6 +243,10 @@ model Incident {
   originOfAlert    String? @map("origin_of_alert")
   nextOfKinPhone   String? @map("next_of_kin_phone")
   placeOfReferral  String? @map("place_of_referral")
+  // Why a referral is being transferred (checkbox list on intake), plus free
+  // text when "Other" is ticked.
+  referralReasons     String[] @default([]) @map("referral_reasons")
+  referralReasonOther String?  @map("referral_reason_other")
   ambulanceUsed    String? @map("ambulance_used")
   surveillanceNote String? @map("surveillance_note") @db.Text
 

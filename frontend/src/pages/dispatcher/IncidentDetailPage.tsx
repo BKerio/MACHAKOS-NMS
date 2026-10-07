@@ -46,6 +46,7 @@ import { fmtDateTime, NBO_TZ } from '@/lib/datetime';
 import { confirmDialog } from '@/lib/alert';
 import { checkInLocationWarning, CREW_RULE, crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
 import LoadingState from '@/components/shared/LoadingState';
+import { caseSlug, isIncidentId } from '@/lib/incidentPath';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -72,7 +73,18 @@ const HANDOVER_VITAL_LABELS: Record<string, string> = {
 };
 
 function IncidentDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  // The URL carries the case number (/incidents/case-021); old links carry the id.
+  // Everything below talks to the API by id, so resolve a case reference first.
+  const { id: ref = '' } = useParams<{ id: string }>();
+  const refIsId = isIncidentId(ref);
+  const { data: resolvedId, isError: refNotFound } = useQuery({
+    queryKey: ['incident-ref', ref],
+    queryFn: async () => (await api.get(`/incidents/${encodeURIComponent(ref)}`)).data.data.id as string,
+    enabled: !!ref && !refIsId,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const id = refIsId ? ref : resolvedId;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { addNotification } = useNotificationStore();
@@ -127,6 +139,12 @@ function IncidentDetailPage() {
     enabled: !!id,
     refetchInterval: 30_000,
   });
+
+  // Old id links: once the case is known, show its case number in the address bar.
+  useEffect(() => {
+    const slug = caseSlug(incident?.caseNumber);
+    if (refIsId && slug && incident?.id === ref) navigate(`/incidents/${slug}`, { replace: true });
+  }, [refIsId, ref, incident?.id, incident?.caseNumber, navigate]);
 
   const { data: tatData } = useQuery({
     queryKey: ['incident', id, 'tat'],
@@ -554,17 +572,26 @@ function IncidentDetailPage() {
     });
 
   // ── Recommended facility, chosen at dispatch ──────────────────────────────
-  // Referrals fix the receiving facility when the case is logged; emergencies
-  // get it here: the dispatcher's pick, else the case's current one, else the
-  // nearest facility in the case's sub-county as a suggestion.
+  // Emergencies and referrals both get their receiving facility here: the
+  // dispatcher's pick, else the case's current one, else the nearest facility
+  // in the case's sub-county as a suggestion. A referral never suggests (or
+  // offers) the facility the patient is being referred from.
   const isReferralCase = incident?.incidentType === 'REFERRAL';
-  const suggestedFacility = facilitiesByDistance[0];
+  const dispatchFacilities = isReferralCase
+    ? facilitiesByDistance.filter(x => x.facility.id !== incident?.originFacilityId)
+    : facilitiesByDistance;
+  // A referral goes up the levels of care, so suggest the nearest facility above
+  // the referring one's KEPH level (falling back to the nearest at all).
+  const originLevel = incident?.originFacility?.kephLevel;
+  const suggestedFacility = isReferralCase && originLevel != null
+    ? dispatchFacilities.find(x => x.facility.kephLevel > originLevel) ?? dispatchFacilities[0]
+    : dispatchFacilities[0];
   const recommendedFacilityId =
     dispatchFacilityId ?? incident?.targetFacilityId ?? suggestedFacility?.facility.id ?? '';
-  const recommendedFacility = facilitiesByDistance.find(x => x.facility.id === recommendedFacilityId);
+  const recommendedFacility = dispatchFacilities.find(x => x.facility.id === recommendedFacilityId);
 
   async function saveRecommendedFacility() {
-    if (isReferralCase || !recommendedFacilityId || recommendedFacilityId === incident?.targetFacilityId) return;
+    if (!recommendedFacilityId || recommendedFacilityId === incident?.targetFacilityId) return;
     await api.patch(`/incidents/${id}`, {
       targetFacilityId: recommendedFacilityId,
       placeOfReferral: recommendedFacility?.facility.name,
@@ -592,8 +619,15 @@ function IncidentDetailPage() {
     !!vehicleOrigin && !!incidentDest
   );
 
-  if (isLoading) return <LoadingState minHeight={320} label="Loading incident…" />;
-  if (!incident) return <div className="p-10 font-bold text-center text-status-danger">Incident Not Found</div>;
+  const resolvingRef = !refIsId && !resolvedId && !refNotFound;
+  if (isLoading || resolvingRef) return <LoadingState minHeight={320} label="Loading incident…" />;
+  if (!incident) {
+    return (
+      <div className="p-10 font-bold text-center text-status-danger">
+        {refNotFound ? `No case found for "${ref.replace(/^case-/i, 'Case ')}"` : 'Incident Not Found'}
+      </div>
+    );
+  }
 
   const getStatusStep = () => {
     if (incident.status === 'DRAFT' || incident.status === 'SUBMITTED') return 1;
@@ -632,7 +666,7 @@ function IncidentDetailPage() {
           )}
           {incident.incidentType === 'REFERRAL' && (
             <span className="px-2.5 py-1 rounded-md font-medium text-xs" style={{ background: 'var(--blue-soft)', color: 'var(--blue)' }}>
-              Referral: {incident.originFacility?.name ?? incident.locationName} → {incident.targetFacility?.name ?? incident.placeOfReferral ?? '?'}
+              Referral: {incident.originFacility?.name ?? incident.locationName} → {incident.targetFacility?.name ?? incident.placeOfReferral ?? 'facility chosen at dispatch'}
             </span>
           )}
           {incident.patientUnknown && (
@@ -913,6 +947,22 @@ function IncidentDetailPage() {
                   <p className="text-sm text-brand-teal">{incident.placeOfReferral || '-'}</p>
                 )}
               </div>
+              {incident.incidentType === 'REFERRAL' && (
+                <div>
+                  <label className="text-xs font-medium text-slate-400 block mb-1.5">Reasons for Referral</label>
+                  {incident.referralReasons?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {incident.referralReasons.map(r => (
+                        <span key={r} className="pill pill-blue" style={{ fontSize: 11.5 }}>
+                          {r === 'Other' && incident.referralReasonOther ? `Other: ${incident.referralReasonOther}` : r}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-brand-teal">-</p>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-slate-400 block mb-1.5">Dispatcher Challenges</label>
                 {isEditingBrief ? (
@@ -995,7 +1045,7 @@ function IncidentDetailPage() {
                   <p className="text-sm text-brand-teal">{incident.patientNationalId}</p>
                 </div>
               )}
-              {incident.nextOfKin && (
+              {!incident.patientUnknown && incident.nextOfKin && (
                 <div className="col-span-2">
                   <label className="text-xs font-medium text-slate-text block mb-1">Next of Kin</label>
                   <p className="text-sm text-brand-teal">{incident.nextOfKin}</p>
@@ -1329,35 +1379,32 @@ function IncidentDetailPage() {
 
               {/* Recommended facility - decided here, at dispatch, not when the case is logged */}
               <div>
-                <label className="text-xs font-medium text-slate-text block mb-1">Recommended Facility</label>
-                {isReferralCase ? (
-                  <div className="rounded-lg px-4 py-2.5 text-sm border border-surface-border bg-slate-50 text-brand-teal">
-                    {incident.targetFacility?.name ?? incident.placeOfReferral ?? '-'}
-                    <span className="block text-[11px] text-slate-400 mt-0.5">Referral: receiving facility set when the case was logged.</span>
-                  </div>
-                ) : (
-                  <>
-                    <select
-                      className="w-full bg-white border border-surface-border rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-green outline-none"
-                      value={recommendedFacilityId}
-                      onChange={e => setDispatchFacilityId(e.target.value)}
-                    >
-                      <option value="">No facility yet - decide later</option>
-                      {facilitiesByDistance.map(({ facility, km, inRegion }) => (
-                        <option key={facility.id} value={facility.id}>
-                          {inRegion ? '★ ' : ''}{facility.name} · KEPH {facility.kephLevel}
-                          {km != null ? ` · ~${km.toFixed(1)} km` : ''}
-                          {incident.hospitalLevelRequired && facility.kephLevel < incident.hospitalLevelRequired ? ' · below required level' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      {dispatchFacilityId === null && !incident.targetFacilityId && suggestedFacility
-                        ? `Suggested: nearest ${suggestedFacility.inRegion ? `in ${incident.subCounty}` : 'facility'}. Change it if the patient needs a different level of care.`
-                        : '★ = in the case\'s sub-county. The crew is routed here after picking up the patient.'}
-                    </p>
-                  </>
-                )}
+                <label className="text-xs font-medium text-slate-text block mb-1">
+                  {isReferralCase ? 'Transfer Facility (receiving)' : 'Recommended Facility'}
+                </label>
+                <select
+                  className="w-full bg-white border border-surface-border rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-green outline-none"
+                  value={recommendedFacilityId}
+                  onChange={e => setDispatchFacilityId(e.target.value)}
+                >
+                  <option value="">No facility yet - decide later</option>
+                  {dispatchFacilities.map(({ facility, km, inRegion }) => (
+                    <option key={facility.id} value={facility.id}>
+                      {inRegion ? '★ ' : ''}{facility.name} · KEPH {facility.kephLevel}
+                      {km != null ? ` · ~${km.toFixed(1)} km` : ''}
+                      {incident.hospitalLevelRequired && facility.kephLevel < incident.hospitalLevelRequired ? ' · below required level' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {dispatchFacilityId === null && !incident.targetFacilityId && suggestedFacility
+                    ? isReferralCase
+                      ? `Suggested: nearest higher-level facility than ${incident.originFacility?.name ?? 'the referring facility'}. Confirm it can take the patient.`
+                      : `Suggested: nearest ${suggestedFacility.inRegion ? `in ${incident.subCounty}` : 'facility'}. Change it if the patient needs a different level of care.`
+                    : isReferralCase
+                      ? 'The patient is taken here from the referring facility.'
+                      : '★ = in the case\'s sub-county. The crew is routed here after picking up the patient.'}
+                </p>
               </div>
 
               <div>

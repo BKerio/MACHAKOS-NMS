@@ -19,6 +19,7 @@ import Map from '@/components/shared/Map';
 import { useVehicleTracking, LiveVehicle } from '@/hooks/useVehicleTracking';
 import VehicleDispatchPanel from '@/components/shared/VehicleDispatchPanel';
 import CrewOnAir from '@/components/dashboard/CrewOnAir';
+import { incidentPath } from '@/lib/incidentPath';
 
 function DashboardPage() {
   const navigate = useNavigate();
@@ -224,7 +225,7 @@ function DashboardPage() {
                 {queueData && queueData.length > 0 ? queueData.slice(0, 8).map((incident) => {
                   const late = Date.now() - new Date(incident.createdAt).getTime() > 600_000;
                   return (
-                    <tr key={incident.id} onClick={() => navigate(`/incidents/${incident.id}`)}>
+                    <tr key={incident.id} onClick={() => navigate(incidentPath(incident))}>
                       <td>
                         <span className="mono strong" style={{ fontSize: 13 }}>{incident.caseNumber}</span>
                         <div className={`pill pill-${incident.status === 'SUBMITTED' ? 'red' : incident.status === 'DISPATCH_HANDLING' ? 'amber' : 'blue'}`} style={{ marginTop: 4, fontSize: 10, padding: '2px 7px' }}>
@@ -276,7 +277,7 @@ function DashboardPage() {
                     className="tl-item"
                     key={inc.id}
                     style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/incidents/${inc.id}`)}
+                    onClick={() => navigate(incidentPath(inc))}
                   >
                     <div className={`tl-dot ${inc.status === 'RESOLVED' ? 'done' : inc.status === 'SUBMITTED' ? 'active' : ''}`}>
                       <WarningCircle size={10} />

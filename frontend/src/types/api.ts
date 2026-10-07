@@ -323,6 +323,8 @@ export interface Incident {
   alertNatureDetail?: string;
   originOfAlert?: string;
   placeOfReferral?: string;
+  referralReasons?: string[];
+  referralReasonOther?: string | null;
   healthcareWorkerName?: string;
   healthcareWorkerContact?: string;
   targetFacilityId?: string | null;
