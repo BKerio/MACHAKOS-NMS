@@ -283,12 +283,18 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'watcher/new-incident',
+        // Standalone incident reporting page (sidebar: Report Incident).
+        path: 'incidents/new',
         element: (
           <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN', 'WATCHER', 'DISPATCHER']}>
             <NewIncidentWizard />
           </RoleGuard>
         ),
+      },
+      {
+        // Old address - kept so bookmarks still work.
+        path: 'watcher/new-incident',
+        element: <Navigate to="/incidents/new" replace />,
       },
       {
         path: 'partner/dashboard',

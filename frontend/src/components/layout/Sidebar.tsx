@@ -32,6 +32,8 @@ import {
   Bell,
   Megaphone,
   CircleUserRound,
+  CirclePlus,
+  Inbox,
   Search,
   X,
   type LucideIcon,
@@ -69,7 +71,9 @@ function useIsMobile() {
 type NavItem = { label: string; path: string; Icon: LucideIcon; roles: string[] };
 type NavSection = { title?: string; items: NavItem[] };
 
-const ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
+const ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'WATCHER', 'PARTNER', 'DRIVER', 'EMT', 'NURSE'];
+/** Who can log a new incident (same as the /incidents/new route guard). */
+const REPORTERS = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER', 'WATCHER'];
 const COMMAND = ['SUPER_ADMIN', 'ADMIN', 'DISPATCHER'];
 const ADMINS = ['SUPER_ADMIN', 'ADMIN'];
 const CREW = ['DRIVER', 'EMT', 'NURSE'];
@@ -78,6 +82,8 @@ const menuSections: NavSection[] = [
   {
     items: [
       { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard, roles: COMMAND },
+      { label: 'Report Incident', path: '/incidents/new', Icon: CirclePlus, roles: REPORTERS },
+      { label: 'My Alerts', path: '/watcher', Icon: Inbox, roles: ['WATCHER'] },
       { label: 'Wallboard', path: '/wallboard', Icon: MonitorPlay, roles: COMMAND },
     ],
   },

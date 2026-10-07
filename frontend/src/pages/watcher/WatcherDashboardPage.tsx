@@ -97,7 +97,7 @@ function WatcherDashboardPage() {
           <div className="section-title" style={{ fontSize: 20, marginTop: 2 }}>My Alerts</div>
           <div className="muted" style={{ fontSize: 13.5, marginTop: 3 }}>Track incidents you've reported and their dispatch status</div>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/watcher/new-incident')}>
+        <button className="btn btn-primary" onClick={() => navigate('/incidents/new')}>
           <PlusCircle size={16} /> New Incident
         </button>
       </div>
@@ -194,7 +194,7 @@ function WatcherDashboardPage() {
                     <button
                       className="btn btn-ghost btn-sm"
                       style={{ margin: '16px auto 0' }}
-                      onClick={() => navigate('/watcher/new-incident')}
+                      onClick={() => navigate('/incidents/new')}
                     >
                       <PlusCircle size={14} /> Submit your first alert
                     </button>

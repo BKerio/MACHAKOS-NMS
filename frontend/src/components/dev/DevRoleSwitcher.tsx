@@ -8,7 +8,7 @@ export const ROLE_ROUTES: Record<Role, string> = {
   SUPER_ADMIN: '/dashboard',
   ADMIN: '/dashboard',
   DISPATCHER: '/dashboard',
-  WATCHER: '/watcher/new-incident',
+  WATCHER: '/incidents/new',
   PARTNER: '/partner/dashboard',
   DRIVER: '/driver/dashboard',
   // EMTs and nurses share the crew pages (there is no /emt or /nurse route).

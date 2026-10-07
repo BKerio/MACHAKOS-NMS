@@ -118,7 +118,7 @@ function DashboardPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/queue')}>
             <ListChecks size={16} /> Full queue
           </button>
-          <button className="btn btn-primary" onClick={() => navigate('/watcher/new-incident')}>
+          <button className="btn btn-primary" onClick={() => navigate('/incidents/new')}>
             <WarningCircle size={16} /> New incident
           </button>
         </div>

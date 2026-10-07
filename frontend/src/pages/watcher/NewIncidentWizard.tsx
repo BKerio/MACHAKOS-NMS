@@ -950,7 +950,7 @@ function NewIncidentWizard() {
     mutationFn: () => api.post('/incidents', buildPayload()),
     onSuccess: (res) => {
       const caseNumber = res?.data?.data?.caseNumber ?? '';
-      navigate('/watcher/new-incident', { state: { submitted: true, caseNumber } });
+      navigate('/incidents/new', { state: { submitted: true, caseNumber } });
     },
     onError: (err: any) => {
       addNotification({
@@ -970,7 +970,7 @@ function NewIncidentWizard() {
       return caseNumber;
     },
     onSuccess: (caseNumber) => {
-      navigate('/watcher/new-incident', { state: { submitted: true, caseNumber, ended: true } });
+      navigate('/incidents/new', { state: { submitted: true, caseNumber, ended: true } });
     },
     onError: (err: any) => {
       addNotification({
@@ -985,7 +985,7 @@ function NewIncidentWizard() {
     mutationFn: () => api.post('/incidents', { ...buildPayload(), surveillanceNote }),
     onSuccess: (res) => {
       const caseNumber = res?.data?.data?.caseNumber ?? '';
-      navigate('/watcher/new-incident', { state: { submitted: true, caseNumber, surveillance: true } });
+      navigate('/incidents/new', { state: { submitted: true, caseNumber, surveillance: true } });
     },
     onError: (err: any) => {
       addNotification({
@@ -1047,7 +1047,7 @@ function NewIncidentWizard() {
                     : `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
                   setForm(defaultForm); setMV(defaultMV);
                   pinSource.current = 'default'; resolvedName.current = ''; setAutoFillNote(''); setSubCountySource('');
-                  navigate('/watcher/new-incident', { replace: true, state: {} });
+                  navigate('/incidents/new', { replace: true, state: {} });
                 }}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl border transition-colors"
                 style={{ borderColor: 'var(--border)', color: 'var(--ink)', background: 'var(--surface-2)' }}
