@@ -758,6 +758,8 @@ body {
 :where(svg.lucide[width="20"]) { width: 24px; height: 24px; }
 
 :where(svg.lucide) { color: var(--blue); }
+/* Incident header: icons take their button's colour (danger red, success green, white on End case). */
+.case-header svg.lucide { color: inherit; }
 .btn svg.lucide,
 .nav-item svg.lucide,
 .sidebar-collapse-btn svg.lucide,

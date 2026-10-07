@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronRight as CaretRight,
@@ -14,7 +14,6 @@ import {
   RotateCcw as ClockCounterClockwise,
   ChevronDown as CaretDown,
   Share2 as ShareNetwork,
-  CircleX as XCircle,
   Timer,
   TriangleAlert as Warning,
   CircleArrowDown as ArrowCircleDown,
@@ -46,6 +45,7 @@ import { fmtDateTime, NBO_TZ } from '@/lib/datetime';
 import { confirmDialog } from '@/lib/alert';
 import { checkInLocationWarning, CREW_RULE, crewShortfall, isCrewComplete, medicsInline, MIN_MEDICS, taskMedics, vehicleMedics } from '@/utils/crew';
 import LoadingState from '@/components/shared/LoadingState';
+import CaseHeader from '@/components/dispatcher/CaseHeader';
 import { caseSlug, isIncidentId } from '@/lib/incidentPath';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
@@ -651,107 +651,59 @@ function IncidentDetailPage() {
 
   return (
     <div className="p-6 flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-white p-5 rounded-xl border border-surface-border">
-        <div className="flex items-center gap-3">
-          <div>
-            <p className="text-xs text-slate-text">Incidents / Detail</p>
-            <h2 className="text-xl font-bold text-brand-teal mt-0.5">Case {incident.caseNumber}</h2>
-          </div>
-          {incident.massCasualty && (
-            <span className="px-2.5 py-1 bg-status-danger/10 text-status-danger rounded-md font-medium text-xs flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-status-danger animate-pulse"></span>
-              MCI
-            </span>
-          )}
-          {incident.incidentType === 'REFERRAL' && (
-            <span className="px-2.5 py-1 rounded-md font-medium text-xs" style={{ background: 'var(--blue-soft)', color: 'var(--blue)' }}>
-              Referral: {incident.originFacility?.name ?? incident.locationName} → {incident.targetFacility?.name ?? incident.placeOfReferral ?? 'facility chosen at dispatch'}
-            </span>
-          )}
-          {incident.patientUnknown && (
-            <span className="px-2.5 py-1 rounded-md font-medium text-xs" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>
-              Unknown person
-            </span>
-          )}
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 border border-surface-border text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-all flex items-center gap-2"
-          >
-            <Printer size={16} />
-            Print
-          </button>
-          {incident.isGbvCase ? (
-            <Link
-              to={`/gbv/cases/${id}`}
-              className="px-4 py-2 border border-status-danger/40 text-status-danger text-sm font-medium rounded-lg hover:bg-status-danger hover:text-white transition-all flex items-center gap-2"
-            >
-              <ShieldWarning size={16} />
-              View GBV Report
-            </Link>
-          ) : (
-            <button
-              onClick={() => sendToGbvMutation.mutate()}
-              disabled={incident.status === 'RESOLVED' || sendToGbvMutation.isPending}
-              className="px-4 py-2 border border-status-danger/40 text-status-danger text-sm font-medium rounded-lg hover:bg-status-danger hover:text-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {sendToGbvMutation.isPending ? <AppLoader size={20} /> : <ShieldWarning size={16} />}
-              Send to GBV
-            </button>
-          )}
-          <button
-            onClick={() => setShowAssignPartnerModal(true)}
-            disabled={incident.status === 'RESOLVED'}
-            className="px-4 py-2 border border-brand-teal/30 text-brand-teal text-sm font-medium rounded-lg hover:bg-brand-teal hover:text-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ShareNetwork size={16} />
-            Assign to Partner
-          </button>
-          {incident.massCasualty ? (
-            <button
-              onClick={async () => {
-                const confirmed = await confirmDialog({
-                  title: 'Remove MCI Flag',
-                  text: `This will remove the Mass Casualty Incident flag from ${incident.caseNumber} and clear the casualty count. The case will remain open.`,
-                  confirmLabel: 'De-escalate',
-                });
-                if (confirmed) deescalateMutation.mutate();
-              }}
-              className="px-4 py-2 border border-slate-300 text-slate-500 text-sm font-medium rounded-lg hover:bg-slate-100 transition-all flex items-center gap-2"
-            >
-              <ArrowCircleDown size={16} />
-              De-escalate
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowEscalateModal(true)}
-              disabled={incident.status === 'RESOLVED'}
-              className="px-4 py-2 border border-status-danger/30 text-status-danger text-sm font-medium rounded-lg hover:bg-status-danger hover:text-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ArrowCircleUp size={16} />
-              Escalate to MCI
-            </button>
-          )}
-          <button
-            onClick={() => setShowResolveModal(true)}
-            disabled={incident.status === 'RESOLVED'}
-            className="px-4 py-2 border border-brand-green/40 text-brand-green text-sm font-medium rounded-lg hover:bg-brand-green hover:text-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <CheckCircle size={16} />
-            {incident.status === 'RESOLVED' ? 'Resolved' : 'Resolve'}
-          </button>
-          <button
-            onClick={() => setShowEndCaseModal(true)}
-            disabled={incident.status === 'RESOLVED'}
-            className="px-4 py-2 bg-status-danger text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <XCircle size={16} />
-            End Case
-          </button>
-        </div>
-      </div>
+      {/* Header - case identity + command bar. Resolve / End Case always visible;
+          the rest sit inline on wide screens and fold into "More" otherwise. */}
+      <CaseHeader
+        caseNumber={incident.caseNumber}
+        status={incident.status}
+        createdAt={incident.createdAt}
+        badges={[
+          ...(incident.massCasualty
+            ? [{ key: 'mci', label: `MCI${incident.massCasualtyCount ? ` · ${incident.massCasualtyCount} casualties` : ''}`, tone: 'red' as const, pulse: true }]
+            : []),
+          ...(incident.incidentType === 'REFERRAL'
+            ? [{ key: 'ref', tone: 'blue' as const, label: `Referral: ${incident.originFacility?.name ?? incident.locationName} → ${incident.targetFacility?.name ?? incident.placeOfReferral ?? 'facility chosen at dispatch'}` }]
+            : []),
+          ...(incident.patientUnknown ? [{ key: 'unknown', label: 'Unknown person', tone: 'amber' as const }] : []),
+          ...(incident.isGbvCase ? [{ key: 'gbv', label: 'GBV case', tone: 'purple' as const }] : []),
+        ]}
+        secondary={[
+          { key: 'print', label: 'Print', Icon: Printer, onClick: () => window.print() },
+          incident.isGbvCase
+            ? { key: 'gbv', label: 'View GBV report', Icon: ShieldWarning, tone: 'danger' as const, to: `/gbv/cases/${id}` }
+            : {
+                key: 'gbv', label: 'Send to GBV', Icon: ShieldWarning, tone: 'danger' as const,
+                busy: sendToGbvMutation.isPending,
+                disabled: incident.status === 'RESOLVED' || sendToGbvMutation.isPending,
+                onClick: () => sendToGbvMutation.mutate(),
+              },
+          {
+            key: 'partner', label: 'Assign to partner', Icon: ShareNetwork,
+            disabled: incident.status === 'RESOLVED',
+            onClick: () => setShowAssignPartnerModal(true),
+          },
+          incident.massCasualty
+            ? {
+                key: 'mci', label: 'De-escalate MCI', Icon: ArrowCircleDown,
+                onClick: async () => {
+                  const confirmed = await confirmDialog({
+                    title: 'Remove MCI Flag',
+                    text: `This will remove the Mass Casualty Incident flag from ${incident.caseNumber} and clear the casualty count. The case will remain open.`,
+                    confirmLabel: 'De-escalate',
+                  });
+                  if (confirmed) deescalateMutation.mutate();
+                },
+              }
+            : {
+                key: 'mci', label: 'Escalate to MCI', Icon: ArrowCircleUp, tone: 'danger' as const,
+                disabled: incident.status === 'RESOLVED',
+                onClick: () => setShowEscalateModal(true),
+              },
+        ]}
+        resolved={incident.status === 'RESOLVED'}
+        onResolve={() => setShowResolveModal(true)}
+        onEndCase={() => setShowEndCaseModal(true)}
+      />
 
       {/* Google Maps ETA panel - only shows when Maps key is configured + vehicle is en-route */}
       {mapsAvailable && vehicleOrigin && (
@@ -1000,10 +952,14 @@ function IncidentDetailPage() {
                   <p className="text-sm text-slate-400">-</p>
                 )}
               </div>
-              <div className="col-span-2 bg-slate-50 p-4 rounded-lg border border-slate-100">
-                <label className="text-xs font-medium text-slate-400 block mb-1.5">Caller Notes</label>
-                <p className="italic text-slate-500 text-sm leading-relaxed">"{incident.watcherComments || incident.dispatcherComments || 'No specific notes provided.'}"</p>
-              </div>
+              {(incident.watcherComments || incident.dispatcherComments) && (
+                <div className="col-span-2 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                  <label className="text-xs font-medium text-slate-400 block mb-1.5">
+                    {incident.watcherComments ? 'Caller Notes' : 'Dispatcher Notes'}
+                  </label>
+                  <p className="italic text-slate-500 text-sm leading-relaxed">"{incident.watcherComments || incident.dispatcherComments}"</p>
+                </div>
+              )}
             </div>
           </div>
 
