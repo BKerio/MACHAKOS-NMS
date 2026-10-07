@@ -170,7 +170,6 @@ function AddPersonnelModal({ isOpen, onClose }: AddPersonnelModalProps) {
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
         {/* Accent strip */}
-        <div className="h-1 w-full bg-brand-green flex-shrink-0" />
 
         {/* Header */}
         <div

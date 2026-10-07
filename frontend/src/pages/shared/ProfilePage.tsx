@@ -119,10 +119,8 @@ function ProfilePage() {
         className="rounded-xl border shadow-sm overflow-hidden"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
-        <div className="h-1 w-full bg-brand-green" />
         <div className="p-5 sm:p-6">
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-1.5 h-5 bg-brand-green rounded-full" />
             <p className="font-sans text-[11px] font-black tracking-[0.2em]" style={{ color: 'var(--muted)' }}>
               Account
             </p>

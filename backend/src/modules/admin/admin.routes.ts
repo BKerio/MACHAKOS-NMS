@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { AdminService } from './admin.service.js';
 import { requireRole } from '../../shared/guards/requireRole.js';
 import { AgencyType, Role } from '../../shared/types/index.js';
-import { BadRequestError } from '../../shared/errors/AppError.js';
+import { BadRequestError, NotFoundError } from '../../shared/errors/AppError.js';
 
 const adminRoles = [Role.ADMIN, Role.SUPER_ADMIN];
 
@@ -350,8 +350,11 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.send({ ok: true, data });
   });
 
+  // Safe to hard-delete: an offline dispatch copies the plate onto the case
+  // (incident.ambulanceUsed), so case history never points at this row.
   app.delete<{ Params: { id: string } }>('/partner-ambulances/:id', async (request, reply) => {
-    await app.prisma.partnerAmbulance.delete({ where: { id: request.params.id } });
+    const { count } = await app.prisma.partnerAmbulance.deleteMany({ where: { id: request.params.id } });
+    if (!count) throw new NotFoundError('Partner ambulance');
     return reply.send({ ok: true });
   });
 

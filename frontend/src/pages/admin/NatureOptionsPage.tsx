@@ -121,7 +121,7 @@ function NatureOptionsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* Page header */}
-      <div style={{ borderLeft: '4px solid var(--green)', paddingLeft: 16, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 4 }}>
             Incident Classification

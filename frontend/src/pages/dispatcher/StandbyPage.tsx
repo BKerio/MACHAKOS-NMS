@@ -192,7 +192,7 @@ function StandbyPage() {
               const crew = crewOf(vehicleById.get(s.vehicleId));
               const upcoming = new Date(s.startedAt).getTime() > now;
               return (
-                <article key={s.id} className="card overflow-hidden flex flex-col" style={{ borderTop: '3px solid var(--green)' }}>
+                <article key={s.id} className="card overflow-hidden flex flex-col">
                   <div className="p-4 flex flex-col gap-3 flex-1">
                     <div className="flex items-center gap-2">
                       <Plate reg={s.vehicle?.registrationNumber ?? '—'} />

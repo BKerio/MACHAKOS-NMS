@@ -541,7 +541,6 @@ function InventoryPage() {
             className="relative w-full max-w-md rounded-2xl shadow-xl overflow-hidden border flex flex-col max-h-[90vh]"
             style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
           >
-            <div className="h-1 w-full bg-brand-green flex-shrink-0" />
             <div
               className="px-5 py-4 flex items-center justify-between"
               style={{ borderBottom: '1px solid var(--border)' }}

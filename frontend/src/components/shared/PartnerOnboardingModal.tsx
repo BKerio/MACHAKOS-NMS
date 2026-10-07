@@ -193,7 +193,6 @@ function PartnerOnboardingModal({ isOpen, onClose }: Props) {
         className="relative w-full max-w-md rounded-2xl shadow-xl overflow-hidden border flex flex-col max-h-[90vh]"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
-        <div className="h-1 w-full bg-brand-green flex-shrink-0" />
 
         {/* Header */}
         <div

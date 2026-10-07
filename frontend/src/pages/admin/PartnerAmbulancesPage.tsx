@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Truck, Plus, Pencil as PencilSimple, Check, X as XIcon } from 'lucide-react';
+import { Truck, Plus, Pencil as PencilSimple, Check, X as XIcon, Trash2 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
 import { PartnerAmbulance } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
 import LoadingState from '@/components/shared/LoadingState';
+import { confirmDialog } from '@/lib/alert';
 
 interface PartnerAgency { id: string; name: string }
 
@@ -64,6 +65,28 @@ function PartnerAmbulancesPage() {
     },
     onError: (err: any) => addNotification({ type: 'error', title: 'Failed', message: err?.response?.data?.message || 'Could not update.' }),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/partner-ambulances/${id}`),
+    onSuccess: (_res, id) => {
+      const plate = rows.find((r) => r.id === id)?.registrationNumber;
+      invalidate();
+      addNotification({ type: 'success', title: 'Deleted', message: `${plate ?? 'Partner ambulance'} removed from the roster.` });
+    },
+    onError: (err: any) => addNotification({ type: 'error', title: 'Failed', message: err?.response?.data?.message || 'Could not delete.' }),
+  });
+
+  const confirmDelete = async (r: PartnerAmbulance) => {
+    const ok = await confirmDialog({
+      title: `Delete ${r.registrationNumber}?`,
+      text: 'It will no longer be offered at dispatch. Past cases keep the plate they were dispatched with. '
+        + 'To take it off the road for a while instead, use Deactivate.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      danger: true,
+    });
+    if (ok) deleteMutation.mutate(r.id);
+  };
 
   const formValid = form.registrationNumber.trim().length >= 2;
 
@@ -140,6 +163,17 @@ function PartnerAmbulancesPage() {
                         {updateMutation.isPending && updateMutation.variables?.id === r.id
                           ? <><AppLoader size={18} /> {r.isActive ? 'Deactivate' : 'Activate'}</>
                           : r.isActive ? <><XIcon size={14} /> Deactivate</> : <><Check size={14} /> Activate</>}
+                      </button>
+                      <button
+                        onClick={() => confirmDelete(r)}
+                        disabled={deleteMutation.isPending}
+                        className="btn btn-ghost px-3 py-1.5 text-xs inline-flex items-center gap-1.5 ml-1"
+                        style={{ color: 'var(--red)' }}
+                        aria-label={`Delete ${r.registrationNumber}`}
+                      >
+                        {deleteMutation.isPending && deleteMutation.variables === r.id
+                          ? <><AppLoader size={18} /> Deleting</>
+                          : <><Trash2 size={14} /> Delete</>}
                       </button>
                     </td>
                   )}
