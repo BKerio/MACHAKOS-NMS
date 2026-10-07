@@ -226,9 +226,9 @@ export default function IncidentHistoryPage() {
   const filtered = !!(search || type || subCounty || range !== 'all' || status);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 min-w-0">
       {/* Header */}
-      <div className="card card-pad flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="card card-pad flex flex-col sm:flex-row sm:items-center gap-4 min-w-0">
         <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0" style={{ background: 'color-mix(in srgb, var(--blue) 12%, var(--surface))' }}>
           <History size={22} color="var(--blue)" />
         </span>
@@ -244,9 +244,9 @@ export default function IncidentHistoryPage() {
       </div>
 
       {/* Filters */}
-      <div className="card card-pad flex flex-col gap-3.5">
+      <div className="card card-pad flex flex-col gap-3.5 min-w-0">
         {/* Status tabs with counts */}
-        <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5" role="tablist">
+        <div className="flex gap-1.5 overflow-x-auto max-w-full min-w-0 -mx-1 px-1 pb-0.5" role="tablist">
           {STATUS_TABS.map((t) => {
             const on = status === t.key;
             return (
@@ -274,8 +274,8 @@ export default function IncidentHistoryPage() {
           })}
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-2.5">
-          <label className="relative flex-1 min-w-0">
+        <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_200px]">
+          <label className="relative block min-w-0 sm:col-span-2 lg:col-span-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-2)' }} />
             <input
               className="input w-full"
@@ -290,12 +290,12 @@ export default function IncidentHistoryPage() {
               </button>
             )}
           </label>
-          <select className="eoc-select lg:w-[160px]" value={type} onChange={(e) => setFilter({ type: e.target.value })} aria-label="Case type">
+          <select className="eoc-select" value={type} onChange={(e) => setFilter({ type: e.target.value })} aria-label="Case type">
             <option value="">All types</option>
             <option value="EMERGENCY">Emergency</option>
             <option value="REFERRAL">Referral</option>
           </select>
-          <select className="eoc-select lg:w-[180px]" value={subCounty} onChange={(e) => setFilter({ subCounty: e.target.value })} aria-label="Sub-county">
+          <select className="eoc-select" value={subCounty} onChange={(e) => setFilter({ subCounty: e.target.value })} aria-label="Sub-county">
             <option value="">All sub-counties</option>
             {subCounties.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -317,9 +317,9 @@ export default function IncidentHistoryPage() {
           ))}
           {range === 'custom' && (
             <span className="inline-flex items-center gap-2">
-              <input type="date" className="input h-8" style={{ height: 32 }} value={from} max={to || undefined} onChange={(e) => setFilter({ range: 'custom', from: e.target.value })} aria-label="From" />
+              <input type="date" className="input" style={{ height: 32, width: 150 }} value={from} max={to || undefined} onChange={(e) => setFilter({ range: 'custom', from: e.target.value })} aria-label="From" />
               <span className="text-[12px]" style={{ color: 'var(--muted)' }}>to</span>
-              <input type="date" className="input h-8" style={{ height: 32 }} value={to} min={from || undefined} onChange={(e) => setFilter({ range: 'custom', to: e.target.value })} aria-label="To" />
+              <input type="date" className="input" style={{ height: 32, width: 150 }} value={to} min={from || undefined} onChange={(e) => setFilter({ range: 'custom', to: e.target.value })} aria-label="To" />
             </span>
           )}
           {filtered && (
