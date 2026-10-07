@@ -8,9 +8,6 @@ import {
   CircleCheck as CheckCircle,
   CircleX as XCircle,
   RefreshCw as ArrowsClockwise,
-  Plus,
-  Trash2 as Trash,
-  Tag,
   Building2 as Buildings,
   Pencil as PencilSimple,
   Check,
@@ -21,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/api/client';
 import { Agency } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
+import NatureOptionsManager from '@/components/admin/NatureOptionsManager';
 
 interface SystemHealth {
   db: 'online' | 'offline';
@@ -133,129 +131,6 @@ function OrganizationSettings() {
   );
 }
 
-function NatureOptionsManager() {
-  const queryClient = useQueryClient();
-  const { addNotification } = useNotificationStore();
-  const [newNature, setNewNature] = useState('');
-  const [newDetail, setNewDetail] = useState('');
-  const [selectedNature, setSelectedNature] = useState('');
-
-  const { data: options = [] } = useQuery<{ id: string; nature: string; detail: string | null }[]>({
-    // Flat admin rows - kept apart from the wizard's grouped ['nature-options'] entry.
-    queryKey: ['nature-options', 'admin'],
-    queryFn: async () => {
-      const res = await api.get('/admin/nature-options');
-      return res.data.data;
-    },
-  });
-
-  const uniqueNatures = [...new Set(options.map(o => o.nature))];
-
-  const addMutation = useMutation({
-    mutationFn: (body: { nature: string; detail?: string }) => api.post('/admin/nature-options', body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nature-options'] });
-      setNewNature(''); setNewDetail('');
-      addNotification({ type: 'success', title: 'Added', message: 'Nature option saved.' });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/admin/nature-options/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['nature-options'] }),
-  });
-
-  return (
-    <div className="bg-white border border-surface-border rounded-xl shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-surface-border bg-slate-50 flex items-center gap-3">
-        <Tag size={20} className="text-slate-text" />
-        <h3 className="font-semibold text-brand-teal">Incident Nature Options</h3>
-      </div>
-      <div className="p-6 flex flex-col gap-6">
-
-        {/* Add new nature */}
-        <div>
-          <h4 className="text-sm font-bold text-slate-800 mb-2">Add Nature Category</h4>
-          <div className="flex gap-2">
-            <input
-              className="flex-1 border border-surface-border rounded-lg px-3 py-2 text-sm"
-              placeholder="e.g. Trauma"
-              value={newNature}
-              onChange={e => setNewNature(e.target.value)}
-            />
-            <button
-              onClick={() => newNature.trim() && addMutation.mutate({ nature: newNature.trim() })}
-              className="bg-brand-teal text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1 hover:opacity-90"
-            >
-              <Plus size={14} /> Add
-            </button>
-          </div>
-        </div>
-
-        {/* Add specific detail under a nature */}
-        <div>
-          <h4 className="text-sm font-bold text-slate-800 mb-2">Add Specific Nature (under a category)</h4>
-          <div className="flex gap-2">
-            <select
-              className="border border-surface-border rounded-lg px-3 py-2 text-sm w-40"
-              value={selectedNature}
-              onChange={e => setSelectedNature(e.target.value)}
-            >
-              <option value="">Category…</option>
-              {uniqueNatures.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <input
-              className="flex-1 border border-surface-border rounded-lg px-3 py-2 text-sm"
-              placeholder="e.g. Road Traffic Accident"
-              value={newDetail}
-              onChange={e => setNewDetail(e.target.value)}
-            />
-            <button
-              onClick={() => selectedNature && newDetail.trim() && addMutation.mutate({ nature: selectedNature, detail: newDetail.trim() })}
-              className="bg-brand-teal text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1 hover:opacity-90"
-            >
-              <Plus size={14} /> Add
-            </button>
-          </div>
-        </div>
-
-        {/* List all natures with their details */}
-        <div className="flex flex-col gap-4">
-          {uniqueNatures.map(nature => {
-            const topLevel = options.find(o => o.nature === nature && !o.detail);
-            const details = options.filter(o => o.nature === nature && o.detail);
-            return (
-              <div key={nature} className="border border-surface-border rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold text-sm text-slate-800">{nature}</span>
-                  {topLevel && (
-                    <button onClick={() => deleteMutation.mutate(topLevel.id)} className="text-red-400 hover:text-red-600">
-                      <Trash size={14} />
-                    </button>
-                  )}
-                </div>
-                {details.map(d => (
-                  <div key={d.id} className="flex items-center justify-between pl-4 py-0.5">
-                    <span className="text-xs text-slate-500">→ {d.detail}</span>
-                    <button onClick={() => deleteMutation.mutate(d.id)} className="text-red-300 hover:text-red-500">
-                      <Trash size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-          {uniqueNatures.length === 0 && (
-            <p className="text-sm text-slate-400 italic">No nature options yet. Add some above.</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-
 function SystemSettingsPage() {
   const queryClient = useQueryClient();
   const { addNotification } = useNotificationStore();
@@ -362,7 +237,6 @@ function SystemSettingsPage() {
               </div>
             </div>
           </div>
-          <NatureOptionsManager />
 
           {/* External Integrations */}
           
@@ -471,6 +345,9 @@ function SystemSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Full width: the nature list is long and reads best in columns. */}
+      <NatureOptionsManager />
     </div>
   );
 }
