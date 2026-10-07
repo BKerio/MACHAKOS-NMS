@@ -41,7 +41,7 @@ import {
 import { useActiveCalls } from '@/hooks/useActiveCalls';
 import { useIncidentQueueCount } from '@/hooks/useIncidentQueueCount';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { confirmDialog } from '@/lib/alert';
+import { confirmSignOut } from '@/lib/alert';
 import SidebarLogo from '@/assets/logos/nccg.jpg';
 
 interface SidebarProps {
@@ -238,12 +238,7 @@ function Sidebar({ collapsed: collapsedPref, onToggleCollapse, connected, drawer
   const roleLabel = user?.role?.replace(/_/g, ' ').toLowerCase();
 
   const handleLogout = async () => {
-    const confirmed = await confirmDialog({
-      title: 'Sign Out',
-      text: "Are you sure you want to sign out? You'll need to log in again to access the dashboard.",
-      confirmLabel: 'Sign Out',
-      danger: true,
-    });
+    const confirmed = await confirmSignOut(user);
     if (confirmed) {
       addNotification({
         type: 'info',

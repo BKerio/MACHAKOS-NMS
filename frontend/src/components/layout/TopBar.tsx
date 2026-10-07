@@ -12,7 +12,7 @@ import NotificationDrawer from '@/components/shared/NotificationDrawer';
 import RoleSwitcher from '@/components/layout/RoleSwitcher';
 import { useNavigate, Link } from 'react-router-dom';
 import { useActiveCalls } from '@/hooks/useActiveCalls';
-import { confirmDialog } from '@/lib/alert';
+import { confirmSignOut } from '@/lib/alert';
 import ThemeMenu from '@/components/layout/ThemeMenu';
 
 interface TopBarProps {
@@ -45,12 +45,7 @@ function TopBar({ onToggleSidebar }: TopBarProps) {
   }, []);
 
   const requestSignOut = async () => {
-    const confirmed = await confirmDialog({
-      title: 'Sign Out',
-      text: "Are you sure you want to sign out? You'll need to log in again to access the dashboard.",
-      confirmLabel: 'Sign Out',
-      danger: true,
-    });
+    const confirmed = await confirmSignOut(user);
     if (confirmed) {
       addNotification({
         type: 'info',
