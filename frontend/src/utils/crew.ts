@@ -2,13 +2,13 @@ import type { Task, Vehicle } from '@/types/api';
 
 /**
  * Crew rule (mirrors backend fleet/crew.ts): an ambulance is dispatch-ready
- * with a driver plus at least one medic, in any mix - one EMT, one nurse, two
- * EMTs, two nurses, or an EMT and a nurse. Up to four medic seats.
+ * with a driver; medics ride along when checked in but aren't required for
+ * now (set back to 1 to require one). Up to four medic seats.
  */
-export const MIN_MEDICS = 1;
+export const MIN_MEDICS = 0;
 
 /** The rule in words, for "can't dispatch yet" messages. */
-export const CREW_RULE = 'a driver and at least one medic (an EMT or a nurse)';
+export const CREW_RULE = MIN_MEDICS > 0 ? 'a driver and at least one medic (an EMT or a nurse)' : 'a driver checked in';
 
 /** "No medics" / "1 medic" / "3 medics". */
 export const medicCountLabel = (n: number) => (n === 0 ? 'No medics' : `${n} medic${n === 1 ? '' : 's'}`);

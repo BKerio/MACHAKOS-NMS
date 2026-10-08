@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { TaskService } from './task.service.js';
+import { TaskService, type PatientDetails } from './task.service.js';
 import { requireRole } from '../../shared/guards/requireRole.js';
 import { TaskStatus, Role } from '../../shared/types/index.js';
 import { BadRequestError } from '../../shared/errors/AppError.js';
@@ -121,19 +121,28 @@ export const taskRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   /**
    * POST /tasks/:id/patient-data
-   * Crew logs patient vitals and pre-hospital management notes.
+   * Crew logs pre-hospital management notes, handover vitals and the patient's
+   * details (name, age, sex, ID, contact, next of kin) with the PCR.
    */
-  app.post<{ Params: { id: string }; Body: { preHospitalManagement: string; dispatcherChallenges?: string; handoverVitals?: Record<string, unknown> } }>(
+  app.post<{
+    Params: { id: string };
+    Body: {
+      preHospitalManagement: string;
+      dispatcherChallenges?: string;
+      handoverVitals?: Record<string, unknown>;
+      patient?: PatientDetails;
+    };
+  }>(
     '/:id/patient-data',
     { preValidation: [requireRole([Role.DRIVER, Role.EMT, Role.NURSE])] },
     async (request, reply) => {
-      const { preHospitalManagement, dispatcherChallenges, handoverVitals } = request.body;
+      const { preHospitalManagement, dispatcherChallenges, handoverVitals, patient } = request.body;
       if (!preHospitalManagement) throw new BadRequestError('preHospitalManagement is required');
 
       const result = await taskService.updatePatientData(
         request.params.id,
         request.user.userId,
-        { preHospitalManagement, dispatcherChallenges, handoverVitals }
+        { preHospitalManagement, dispatcherChallenges, handoverVitals, patient }
       );
       return reply.send({ ok: true, data: result });
     }

@@ -2,11 +2,12 @@ import { Prisma } from '../../generated/prisma/index.js';
 import { Role } from '../../shared/types/index.js';
 
 /**
- * Crew rule: an ambulance is dispatch-ready with a driver plus at least one
- * medic, in any mix - one EMT, one nurse, two EMTs, two nurses, or an EMT and
- * a nurse. Each vehicle (and task) has two EMT slots and two nurse slots.
+ * Crew rule: an ambulance is dispatch-ready with a driver; medics (EMTs,
+ * nurses) ride along when checked in but aren't required for now. Set this
+ * back to 1 to require at least one medic again. Each vehicle (and task) has
+ * two EMT slots and two nurse slots.
  */
-export const MIN_MEDICS = 1;
+export const MIN_MEDICS = 0;
 
 export const EMT_SLOTS = ['currentEmtId', 'currentEmt2Id'] as const;
 export const NURSE_SLOTS = ['currentNurseId', 'currentNurse2Id'] as const;

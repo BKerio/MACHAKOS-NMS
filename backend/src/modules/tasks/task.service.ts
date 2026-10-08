@@ -19,6 +19,15 @@ import {
 } from '../fleet/crew.js';
 import { PushSenderService } from '../notifications/push-sender.service.js';
 import { haversineDistance } from '../../shared/utils/haversine.js';
+import { unknownPatientLabel } from '../incidents/incident.service.js';
+
+/** Patient details the crew records with the PCR. */
+const PATIENT_FIELDS = [
+  'patientName', 'patientAge', 'patientGender', 'patientNationalId',
+  'patientContact', 'nextOfKin', 'nextOfKinPhone',
+] as const;
+type PatientField = (typeof PATIENT_FIELDS)[number];
+export type PatientDetails = Partial<Record<PatientField, string | null>>;
 
 /** Mirrors TaskStatus.labels in frontend/src/utils/taskStatus.ts and nccg/lib/models/task.dart. */
 const STATUS_LABELS: Record<string, string> = {
@@ -876,18 +885,32 @@ export class TaskService {
   async getPatientVitals(taskId: string, user: { userId: string; role: Role }) {
     const task = await this.app.prisma.task.findUnique({
       where: { id: taskId },
-      include: { incident: { select: { caseNumber: true, vitals: true } } },
+      include: {
+        incident: {
+          select: {
+            caseNumber: true, vitals: true, patientUnknown: true,
+            preHospitalManagement: true, dispatcherChallenges: true,
+            ...Object.fromEntries(PATIENT_FIELDS.map((f) => [f, true])),
+          },
+        },
+      },
     });
     if (!task) throw new NotFoundError('Task');
     const isCrewRole = user.role === Role.DRIVER || user.role === Role.EMT || user.role === Role.NURSE;
     if (isCrewRole && !taskCrewIds(task).includes(user.userId)) {
       throw new ForbiddenError('You are not assigned to this task');
     }
+    const incident = task.incident as typeof task.incident & Record<PatientField, string | null>;
     return {
       taskId,
-      caseNumber: task.incident.caseNumber,
+      caseNumber: incident.caseNumber,
       vitals: (task.handoverVitals ?? null) as Record<string, string> | null,
-      reportedAtAlert: (task.incident.vitals ?? null) as Record<string, string> | null,
+      reportedAtAlert: (incident.vitals ?? null) as Record<string, string> | null,
+      // What the PCR form pre-fills: the patient as the case has them, and the clinical notes.
+      patient: Object.fromEntries(PATIENT_FIELDS.map((f) => [f, incident[f] ?? null])),
+      patientUnknown: incident.patientUnknown,
+      preHospitalManagement: incident.preHospitalManagement,
+      dispatcherChallenges: incident.dispatcherChallenges,
     };
   }
 
@@ -919,9 +942,13 @@ export class TaskService {
       preHospitalManagement: string;
       dispatcherChallenges?: string;
       handoverVitals?: Record<string, unknown>;
+      patient?: PatientDetails;
     }
   ) {
-    const task = await this.app.prisma.task.findUnique({ where: { id: taskId } });
+    const task = await this.app.prisma.task.findUnique({
+      where: { id: taskId },
+      include: { incident: true },
+    });
     if (!task) throw new NotFoundError('Task');
 
     const isCrew = taskCrewIds(task).includes(userId);
@@ -935,14 +962,45 @@ export class TaskService {
       });
     }
 
-    // Store clinical notes on the incident
+    // Patient details the paper PCR doesn't give the system as data. Blank
+    // fields leave what's on the case. An unidentified patient keeps their
+    // "Unknown African ..." name (dispatch identifies them), but it follows
+    // a change of sex.
+    const incident = task.incident;
+    const clean = (v?: string | null) => (v && v.trim() ? v.trim() : undefined);
+    const p = data.patient ?? {};
+    const patientUpdates: Record<string, string> = {};
+    for (const field of PATIENT_FIELDS) {
+      if (field === 'patientName' && incident.patientUnknown) continue;
+      const value = clean(p[field]);
+      if (value !== undefined && value !== incident[field]) patientUpdates[field] = value;
+    }
+    if (incident.patientUnknown && incident.unknownSeq != null && patientUpdates.patientGender) {
+      const label = unknownPatientLabel(patientUpdates.patientGender, incident.unknownSeq);
+      if (label !== incident.patientName) patientUpdates.patientName = label;
+    }
+
     const updatedIncident = await this.app.prisma.incident.update({
       where: { id: task.incidentId },
       data: {
         preHospitalManagement: data.preHospitalManagement,
         dispatcherChallenges: data.dispatcherChallenges,
+        ...patientUpdates,
       },
     });
+
+    if (Object.keys(patientUpdates).length > 0) {
+      await this.app.prisma.auditLog.create({
+        data: {
+          action: 'UPDATE',
+          subjectType: 'INCIDENT',
+          subjectId: task.incidentId,
+          oldValues: Object.fromEntries(Object.keys(patientUpdates).map((k) => [k, incident[k as PatientField]])),
+          newValues: { ...patientUpdates, via: 'CREW_PCR' },
+          userId,
+        },
+      });
+    }
 
     this.app.io.to(`incident:${task.incidentId}`).emit('incident:update', updatedIncident);
 
