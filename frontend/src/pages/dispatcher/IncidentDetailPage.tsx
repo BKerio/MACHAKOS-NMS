@@ -38,6 +38,7 @@ import EndCaseModal from '@/components/shared/EndCaseModal';
 import { formatDistanceToNow } from 'date-fns';
 import Map from '@/components/shared/Map';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useVehicleTracking } from '@/hooks/useVehicleTracking';
 import { socket } from '@/lib/socket';
 import { fmtDateTime } from '@/lib/datetime';
@@ -46,6 +47,7 @@ import { checkInLocationWarning, CREW_RULE, crewShortfall, isCrewComplete, medic
 import LoadingState from '@/components/shared/LoadingState';
 import CaseHeader from '@/components/dispatcher/CaseHeader';
 import ResponseTimeline from '@/components/dispatcher/ResponseTimeline';
+import AddFacilityModal from '@/components/dispatcher/AddFacilityModal';
 import IdentifyPatient from '@/components/dispatcher/IdentifyPatient';
 import { caseSlug, caseTitle, isIncidentId, unknownLabel } from '@/lib/incidentPath';
 
@@ -119,6 +121,8 @@ function IncidentDetailPage() {
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [reassignReason, setReassignReason] = useState('');
   const [reassignVehicleId, setReassignVehicleId] = useState('');
+  // Which facility picker opened "Add a facility" (brief edit or dispatch panel).
+  const [addFacilityFor, setAddFacilityFor] = useState<'brief' | 'dispatch' | null>(null);
 
   // Fetch Incident
   const { data: incident, isLoading } = useQuery({
@@ -140,6 +144,19 @@ function IncidentDetailPage() {
     enabled: !!id,
     refetchInterval: 30_000,
   });
+
+  // A dispatcher opening a new case picks it up: that's the "Dispatcher Picked Up"
+  // step on the response timeline. Only SUBMITTED cases can be claimed.
+  const role = useAuthStore((s) => s.user?.role);
+  useEffect(() => {
+    if (!id || role !== 'DISPATCHER' || incident?.id !== id || incident.status !== 'SUBMITTED') return;
+    api.post(`/dispatch/assign/${id}`)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['incident', id] });
+        queryClient.invalidateQueries({ queryKey: ['dispatch', 'queue'] });
+      })
+      .catch(() => { /* already claimed by someone else - nothing to do */ });
+  }, [id, role, incident?.id, incident?.status, queryClient]);
 
   // Old id links: once the case is known, show its case number in the address bar.
   useEffect(() => {
@@ -862,6 +879,9 @@ function IncidentDetailPage() {
                         </option>
                       ))}
                     </select>
+                    <button type="button" onClick={() => setAddFacilityFor('brief')} className="text-xs font-semibold text-brand-green hover:underline mt-1.5">
+                      + Not on the list? Add a facility
+                    </button>
                     {(() => {
                       const sel = facilitiesByDistance.find(x => x.facility.id === editedTargetFacilityId);
                       if (!sel) return null;
@@ -1360,6 +1380,9 @@ function IncidentDetailPage() {
                     </option>
                   ))}
                 </select>
+                <button type="button" onClick={() => setAddFacilityFor('dispatch')} className="text-xs font-semibold text-brand-green hover:underline mt-1">
+                  + Not on the list? Add a facility
+                </button>
                 <p className="text-[11px] mt-1" style={{ color: isReferralCase && !recommendedFacilityId ? 'var(--red)' : 'var(--muted-2)' }}>
                   {isReferralCase && !recommendedFacilityId
                     ? 'A referral needs a receiving facility before the ambulance can be dispatched.'
@@ -2002,6 +2025,23 @@ function IncidentDetailPage() {
       )}
 
       {/* Escalate to MCI Modal */}
+      {addFacilityFor && (
+        <AddFacilityModal
+          near={scenePoint}
+          defaultSubCounty={incident.subCounty}
+          onClose={() => setAddFacilityFor(null)}
+          onCreated={(facility) => {
+            // Show it in the pickers straight away, then refresh from the server.
+            queryClient.setQueryData<Facility[]>(['facilities'], (old = []) => [...old, facility]);
+            queryClient.invalidateQueries({ queryKey: ['facilities'] });
+            if (addFacilityFor === 'brief') setEditedTargetFacilityId(facility.id);
+            else setDispatchFacilityId(facility.id);
+            setAddFacilityFor(null);
+            addNotification({ type: 'success', title: 'Facility added', message: `${facility.name} is now on the list and selected.` });
+          }}
+        />
+      )}
+
       {showEscalateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-xl border border-surface-border w-full max-w-md mx-4 p-6 flex flex-col gap-5">

@@ -575,6 +575,16 @@ export class IncidentService {
 
     const task = incident.tasks[0] ?? null;
 
+    // Closed time: the audit entry when there is one. Cases resolved by the crew
+    // completing the run before that was logged fall back to the completion time.
+    const lastTask = incident.tasks[incident.tasks.length - 1] ?? null;
+    const closedAt =
+      getStatusTs('RESOLVED') ??
+      auditLog.find(a => a.action === 'CLOSE')?.createdAt ??
+      (incident.status === IncidentStatus.RESOLVED
+        ? lastTask?.completedAt ?? lastTask?.cancelledAt ?? incident.updatedAt
+        : null);
+
     type TatStep = {
       key: string;
       label: string;
@@ -592,7 +602,7 @@ export class IncidentService {
       { key: 'patient_picked',      label: 'Patient On Board',      timestamp: task?.patientPickAt ?? null },
       { key: 'at_hospital',         label: 'Arrived at Facility',   timestamp: task?.facilityArrivalAt ?? null },
       { key: 'task_completed',      label: 'Task Completed',        timestamp: task?.completedAt ?? task?.cancelledAt ?? null },
-      { key: 'case_closed',         label: 'Case Closed',           timestamp: getStatusTs('RESOLVED') ?? (auditLog.find(a => a.action === 'CLOSE')?.createdAt ?? null) },
+      { key: 'case_closed',         label: 'Case Closed',           timestamp: closedAt },
     ];
 
     // Drop the alert_received step if it's the same as submitted (no separate alertAt)

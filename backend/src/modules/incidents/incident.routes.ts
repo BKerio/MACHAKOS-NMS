@@ -175,6 +175,49 @@ export const incidentRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
   });
 
   /**
+   * POST /incidents/facilities - a dispatcher or admin adds a facility that is
+   * missing from the list while assigning one, pinned on the map.
+   */
+  const addFacilitySchema = z.object({
+    name: z.string().trim().min(2, 'Facility name is required'),
+    type: z.string().trim().min(2, 'Facility type is required'),
+    ownership: z.enum(['PUBLIC', 'PRIVATE']).optional(),
+    kephLevel: z.number().int().min(1).max(6),
+    subCounty: z.string().trim().min(2, 'Sub-county is required'),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+  });
+
+  app.post(
+    '/facilities',
+    { preValidation: [requireRole([Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])] },
+    async (request, reply) => {
+      const parsed = addFacilitySchema.safeParse(request.body);
+      if (!parsed.success) throw new BadRequestError(parsed.error.issues[0].message);
+      const existing = await app.prisma.facility.findFirst({
+        where: { name: { equals: parsed.data.name, mode: 'insensitive' }, isActive: true },
+        select: { id: true },
+      });
+      if (existing) throw new BadRequestError(`"${parsed.data.name}" is already on the facility list`);
+
+      const facility = await app.prisma.facility.create({
+        data: parsed.data,
+        select: { id: true, name: true, type: true, subCounty: true, kephLevel: true, lat: true, lng: true },
+      });
+      await app.prisma.auditLog.create({
+        data: {
+          action: 'CREATE',
+          subjectType: 'FACILITY',
+          subjectId: facility.id,
+          newValues: { ...parsed.data, source: 'ASSIGNMENT' },
+          userId: request.user.userId,
+        },
+      });
+      return reply.status(201).send({ ok: true, data: facility });
+    }
+  );
+
+  /**
    * GET /incidents
    */
   app.get<{ Querystring: { status?: IncidentStatus; watcherId?: string; caseNumber?: string; search?: string; from?: string; to?: string; type?: string; subCounty?: string; page?: string; limit?: string } }>(

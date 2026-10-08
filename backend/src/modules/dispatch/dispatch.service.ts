@@ -88,6 +88,18 @@ export class DispatchService {
       },
     });
 
+    // The response timeline reads "Dispatcher Picked Up" from this entry.
+    await this.app.prisma.auditLog.create({
+      data: {
+        action: 'STATUS_CHANGE',
+        subjectType: 'INCIDENT',
+        subjectId: incidentId,
+        oldValues: { status: incident.status },
+        newValues: { status: IncidentStatus.DISPATCH_HANDLING },
+        userId: user.userId,
+      },
+    });
+
     this.app.io.to(`incident:${incidentId}`).emit('incident:update', updated);
     this.app.io.to(`role:${Role.WATCHER}`).emit('incident:update', updated);
 

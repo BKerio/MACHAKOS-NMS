@@ -66,7 +66,7 @@ export class TaskService {
     incident: AssignmentIncident,
     registrationNumber: string,
   ): void {
-    const nature = [incident.alertNature, incident.alertNatureDetail].filter(Boolean).join(' – ') || incident.chiefComplaint;
+    const nature = [incident.alertNature, incident.alertNatureDetail].filter(Boolean).join(' - ') || incident.chiefComplaint;
     this.pushSender
       .sendToUsers(
         crewIds,
@@ -585,6 +585,7 @@ export class TaskService {
         incident: {
           select: {
             caseNumber: true,
+            status: true,
             lat: true,
             lng: true,
             targetFacility: { select: { lat: true, lng: true, name: true } },
@@ -699,6 +700,19 @@ export class TaskService {
         where: { id: task.incidentId },
         data: { status: IncidentStatus.RESOLVED },
       });
+      // The response timeline reads "Case Closed" from this entry.
+      if (task.incident.status !== IncidentStatus.RESOLVED) {
+        await this.app.prisma.auditLog.create({
+          data: {
+            action: 'STATUS_CHANGE',
+            subjectType: 'INCIDENT',
+            subjectId: task.incidentId,
+            oldValues: { status: task.incident.status },
+            newValues: { status: IncidentStatus.RESOLVED, via: 'TASK_COMPLETED' },
+            userId: user.userId,
+          },
+        });
+      }
     }
 
     // Broadcast update to the crew and dispatchers
