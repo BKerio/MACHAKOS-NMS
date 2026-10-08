@@ -8,7 +8,19 @@ import {
   X as XIcon,
   Check,
   TriangleAlert as AlertTriangle,
+  Minus,
+  Layers,
+  Sparkles,
+  ClipboardCheck,
+  Truck,
+  HeartPulse,
+  Syringe,
+  Pill,
+  Wind,
+  Bandage,
+  Boxes,
 } from 'lucide-react';
+import { confirmDialog } from '@/lib/alert';
 import AppLoader from '@/components/shared/AppLoader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -24,6 +36,15 @@ const CATEGORIES: { value: InventoryCategory; label: string }[] = [
   { value: 'WOUND_CARE', label: 'Wound Care' },
   { value: 'OTHER', label: 'Other' },
 ];
+
+const CATEGORY_ICONS: Record<InventoryCategory, typeof Package> = {
+  VITALS: HeartPulse,
+  CONSUMABLES: Syringe,
+  MEDICATION: Pill,
+  AIRWAY: Wind,
+  WOUND_CARE: Bandage,
+  OTHER: Boxes,
+};
 
 const UNITS = ['each', 'box', 'pack', 'set', 'litre', 'roll', 'pair', 'check'];
 
@@ -70,22 +91,22 @@ function categoryLabel(value: string) {
 
 function InventoryPage() {
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  /** 'ALL', 'LOW' (low stock) or a category value. */
+  const [view, setView] = useState<string>('ALL');
+  const [quickName, setQuickName] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | InventoryItemType>('ALL');
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState<InventoryItem | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [confirmDelete, setConfirmDelete] = useState<InventoryItem | null>(null);
 
   const { addNotification } = useNotificationStore();
   const queryClient = useQueryClient();
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['admin', 'inventory', categoryFilter],
+    // Everything at once; categories, low stock and search filter it here.
+    queryKey: ['admin', 'inventory', 'all'],
     queryFn: async () => {
-      const params: Record<string, string> = {};
-      if (categoryFilter !== 'ALL') params.category = categoryFilter;
-      const res = await api.get('/admin/inventory', { params });
+      const res = await api.get('/admin/inventory');
       return res.data.data as InventoryItem[];
     },
   });
@@ -162,7 +183,6 @@ function InventoryPage() {
     mutationFn: (id: string) => api.delete(`/admin/inventory/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'inventory'] });
-      setConfirmDelete(null);
       addNotification({ type: 'success', title: 'Deleted', message: 'Item removed from inventory.' });
     },
     onError: (err: any) => {
@@ -173,6 +193,31 @@ function InventoryPage() {
       });
     },
   });
+
+  // Quick +/- from the list: one PATCH, the row updates in place.
+  const stockMutation = useMutation({
+    mutationFn: (v: { id: string; quantityStock: number }) =>
+      api.patch(`/admin/inventory/${v.id}`, { quantityStock: Math.max(0, v.quantityStock) }),
+    onMutate: async (v) => {
+      await queryClient.cancelQueries({ queryKey: ['admin', 'inventory', 'all'] });
+      queryClient.setQueryData<InventoryItem[]>(['admin', 'inventory', 'all'], (old) =>
+        old?.map((i) => (i.id === v.id ? { ...i, quantityStock: Math.max(0, v.quantityStock) } : i)));
+    },
+    onError: (err: any) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'inventory'] });
+      addNotification({ type: 'error', title: 'Stock not updated', message: err?.response?.data?.message || 'Could not change the stock level.' });
+    },
+  });
+
+  async function deleteItem(item: InventoryItem) {
+    const ok = await confirmDialog({
+      title: `Delete ${item.name}?`,
+      text: 'This removes the item from inventory and the dispatch checklist. Past checkouts keep their records.',
+      confirmLabel: 'Delete item',
+      danger: true,
+    });
+    if (ok) deleteMutation.mutate(item.id);
+  }
 
   const seedVitalsMutation = useMutation({
     mutationFn: async () => {
@@ -208,9 +253,9 @@ function InventoryPage() {
     },
   });
 
-  function openCreate() {
+  function openCreate(prefill?: Partial<typeof emptyForm>) {
     setEditTarget(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, ...(view !== 'ALL' && view !== 'LOW' ? { category: view as InventoryCategory } : {}), ...prefill });
     setShowModal(true);
   }
 
@@ -235,294 +280,275 @@ function InventoryPage() {
     setForm(emptyForm);
   }
 
-  const filtered = items.filter((item) => {
-    if (typeFilter !== 'ALL' && item.itemType !== typeFilter) return false;
-    const q = search.toLowerCase();
-    return (
-      item.name.toLowerCase().includes(q) ||
-      (item.notes ?? '').toLowerCase().includes(q) ||
-      categoryLabel(item.category).toLowerCase().includes(q)
-    );
-  });
+  const isLow = (i: InventoryItem) => i.isActive && i.reorderLevel > 0 && i.quantityStock <= i.reorderLevel;
+  const byType = items.filter((i) => typeFilter === 'ALL' || i.itemType === typeFilter);
+  const lowItems = byType.filter(isLow);
+  const q = search.trim().toLowerCase();
+  const inView = (i: InventoryItem) => (view === 'ALL' ? true : view === 'LOW' ? isLow(i) : i.category === view);
+  const filtered = byType
+    .filter((i) => (q ? true : inView(i)))
+    .filter((i) =>
+      !q ||
+      i.name.toLowerCase().includes(q) ||
+      (i.notes ?? '').toLowerCase().includes(q) ||
+      categoryLabel(i.category).toLowerCase().includes(q))
+    .sort((a, b) => Number(isLow(b)) - Number(isLow(a)) || a.name.localeCompare(b.name));
 
-  const lowStock = items.filter(
-    (i) => i.isActive && i.reorderLevel > 0 && i.quantityStock <= i.reorderLevel
-  ).length;
-  const vitalsCount = items.filter((i) => i.category === 'VITALS').length;
   const totalUnits = items.reduce((sum, i) => sum + (i.quantityStock || 0), 0);
+  const requiredCount = items.filter((i) => i.requiredForDispatch).length;
+  const viewTitle = q
+    ? `Results for "${search.trim()}"`
+    : view === 'ALL' ? 'All items' : view === 'LOW' ? 'Low stock' : categoryLabel(view);
+  const viewCategory = CATEGORIES.some((c) => c.value === view) ? (view as InventoryCategory) : null;
+
+  const navRows: { id: string; label: string; Icon: typeof Package; count: number; low: number }[] = [
+    { id: 'ALL', label: 'All items', Icon: Layers, count: byType.length, low: lowItems.length },
+    { id: 'LOW', label: 'Low stock', Icon: AlertTriangle, count: lowItems.length, low: 0 },
+    ...CATEGORIES.map((c) => ({
+      id: c.value,
+      label: c.label,
+      Icon: CATEGORY_ICONS[c.value],
+      count: byType.filter((i) => i.category === c.value).length,
+      low: lowItems.filter((i) => i.category === c.value).length,
+    })),
+  ];
 
   return (
-    <div className="col" style={{ gap: 24 }}>
+    <div className="col" style={{ gap: 20 }}>
       {/* Header */}
-      <div
-        className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-4 sm:p-6 lg:p-8 rounded-xl border shadow-sm"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-      >
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="font-sans text-[11px] font-black tracking-[0.2em] mb-1" style={{ color: 'var(--muted)' }}>
-            Stock Control
-          </p>
-          <h2 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight" style={{ color: 'var(--ink)' }}>
-            Inventory
-          </h2>
+          <p className="eyebrow">Stock control</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mt-1" style={{ color: 'var(--ink)' }}>Inventory</h2>
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-            Track vitals equipment and other supplies with stock levels
+            Medical and vehicle supplies, stock levels and what crews have on board.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => seedVitalsMutation.mutate()}
-            disabled={seedVitalsMutation.isPending}
-            className="flex-1 sm:flex-none px-4 py-3 text-xs font-black tracking-widest rounded-xl border transition-colors disabled:opacity-40"
-            style={{ borderColor: 'var(--border)', color: 'var(--ink)', background: 'var(--surface-2)' }}
-          >
-            {seedVitalsMutation.isPending ? <><AppLoader size={16} /> Adding...</> : 'Add Vitals Kit'}
-          </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="btn btn-primary flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs"
-          >
-            <Plus size={18} />
-            Add Item
-          </button>
-        </div>
+        <button type="button" onClick={() => openCreate()} className="btn btn-primary">
+          <Plus size={17} /> Add item
+        </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Items', value: items.length },
-          { label: 'Vitals Items', value: vitalsCount },
-          { label: 'Units in Stock', value: totalUnits },
-          { label: 'Low Stock', value: lowStock },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="p-6 rounded-xl border shadow-sm"
-            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-          >
-            <div className="font-sans text-[10px] font-black tracking-[0.2em] mb-2" style={{ color: 'var(--muted)' }}>
-              {stat.label}
-            </div>
-            <div
-              className="font-sans text-4xl font-black leading-none"
-              style={{ color: stat.label === 'Low Stock' && stat.value > 0 ? 'var(--red)' : 'var(--ink)' }}
-            >
-              {stat.value}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Medical / Vehicle split */}
-      <div className="flex gap-2">
-        {(['ALL', 'MEDICAL', 'VEHICLE'] as const).map((t) => (
+          { label: 'Items', value: items.length, note: `${requiredCount} on the dispatch checklist` },
+          { label: 'Units in stock', value: totalUnits, note: 'Across all items' },
+          { label: 'Low stock', value: items.filter(isLow).length, note: 'At or below reorder level', alert: true },
+          { label: 'On ambulances', value: checkouts.reduce((s, c) => s + c.quantity - c.returnedQuantity, 0), note: `${checkouts.length} checkout${checkouts.length === 1 ? '' : 's'} open` },
+        ].map((s) => (
           <button
-            key={t}
+            key={s.label}
             type="button"
-            onClick={() => setTypeFilter(t)}
-            className="btn btn-sm"
-            style={
-              typeFilter === t
-                ? { background: 'var(--green)', color: '#fff' }
-                : { background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--border)' }
-            }
+            onClick={() => s.alert && s.value > 0 && (setView('LOW'), setSearch(''))}
+            className="card card-pad text-left"
+            style={{ cursor: s.alert && s.value > 0 ? 'pointer' : 'default' }}
           >
-            {t === 'ALL' ? 'All Items' : t === 'MEDICAL' ? 'Medical' : 'Vehicle'}
+            <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>{s.label}</p>
+            <p className="text-3xl font-bold mt-1 leading-none" style={{ color: s.alert && s.value > 0 ? 'var(--red)' : 'var(--ink)' }}>{s.value}</p>
+            <p className="text-[11.5px] mt-2" style={{ color: 'var(--muted)' }}>{s.note}</p>
           </button>
         ))}
       </div>
 
-      {/* Filters */}
-      <div
-        className="rounded-xl border p-4 flex flex-col sm:flex-row gap-3 shadow-sm"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-      >
-        <div className="relative flex-1">
-          <MagnifyingGlass
-            size={18}
-            className="absolute left-4 top-1/2 -translate-y-1/2"
-            style={{ color: 'var(--muted-2)' }}
-          />
-          <input
-            className={inputCls + ' pl-11'}
-            style={inputStyle}
-            placeholder="Search by name or notes..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <select
-          className={inputCls + ' sm:w-52 cursor-pointer'}
-          style={inputStyle}
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-        >
-          <option value="ALL">All Categories</option>
-          {CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Table */}
-      <div
-        className="rounded-xl border shadow-sm overflow-hidden"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-      >
-        {isLoading ? (
-          <LoadingState minHeight={200} label="Loading inventory…" />
-        ) : filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <Package size={40} className="mx-auto mb-3" style={{ color: 'var(--muted-2)' }} />
-            <p className="font-bold" style={{ color: 'var(--ink)' }}>
-              No inventory items yet
-            </p>
-            <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-              Add items manually or use Add Vitals Kit to start with common equipment.
-            </p>
+      {/* Master-detail */}
+      <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="searchbox" style={{ maxWidth: 340, minWidth: 0, flex: '1 1 220px' }}>
+            <MagnifyingGlass size={15} />
+            <input placeholder="Search items, notes or categories…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search inventory" />
+            {search && (
+              <button onClick={() => setSearch('')} aria-label="Clear search" style={{ color: 'var(--muted)' }}><XIcon size={14} /></button>
+            )}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[720px]">
-              <thead>
-                <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                  {['Item', 'Category', 'Stock', 'Reorder At', 'Unit', ''].map((h, i) => (
-                    <th
-                      key={h || `a-${i}`}
-                      className="px-5 py-4 font-sans text-[10px] font-black tracking-[0.2em]"
-                      style={{ color: 'var(--muted)' }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+          <div className="seg ml-auto" role="tablist" aria-label="Item type">
+            {(['ALL', 'MEDICAL', 'VEHICLE'] as const).map((t) => (
+              <button key={t} role="tab" aria-selected={typeFilter === t} className={typeFilter === t ? 'on' : ''} onClick={() => setTypeFilter(t)}>
+                {t === 'ALL' ? 'All' : t === 'MEDICAL' ? 'Medical' : 'Vehicle'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="nature-layout">
+          <aside className="nature-cats" aria-label="Categories">
+            <div className="nature-cats-list">
+              {navRows.map(({ id, label, Icon, count, low }) => (
+                <button
+                  key={id}
+                  onClick={() => { setView(id); setSearch(''); }}
+                  className={`nature-cat${!q && view === id ? ' on' : ''}`}
+                  aria-current={!q && view === id}
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <Icon size={16} style={{ color: id === 'LOW' && count > 0 ? 'var(--red)' : undefined, flexShrink: 0 }} />
+                    <span className="truncate">{label}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 flex-shrink-0">
+                    {low > 0 && <span className="inv-lowdot" title={`${low} low`} />}
+                    <span className="nature-count" style={id === 'LOW' && count > 0 ? { background: 'var(--red-soft)', color: 'var(--red)' } : undefined}>{count}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <section className="nature-panel">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="eyebrow">{q ? 'Search' : view === 'ALL' || view === 'LOW' ? 'View' : 'Category'}</p>
+                <h3 className="text-lg font-bold leading-tight mt-0.5" style={{ color: 'var(--ink)' }}>{viewTitle}</h3>
+                <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                  {filtered.length} item{filtered.length === 1 ? '' : 's'}
+                  {typeFilter !== 'ALL' ? ` · ${typeFilter === 'MEDICAL' ? 'medical' : 'vehicle'} only` : ''}
+                </p>
+              </div>
+              {viewCategory === 'VITALS' && (
+                <button
+                  type="button"
+                  onClick={() => seedVitalsMutation.mutate()}
+                  disabled={seedVitalsMutation.isPending}
+                  className="btn btn-ghost btn-sm"
+                >
+                  {seedVitalsMutation.isPending ? <AppLoader size={14} /> : <Sparkles size={14} />} Add vitals kit
+                </button>
+              )}
+            </div>
+
+            {viewCategory && !q && (
+              <form
+                className="flex gap-2 mt-4"
+                onSubmit={(e) => { e.preventDefault(); if (quickName.trim()) { openCreate({ name: quickName.trim(), category: viewCategory }); setQuickName(''); } }}
+              >
+                <input
+                  className="input flex-1 min-w-0"
+                  style={{ height: 40 }}
+                  placeholder={`Add an item to ${categoryLabel(viewCategory)}…`}
+                  value={quickName}
+                  onChange={(e) => setQuickName(e.target.value)}
+                />
+                <button type="submit" disabled={!quickName.trim()} className="btn btn-primary" style={{ height: 40 }}>
+                  <Plus size={16} /> Add
+                </button>
+              </form>
+            )}
+
+            {isLoading ? (
+              <LoadingState minHeight={200} label="Loading inventory…" />
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-14">
+                <Package size={34} className="mx-auto mb-3" style={{ color: 'var(--muted-2)' }} />
+                <p className="font-bold" style={{ color: 'var(--ink)' }}>
+                  {q ? 'No items match your search' : view === 'LOW' ? 'Nothing is running low' : 'No items here yet'}
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+                  {q ? 'Try another name, or clear the search.'
+                    : view === 'LOW' ? 'Every item is above its reorder level.'
+                    : viewCategory === 'VITALS' ? 'Add items above, or use "Add vitals kit" for the common equipment.'
+                    : 'Add the first item with the field above.'}
+                </p>
+              </div>
+            ) : (
+              <div className="col mt-4" style={{ gap: 8 }}>
                 {filtered.map((item) => {
-                  const isLow =
-                    item.isActive && item.reorderLevel > 0 && item.quantityStock <= item.reorderLevel;
+                  const low = isLow(item);
+                  const scale = Math.max(item.reorderLevel * 3, item.quantityStock, 1);
+                  const adjusting = stockMutation.isPending && stockMutation.variables?.id === item.id;
                   return (
-                    <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td className="px-5 py-4">
-                        <p className="font-bold text-sm" style={{ color: 'var(--ink)' }}>
-                          {item.name}
-                        </p>
-                        {item.notes && (
-                          <p className="text-[11px] mt-0.5 line-clamp-1" style={{ color: 'var(--muted)' }}>
-                            {item.notes}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className="inline-flex px-2.5 py-1 rounded-md text-[10px] font-black tracking-wide"
-                          style={{
-                            background: 'var(--surface-2)',
-                            border: '1px solid var(--border)',
-                            color: 'var(--ink)',
-                          }}
-                        >
-                          {categoryLabel(item.category)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="font-black text-lg leading-none"
-                            style={{ color: isLow ? 'var(--red)' : 'var(--ink)' }}
-                          >
-                            {item.quantityStock}
+                    <div key={item.id} className={`inv-row${low ? ' low' : ''}${item.isActive ? '' : ' inactive'}`}>
+                      <div className="inv-main">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{item.name}</p>
+                          {(q || view === 'ALL' || view === 'LOW') && <span className="pill pill-gray" style={{ fontSize: 10.5 }}>{categoryLabel(item.category)}</span>}
+                          {item.itemType === 'VEHICLE' && <span className="pill pill-blue" style={{ fontSize: 10.5 }}>Vehicle</span>}
+                          {item.requiredForDispatch && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: 'var(--green)' }} title="Must be confirmed before dispatch">
+                              <ClipboardCheck size={12} /> Checklist
+                            </span>
+                          )}
+                        </div>
+                        {item.notes && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--muted)' }}>{item.notes}</p>}
+                      </div>
+
+                      <div className="inv-stock">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-lg font-bold leading-none" style={{ color: low ? 'var(--red)' : 'var(--ink)' }}>
+                            {item.quantityStock} <span className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>{item.unit}</span>
                           </span>
-                          {isLow && <AlertTriangle size={14} style={{ color: 'var(--red)' }} />}
+                          {item.reorderLevel > 0 && (
+                            <span className="text-[11px]" style={{ color: low ? 'var(--red)' : 'var(--muted)' }}>
+                              {low ? 'Reorder' : `Reorder at ${item.reorderLevel}`}
+                            </span>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-5 py-4 text-sm font-semibold" style={{ color: 'var(--muted)' }}>
-                        {item.reorderLevel}
-                      </td>
-                      <td className="px-5 py-4 text-sm font-semibold" style={{ color: 'var(--muted)' }}>
-                        {item.unit}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <div className="inline-flex items-center gap-1">
+                        <div className="inv-bar" aria-hidden="true">
+                          <span style={{ width: `${Math.min(100, (item.quantityStock / scale) * 100)}%`, background: low ? 'var(--red)' : 'var(--green)' }} />
+                          {item.reorderLevel > 0 && <i style={{ left: `${(item.reorderLevel / scale) * 100}%` }} />}
+                        </div>
+                      </div>
+
+                      <div className="inv-actions">
+                        <div className="inv-stepper" role="group" aria-label={`Adjust stock of ${item.name}`}>
                           <button
                             type="button"
-                            onClick={() => openEdit(item)}
-                            className="p-2 rounded-lg transition-colors"
-                            style={{ color: 'var(--muted)' }}
-                            title="Edit"
+                            onClick={() => stockMutation.mutate({ id: item.id, quantityStock: item.quantityStock - 1 })}
+                            disabled={adjusting || item.quantityStock <= 0}
+                            aria-label="Remove one"
                           >
-                            <PencilSimple size={16} />
+                            <Minus size={14} />
                           </button>
                           <button
                             type="button"
-                            onClick={() => setConfirmDelete(item)}
-                            className="p-2 rounded-lg transition-colors"
-                            style={{ color: 'var(--red)' }}
-                            title="Delete"
+                            onClick={() => stockMutation.mutate({ id: item.id, quantityStock: item.quantityStock + 1 })}
+                            disabled={adjusting}
+                            aria-label="Add one"
                           >
-                            <Trash2 size={16} />
+                            <Plus size={14} />
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                        <button type="button" onClick={() => openEdit(item)} className="inv-icon" title="Edit" aria-label={`Edit ${item.name}`}>
+                          <PencilSimple size={15} />
+                        </button>
+                        <button type="button" onClick={() => deleteItem(item)} className="inv-icon danger" title="Delete" aria-label={`Delete ${item.name}`}>
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
 
       {/* Checked out to crew */}
       {checkouts.length > 0 && (
-        <div
-          className="rounded-xl border shadow-sm overflow-hidden"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-        >
-          <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-            <p className="font-sans text-sm font-black" style={{ color: 'var(--ink)' }}>
-              Checked Out to Crew
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-              Stock currently carried on ambulances, drawn from the totals above
-            </p>
+        <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+            <span className="grid place-items-center rounded-lg flex-shrink-0" style={{ width: 36, height: 36, background: 'var(--green-light)' }}>
+              <Truck size={17} style={{ color: 'var(--green)' }} />
+            </span>
+            <div>
+              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>On ambulances</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Stock crews have checked out, drawn from the totals above</p>
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[640px]">
+          <div className="tbl-wrap">
+            <table className="tbl" style={{ minWidth: 640 }}>
               <thead>
-                <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                  {['Item', 'Qty Outstanding', 'Ambulance', 'Crew Member', 'Since'].map((h) => (
-                    <th
-                      key={h}
-                      className="px-5 py-3 font-sans text-[10px] font-black tracking-[0.2em]"
-                      style={{ color: 'var(--muted)' }}
-                    >
-                      {h}
-                    </th>
-                  ))}
+                <tr>
+                  <th>Item</th><th>Outstanding</th><th>Ambulance</th><th>Crew member</th><th>Since</th>
                 </tr>
               </thead>
               <tbody>
                 {checkouts.map((co) => (
-                  <tr key={co.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td className="px-5 py-3 text-sm font-bold" style={{ color: 'var(--ink)' }}>
-                      {co.item.name}
-                    </td>
-                    <td className="px-5 py-3 text-sm font-semibold" style={{ color: 'var(--ink)' }}>
-                      {co.quantity - co.returnedQuantity} {co.item.unit}
-                    </td>
-                    <td className="px-5 py-3 text-sm font-semibold" style={{ color: 'var(--muted)' }}>
-                      {co.vehicle.registrationNumber}
-                    </td>
-                    <td className="px-5 py-3 text-sm font-semibold" style={{ color: 'var(--muted)' }}>
-                      {co.user.name} ({co.user.role})
-                    </td>
-                    <td className="px-5 py-3 text-sm" style={{ color: 'var(--muted)' }}>
+                  <tr key={co.id}>
+                    <td className="strong">{co.item.name}</td>
+                    <td>{co.quantity - co.returnedQuantity} {co.item.unit}</td>
+                    <td className="mono">{co.vehicle.registrationNumber}</td>
+                    <td>{co.user.name} <span className="muted">· {co.user.role}</span></td>
+                    <td className="muted">
                       {new Date(co.checkedOutAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </td>
                   </tr>
@@ -728,45 +754,6 @@ function InventoryPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmDelete(null)} />
-          <div
-            className="relative w-full max-w-sm rounded-2xl shadow-xl overflow-hidden border"
-            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-          >
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>
-                Delete {confirmDelete.name}?
-              </p>
-              <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                This removes the item from inventory permanently.
-              </p>
-            </div>
-            <div className="px-5 py-4 flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 text-sm font-bold rounded-xl border"
-                style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => deleteMutation.mutate(confirmDelete.id)}
-                disabled={deleteMutation.isPending}
-                className="px-4 py-2 text-sm font-bold rounded-xl text-white disabled:opacity-40"
-                style={{ background: 'var(--red)' }}
-              >
-                {deleteMutation.isPending ? <><AppLoader size={16} /> Deleting...</> : 'Delete'}
-              </button>
-            </div>
           </div>
         </div>
       )}

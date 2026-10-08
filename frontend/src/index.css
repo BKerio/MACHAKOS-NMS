@@ -1210,3 +1210,37 @@ body {
   .nature-grid { grid-template-columns: 1fr; }
 }
 .nature-bin svg.lucide, .nature-cat svg.lucide { color: inherit; }
+
+/* ── Admin inventory rows (pages/admin/InventoryPage.tsx; layout shares .nature-*) ── */
+.inv-lowdot { width: 7px; height: 7px; border-radius: 99px; background: var(--red); }
+.inv-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px auto; align-items: center; gap: 16px;
+  padding: 12px 12px 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  transition: border-color .12s;
+}
+.inv-row:hover { border-color: var(--border-strong); }
+.inv-row.low { border-color: color-mix(in srgb, var(--red) 35%, var(--border)); background: color-mix(in srgb, var(--red) 4%, var(--surface)); }
+.inv-row.inactive { opacity: .6; }
+.inv-main { min-width: 0; }
+.inv-bar { position: relative; height: 6px; margin-top: 7px; border-radius: 99px; background: var(--surface-3); }
+.inv-bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; transition: width .35s ease; }
+.inv-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 2px; background: var(--ink-2); opacity: .55; }
+.inv-actions { display: flex; align-items: center; gap: 4px; }
+.inv-stepper { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin-right: 4px; }
+.inv-stepper button {
+  width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.inv-stepper button + button { border-left: 1px solid var(--border); }
+.inv-stepper button:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.inv-stepper button:disabled { opacity: .4; cursor: not-allowed; }
+.inv-icon {
+  width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.inv-icon:hover { background: var(--surface-2); color: var(--ink); }
+.inv-icon.danger:hover { background: var(--red-soft); color: var(--red); }
+.inv-stepper svg.lucide, .inv-icon svg.lucide { color: inherit; }
+@media (max-width: 760px) {
+  .inv-row { grid-template-columns: 1fr; gap: 10px; }
+  .inv-actions { justify-content: flex-end; }
+}
