@@ -5,6 +5,17 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/err
 import { NATURE_TAXONOMY } from './nature-taxonomy.js';
 import { taskCrewIds } from '../fleet/crew.js';
 
+/**
+ * Placeholder name for an unidentified patient, from their sex and running
+ * number: "Unknown African Man 3", "Unknown African Woman 4", or
+ * "Unknown African Person 5" while the sex isn't recorded.
+ */
+export function unknownPatientLabel(gender: string | null | undefined, seq: number): string {
+  const g = gender?.trim().toLowerCase();
+  const who = g === 'male' ? 'Man' : g === 'female' ? 'Woman' : 'Person';
+  return `Unknown African ${who} ${seq}`;
+}
+
 export class IncidentService {
   constructor(private app: FastifyInstance) {}
 
@@ -137,12 +148,17 @@ export class IncidentService {
 
     // Create with a unique placeholder, then set the human "Case NNN" from the
     // DB-assigned caseSeq - this is collision-free and always in ascending order.
-    // Unidentified patient: next running label from the sequence ("Unknown 7").
+    // Unidentified patient: next running label from the sequence ("Unknown African Man 7").
     let unknownSeq: number | undefined;
     if (data.patientUnknown) {
       const [row] = await this.app.prisma.$queryRaw<{ n: bigint }[]>`SELECT nextval('incidents_unknown_seq') AS n`;
       unknownSeq = Number(row.n);
-      data = { ...data, patientName: `Unknown ${unknownSeq}`, patientNationalId: undefined, patientContact: undefined };
+      data = {
+        ...data,
+        patientName: unknownPatientLabel(data.patientGender, unknownSeq),
+        patientNationalId: undefined,
+        patientContact: undefined,
+      };
     }
 
     const created = await this.app.prisma.incident.create({
@@ -261,8 +277,10 @@ export class IncidentService {
         { locationName: { contains: search, mode: 'insensitive' } },
         { chiefComplaint: { contains: search, mode: 'insensitive' } },
         { alertNature: { contains: search, mode: 'insensitive' } },
-        // "unknown 3" / "unknown3" finds that unidentified patient's case.
-        ...(/^unknown\s*(\d+)$/i.test(search) ? [{ unknownSeq: Number(/(\d+)$/.exec(search)![1]) }] : []),
+        // "unknown 3" / "unknown african man 3" finds that unidentified patient's case.
+        ...(/^unknown(\s+african)?(\s+(man|woman|person))?\s*\d+$/i.test(search)
+          ? [{ unknownSeq: Number(/(\d+)$/.exec(search)![1]) }]
+          : []),
       ];
     }
 
@@ -370,7 +388,7 @@ export class IncidentService {
       userId,
       action: 'IDENTIFY_PATIENT',
       subjectId: incidentId,
-      oldValues: { patientName: incident.patientName, unknownLabel: incident.unknownSeq ? `Unknown ${incident.unknownSeq}` : null },
+      oldValues: { patientName: incident.patientName, unknownLabel: incident.unknownSeq ? unknownPatientLabel(incident.patientGender, incident.unknownSeq) : null },
       newValues: { ...updates, ...(clean(data.note) ? { note: clean(data.note) } : {}) },
     });
 
@@ -517,6 +535,17 @@ export class IncidentService {
         newValues[field] = value;
       }
       updateData[field] = value;
+    }
+
+    // Still unidentified and the sex changed: the placeholder name follows it
+    // ("Unknown African Person 3" -> "Unknown African Woman 3").
+    if (incident.patientUnknown && incident.unknownSeq != null && 'patientGender' in newValues && data.patientName === undefined) {
+      const label = unknownPatientLabel(newValues.patientGender as string, incident.unknownSeq);
+      if (label !== incident.patientName) {
+        oldValues.patientName = incident.patientName;
+        newValues.patientName = label;
+        updateData.patientName = label;
+      }
     }
 
     const updated = await this.app.prisma.incident.update({

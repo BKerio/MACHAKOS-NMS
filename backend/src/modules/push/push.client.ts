@@ -32,6 +32,10 @@ export class FcmPushClient {
 
   /** Sends one (title, body) push to up to 500 tokens in a single FCM multicast call. */
   async sendMulticast(tokens: string[], title: string, body: string, data?: Record<string, string>): Promise<PushSendResult[]> {
+    // House style: no em/en dashes in notifications - this is the one funnel
+    // every push goes through, so admin-typed and case text is covered too.
+    title = noDashes(title);
+    body = noDashes(body);
     if (tokens.length === 0) return [];
     try {
       const response = await getMessaging(this.app).sendEachForMulticast({
@@ -87,4 +91,9 @@ export class FcmPushClient {
   async close(): Promise<void> {
     await deleteApp(this.app).catch(() => {});
   }
+}
+
+/** Em (U+2014) and en (U+2013) dashes become a plain spaced hyphen: "A - B". */
+export function noDashes(text: string): string {
+  return text.replace(/\s*[—–]\s*/g, ' - ').replace(/ {2,}/g, ' ').trim();
 }

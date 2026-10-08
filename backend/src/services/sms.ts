@@ -17,7 +17,8 @@ export function normalizeKenyanMobile(raw: string): string | null {
 
   if (/^254\d{9,12}$/.test(v)) return v;
   if (/^0\d{9}$/.test(v)) return `254${v.slice(1)}`;
-  if (/^7\d{8}$/.test(v)) return `254${v}`;
+  // Bare 9-digit subscriber number: 7xx (Safaricom/Airtel) or 1xx (newer 01x lines).
+  if (/^[17]\d{8}$/.test(v)) return `254${v}`;
 
   const digits = v.replace(/\D/g, '');
   if (/^254\d{9,12}$/.test(digits)) return digits;

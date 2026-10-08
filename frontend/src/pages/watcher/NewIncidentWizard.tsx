@@ -78,9 +78,10 @@ const REFERRAL_REASONS = [
 const facilityLabel = (f: Facility) =>
   [f.name, f.type, f.subCounty].filter(Boolean).join(' · ');
 
-/** What an unidentified patient is called until saved - the server then assigns "Unknown N". */
-function unknownPatientName(_gender?: string) {
-  return 'Unknown (numbered when saved)';
+/** What an unidentified patient is called until saved - the server then adds the number. */
+function unknownPatientName(gender?: string) {
+  const who = gender === 'Male' ? 'Man' : gender === 'Female' ? 'Woman' : 'Person';
+  return `Unknown African ${who} (numbered when saved)`;
 }
 
 // ── Style tokens ─────────────────────────────────────────────────────────────
@@ -1420,7 +1421,7 @@ function NewIncidentWizard() {
                       <b className="inline-flex items-center gap-1.5"><UserX size={15} /> Unknown person</b>
                       <span className="block text-[12px]" style={{ color: 'var(--muted)' }}>
                         Identity not known. The case gets the next unknown number, e.g.{' '}
-                        <b style={{ color: 'var(--ink)' }}>Unknown 4</b>, and their details can be added from the case page once they're identified.
+                        <b style={{ color: 'var(--ink)' }}>Unknown African Man 4</b> or <b style={{ color: 'var(--ink)' }}>Unknown African Woman 4</b> (from the sex below), and their details can be added from the case page once they're identified.
                       </span>
                     </span>
                   </label>

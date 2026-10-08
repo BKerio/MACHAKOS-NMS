@@ -1199,7 +1199,7 @@ body {
 @media (hover: none) { .nature-bin { opacity: 1; } }
 /* Phones/tablets: categories become a scrolling chip row above the panel. */
 @media (max-width: 760px) {
-  .nature-layout { grid-template-columns: 1fr; min-height: 0; }
+  .nature-layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .nature-cats { border-right: 0; border-bottom: 1px solid var(--border); flex-direction: row; align-items: center; overflow-x: auto; scrollbar-width: none; }
   .nature-cats::-webkit-scrollbar { display: none; }
   .nature-cats-list { flex-direction: row; max-height: none; overflow: visible; }
@@ -1243,4 +1243,18 @@ body {
 @media (max-width: 760px) {
   .inv-row { grid-template-columns: 1fr; gap: 10px; }
   .inv-actions { justify-content: flex-end; }
+}
+
+/* ── Vehicle checklists (pages/dispatcher/FleetChecklistsPage.tsx; shares .nature-*) ── */
+.chk-layout { grid-template-columns: 280px minmax(0, 1fr); }
+.chk-unit { align-items: flex-start; padding: 10px; }
+.chk-unit .nature-count { display: none; }
+.chk-search { flex: none; height: 38px; }
+@media (max-width: 760px) {
+  .chk-layout { grid-template-columns: minmax(0, 1fr); }
+  .chk-layout .nature-cats { flex-direction: column; align-items: stretch; overflow: visible; }
+  .chk-layout .nature-cats-list { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
+  .chk-layout .nature-cats-list::-webkit-scrollbar { display: none; }
+  .chk-unit { width: auto; min-width: 150px; }
+  .chk-unit-sub { display: none; }
 }

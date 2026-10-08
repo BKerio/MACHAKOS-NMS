@@ -19,14 +19,20 @@ export function incidentPath(incident: { id: string; caseNumber?: string | null 
   return `/incidents/${caseSlug(incident.caseNumber) ?? incident.id}`;
 }
 
-type PatientIdentity = { patientUnknown?: boolean; unknownSeq?: number | null };
+type PatientIdentity = { patientUnknown?: boolean; unknownSeq?: number | null; patientGender?: string | null };
 
-/** "Unknown 3" for an unidentified patient (also after they're identified), else null. */
+/**
+ * "Unknown African Man 3" / "Unknown African Woman 3" for an unidentified
+ * patient (also after they're identified), else null. Matches the backend.
+ */
 export function unknownLabel(i: PatientIdentity): string | null {
-  return i.unknownSeq != null ? `Unknown ${i.unknownSeq}` : null;
+  if (i.unknownSeq == null) return null;
+  const g = i.patientGender?.trim().toLowerCase();
+  const who = g === 'male' ? 'Man' : g === 'female' ? 'Woman' : 'Person';
+  return `Unknown African ${who} ${i.unknownSeq}`;
 }
 
-/** "Case 022 (Unknown 1)" while unidentified, plain "Case 022" otherwise. */
+/** "Case 022 (Unknown African Man 1)" while unidentified, plain "Case 022" otherwise. */
 export function caseTitle(i: PatientIdentity & { caseNumber: string }): string {
   const label = unknownLabel(i);
   return i.patientUnknown && label ? `${i.caseNumber} (${label})` : i.caseNumber;
