@@ -63,6 +63,13 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
+// "4 min", "1 h 12 min"
+function formatEta(secs: number): string {
+  const mins = Math.max(1, Math.round(secs / 60));
+  if (mins < 60) return `${mins} min`;
+  return `${Math.floor(mins / 60)} h ${mins % 60} min`;
+}
+
 // Friendly labels for the crew's hospital-handover vitals (stored on Task.handoverVitals).
 const HANDOVER_VITAL_LABELS: Record<string, string> = {
   temperature: 'Temperature',
@@ -238,6 +245,20 @@ function IncidentDetailPage() {
   const nearestVehicles = (nearestVehiclesRaw ?? []).filter(
     v => v.status === 'READY' && v.isActive && !!v.currentDriver && !v.standby
   );
+
+  // Drive time from each candidate to the scene (live traffic), refreshed as
+  // the units move. Loaded separately so the list never waits on Google.
+  const etaIds = nearestVehicles.map(v => v.id).join(',');
+  const { data: vehicleEtas, isFetching: etasLoading } = useQuery({
+    queryKey: ['vehicles', 'etas', incident?.id, incident?.lat, incident?.lng, etaIds],
+    queryFn: async () => {
+      const res = await api.get(`/dispatch/vehicle-etas?lat=${incident!.lat}&lng=${incident!.lng}&ids=${encodeURIComponent(etaIds)}`);
+      const rows = res.data.data as { vehicleId: string; eta: { durationSecs: number | null; distanceKm: number | null; source: 'google' | 'estimate' } | null }[];
+      return Object.fromEntries(rows.map(r => [r.vehicleId, r.eta]));
+    },
+    enabled: !!incident?.lat && !!incident?.lng && etaIds.length > 0,
+    refetchInterval: 60_000,
+  });
 
   // Real-time: keep incident fresh when status changes or crew is assigned
   useEffect(() => {
@@ -1173,6 +1194,7 @@ function IncidentDetailPage() {
                 <thead className="sticky top-0 bg-white z-10 border-b border-surface-border">
                   <tr className="bg-slate-50">
                     <th className="px-6 py-3 text-xs font-medium text-slate-text">Unit</th>
+                    <th className="px-6 py-3 text-xs font-medium text-slate-text">ETA to scene</th>
                     <th className="px-6 py-3 text-xs font-medium text-slate-text">Status</th>
                     <th className="px-6 py-3"></th>
                   </tr>
@@ -1192,6 +1214,27 @@ function IncidentDetailPage() {
                             {checkInLocationWarning(v)}
                           </p>
                         )}
+                      </td>
+                      <td className="px-6 py-3 whitespace-nowrap">
+                        {(() => {
+                          const eta = vehicleEtas?.[v.id];
+                          if (!incident?.lat || !incident?.lng) return <span className="text-xs text-slate-text">No scene location</span>;
+                          if (eta === undefined) return <span className="text-xs text-slate-text">{etasLoading ? 'Calculating…' : '-'}</span>;
+                          if (!eta) return <span className="text-xs text-slate-text">No GPS position</span>;
+                          if (eta.durationSecs == null) return <span className="text-xs text-status-warning">No road route</span>;
+                          return (
+                            <div title={eta.source === 'google' ? 'Driving time with current traffic (Google)' : 'Rough estimate from straight-line distance'}>
+                              <p className="font-semibold text-brand-teal text-sm">
+                                {eta.source === 'estimate' ? '~' : ''}{formatEta(eta.durationSecs)}
+                              </p>
+                              {eta.distanceKm != null && (
+                                <p className="text-xs text-slate-text mt-0.5">
+                                  {eta.distanceKm.toFixed(1)} km{eta.source === 'estimate' ? ' (est.)' : ''}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-3">
                         {!isCrewComplete(v) ? (
@@ -1215,7 +1258,7 @@ function IncidentDetailPage() {
                   ))}
                   {nearestVehicles.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="px-6 py-6 text-center text-sm text-slate-text">No vehicles with a driver available nearby.</td>
+                      <td colSpan={4} className="px-6 py-6 text-center text-sm text-slate-text">No vehicles with a driver available nearby.</td>
                     </tr>
                   )}
                 </tbody>
@@ -1241,6 +1284,7 @@ function IncidentDetailPage() {
                       {(nearestVehicles || []).map(v => (
                         <option key={v.id} value={v.id}>
                           {v.registrationNumber}
+                          {vehicleEtas?.[v.id]?.durationSecs != null ? ` (${vehicleEtas[v.id]!.source === 'estimate' ? '~' : ''}${formatEta(vehicleEtas[v.id]!.durationSecs!)} away)` : ''}
                           {v.currentDriver ? ` - ${v.currentDriver.name}` : ' - no driver'}
                           {medicsInline(v, ' / ')}
                           {v.currentDriver && !isCrewComplete(v) ? ` · ⚠ crew incomplete (${crewShortfall(v)})` : ''}

@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { haversineDistance } from '../../shared/utils/haversine.js';
+import { driveEtas } from '../../shared/utils/driveEta.js';
 import { FleetService } from '../fleet/fleet.service.js';
 import { IncidentStatus, Role, TaskStatus } from '../../shared/types/index.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
@@ -251,6 +252,34 @@ export class DispatchService {
       select: { vehicleId: true, title: true, location: true },
     });
     return new Map(rows.map((r) => [r.vehicleId, { title: r.title, location: r.location }]));
+  }
+
+  /**
+   * Drive-time ETA from each vehicle's live position to the scene. Kept apart
+   * from findNearestVehicles so the candidate list never waits on Google.
+   * Vehicles with no known position come back with eta null.
+   */
+  async vehicleEtas(lat: number, lng: number, vehicleIds: string[]) {
+    const live = new Map<string, { lat: number; lng: number }>();
+    for (const v of await this.fleetService.getAllActiveVehicleLocations()) {
+      if (vehicleIds.includes(v.vehicleId) && Number.isFinite(v.lat) && Number.isFinite(v.lng)) {
+        live.set(v.vehicleId, { lat: v.lat, lng: v.lng });
+      }
+    }
+    // No live GPS in Redis - fall back to the last position stored on the vehicle.
+    const missing = vehicleIds.filter((id) => !live.has(id));
+    if (missing.length > 0) {
+      const rows = await this.app.prisma.vehicle.findMany({
+        where: { id: { in: missing } },
+        select: { id: true, lastLat: true, lastLng: true },
+      });
+      for (const r of rows) if (r.lastLat != null && r.lastLng != null) live.set(r.id, { lat: r.lastLat, lng: r.lastLng });
+    }
+
+    const located = vehicleIds.filter((id) => live.has(id));
+    const etas = await driveEtas(located.map((id) => live.get(id)!), { lat, lng }, this.app.config.GOOGLE_MAPS_KEY);
+    const byId = new Map(located.map((id, i) => [id, etas[i]]));
+    return vehicleIds.map((id) => ({ vehicleId: id, eta: byId.get(id) ?? null }));
   }
 
   /**

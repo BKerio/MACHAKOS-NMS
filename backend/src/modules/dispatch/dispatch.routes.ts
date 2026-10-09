@@ -149,4 +149,26 @@ export const dispatchRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
       return reply.send({ ok: true, data: vehicles });
     }
   );
+
+  /**
+   * GET /dispatch/vehicle-etas?lat=&lng=&ids=a,b,c
+   * Drive time (live traffic) from each vehicle to the scene.
+   */
+  app.get<{
+    Querystring: { lat: string; lng: string; ids?: string };
+  }>(
+    '/vehicle-etas',
+    { preValidation: [requireRole(assignRoles)] },
+    async (request, reply) => {
+      const { lat, lng, ids } = request.query;
+      const latN = parseFloat(lat);
+      const lngN = parseFloat(lng);
+      if (!Number.isFinite(latN) || !Number.isFinite(lngN)) throw new BadRequestError('lat and lng query params are required');
+
+      // Routes API matrix allows 625 elements per call; dispatch lists are ~10.
+      const vehicleIds = (ids ?? '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 25);
+      const data = await dispatchService.vehicleEtas(latN, lngN, vehicleIds);
+      return reply.send({ ok: true, data });
+    }
+  );
 };

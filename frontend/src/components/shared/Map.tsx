@@ -114,14 +114,11 @@ function vehicleSvg(status: VehicleTrackingStatus, speed: number): string {
     </svg>`;
 }
 
-/** SVG faces east; GPS heading 0 is north, so rotate by heading − 90. */
-function headingRotation(heading: number): number {
-  return heading - 90;
-}
-
-function createVehicleIcon(status: VehicleTrackingStatus, speed: number, heading = 0): L.DivIcon {
+// Markers are always drawn upright (wheels down) — rotating by GPS heading made
+// them lie on their side or upside down, which reads badly on the ops map.
+function createVehicleIcon(status: VehicleTrackingStatus, speed: number): L.DivIcon {
   return L.divIcon({
-    html: `<div style="transform:rotate(${headingRotation(heading)}deg);transform-origin:center center">${vehicleSvg(status, speed)}</div>`,
+    html: `<div>${vehicleSvg(status, speed)}</div>`,
     className: '',
     iconSize: [52, 31],
     iconAnchor: [26, 25],
@@ -157,7 +154,6 @@ interface VehicleEntry {
   marker: google.maps.marker.AdvancedMarkerElement;
   status: VehicleTrackingStatus;
   speed: number;
-  heading: number;
   vehicle: LiveVehicle;
 }
 
@@ -345,27 +341,25 @@ function GoogleCanvas({
     vehicleMarkers.forEach(v => {
       const status = getVehicleTrackingStatus(v);
       const speed = Math.round(v.speed);
-      const heading = Math.round(v.heading);
       seen.add(v.vehicleId);
       const existing = pool[v.vehicleId];
 
       if (existing) {
         existing.vehicle = v;
         existing.marker.position = { lat: v.lat, lng: v.lng };
-        if (existing.status !== status || existing.speed !== speed || existing.heading !== heading) {
+        if (existing.status !== status || existing.speed !== speed) {
           const el = document.createElement('div');
-          el.style.cssText = `cursor:pointer;transform:translateY(28%) rotate(${headingRotation(v.heading)}deg)`;
+          el.style.cssText = 'cursor:pointer;transform:translateY(28%)';
           el.innerHTML = vehicleSvg(status, v.speed);
           existing.marker.content = el;
           existing.status = status;
           existing.speed = speed;
-          existing.heading = heading;
         }
         return;
       }
 
       const el = document.createElement('div');
-      el.style.cssText = `cursor:pointer;transform:translateY(28%) rotate(${headingRotation(v.heading)}deg)`;
+      el.style.cssText = 'cursor:pointer;transform:translateY(28%)';
       el.innerHTML = vehicleSvg(status, v.speed);
       const marker = new google.maps.marker.AdvancedMarkerElement({
         map: mapRef.current,
@@ -374,7 +368,7 @@ function GoogleCanvas({
         title: v.registration,
         zIndex: 20,
       });
-      const entry: VehicleEntry = { marker, status, speed, heading, vehicle: v };
+      const entry: VehicleEntry = { marker, status, speed, vehicle: v };
       marker.addListener('click', () => {
         onVehicleMarkerClick(entry.vehicle);
         if (!suppressVehiclePopup) {
@@ -508,9 +502,9 @@ function LeafletCanvas({
         const status = getVehicleTrackingStatus(v);
         return (
           <Marker
-            key={`${v.vehicleId}-${status}-${Math.round(v.heading)}`}
+            key={`${v.vehicleId}-${status}`}
             position={[v.lat, v.lng]}
-            icon={createVehicleIcon(status, v.speed, v.heading)}
+            icon={createVehicleIcon(status, v.speed)}
             eventHandlers={{ click: () => onVehicleMarkerClick(v) }}
           >
             {/* Suppress default popup when a click handler is wired - parent shows dispatch panel */}
