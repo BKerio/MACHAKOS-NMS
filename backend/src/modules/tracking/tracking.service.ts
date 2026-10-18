@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { Role } from '../../shared/types/index.js';
 import { extractOdometerKm, legKm, nairobiHourStart } from './distance.js';
+import { effectiveStatus, onCaseVehicleIds, repairOnCaseStatus } from '../fleet/onCase.js';
 
 /**
  * Uffizio Pull API - GPS Tracking Service
@@ -294,6 +295,8 @@ export class TrackingService {
     this.app.io
       .to(`role:${Role.DISPATCHER}`)
       .to(`role:${Role.WATCHER}`)
+      .to(`role:${Role.ADMIN}`)
+      .to(`role:${Role.SUPER_ADMIN}`)
       .emit('fleet:pos', locations);
 
     this._lastSuccessAt = new Date().toISOString();
@@ -320,9 +323,16 @@ export class TrackingService {
   }
 
   private async mapToInternalFormat(rawVehicles: any[]): Promise<VehicleLocation[]> {
-    const dbVehicles = await this.app.prisma.vehicle.findMany({
-      select: { id: true, imei: true, registrationNumber: true, agencyId: true, isActive: true, status: true, currentDriverId: true },
-    });
+    const [dbVehicles, onCase] = await Promise.all([
+      this.app.prisma.vehicle.findMany({
+        select: { id: true, imei: true, registrationNumber: true, agencyId: true, isActive: true, status: true, currentDriverId: true },
+      }),
+      onCaseVehicleIds(this.app.prisma),
+    ]);
+    // Self-heal: a unit with an open task must read BUSY everywhere (map colour,
+    // nearest-vehicle filter), even if its flag drifted back to READY.
+    const repaired = await repairOnCaseStatus(this.app.prisma, onCase);
+    if (repaired > 0) this.app.log.warn(`Uffizio: ${repaired} vehicle(s) on a case were marked READY - set back to BUSY`);
     const byImei = new Map(dbVehicles.map(v => [v.imei, v]));
     const byReg = new Map(dbVehicles.map(v => [v.registrationNumber?.toUpperCase(), v]));
 
@@ -359,7 +369,7 @@ export class TrackingService {
         timestamp,
         agencyId: dbV.agencyId,
         isActive: dbV.isActive,
-        dbStatus: (dbV.status as 'READY' | 'BUSY' | 'MAINTENANCE') ?? 'READY',
+        dbStatus: effectiveStatus(dbV.id, (dbV.status as 'READY' | 'BUSY' | 'MAINTENANCE') ?? 'READY', onCase),
         hasDriver: !!dbV.currentDriverId,
         fuelLevelL: extractFuelLevel(raw),
         odometerKm: extractOdometerKm(raw),

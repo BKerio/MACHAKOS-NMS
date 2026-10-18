@@ -293,8 +293,14 @@ export class TaskService {
       }),
     ]);
 
-    // Notify crew via socket
-    this.app.io.to(vehicleCrewIds(vehicle).map((id) => `user:${id}`)).emit('task:assigned', task);
+    // Notify crew via socket; dispatch screens hear it too so the unit turns red
+    // on their maps at once instead of on the next refresh.
+    this.app.io
+      .to([
+        ...vehicleCrewIds(vehicle).map((id) => `user:${id}`),
+        `role:${Role.DISPATCHER}`, `role:${Role.ADMIN}`, `role:${Role.SUPER_ADMIN}`,
+      ])
+      .emit('task:assigned', task);
 
     // Notify crew via push (fire-and-forget - never blocks dispatch)
     this.notifyCrewOfPushAssignment(vehicleCrewIds(vehicle), incident, vehicle.registrationNumber);

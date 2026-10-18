@@ -69,11 +69,13 @@ function DashboardPage() {
 
   useEffect(() => {
     socket.connect();
-    socket.on('incident:new', () => {
+    const onNew = () => {
       queryClient.invalidateQueries({ queryKey: ['dispatch', 'queue'] });
       queryClient.invalidateQueries({ queryKey: ['incidents', 'recent'] });
-    });
-    return () => { socket.off('incident:new'); };
+    };
+    socket.on('incident:new', onNew);
+    // Remove only this handler - a bare off() would also drop AppShell's alert.
+    return () => { socket.off('incident:new', onNew); };
   }, []);
 
   const avgResponseDisplay = (() => {

@@ -29,71 +29,67 @@ function AppShell() {
 
     socket.connect();
 
-    socket.on('connect', () => {
-      socket.emit('join:room', { userId: user.id, roles: [user.role] });
-      setIsConnected(true);
-      setReconnectedFlash(true);
-    });
-
-    socket.on('disconnect', () => setIsConnected(false));
-    socket.on('connect_error', () => setIsConnected(false));
+    // Named handlers: cleanup must remove only these. A bare socket.off(event)
+    // strips every listener for that event app-wide - including the live map's
+    // task:assigned handler, which then stopped turning dispatched units red.
+    const handlers: Record<string, (...args: any[]) => void> = {
+      connect: () => {
+        socket.emit('join:room', { userId: user.id, roles: [user.role] });
+        setIsConnected(true);
+        setReconnectedFlash(true);
+      },
+      disconnect: () => setIsConnected(false),
+      connect_error: () => setIsConnected(false),
+      'incident:new': (data) => {
+        addNotification({
+          type: 'warning',
+          title: 'New Incident Submitted',
+          message: `Incident #${data.id.substring(0, 4)} reported at ${data.locationName}.`,
+        });
+      },
+      'fleet:offline': (data) => {
+        addNotification({
+          type: 'error',
+          title: 'Vehicle Offline',
+          message: `Unit ${data.id.substring(0, 4)} has gone offline unexpectedly.`,
+        });
+      },
+      // Crew-only toast: dispatch screens now get task:assigned too (to recolour
+      // the map), and the dispatcher already sees their own "Dispatched" toast.
+      'task:assigned': (task: { id: string; vehicleId: string; incidentId: string }) => {
+        if (!FIELD_CREW_ROLES.includes(user.role)) return;
+        addNotification({
+          type: 'success',
+          title: 'Crew Dispatched',
+          message: `Task ${task.id.substring(0, 6)} - crew assigned and en route.`,
+        });
+      },
+      'incident:escalated': (data: { caseNumber: string; locationName: string; massCasualtyCount: number }) => {
+        addNotification({
+          type: 'error',
+          title: `MCI DECLARED - ${data.caseNumber}`,
+          message: `${data.massCasualtyCount} casualties at ${data.locationName}. Immediate response required.`,
+        });
+      },
+      // Crew checked in away from the ambulance's GPS tracker (or with a fake
+      // GPS app). Informational - the vehicle can still be assigned.
+      'fleet:checkin-alert': (data: { message: string; userName: string | null; role: string; locationName: string | null }) => {
+        const who = [data.userName, data.role?.toLowerCase()].filter(Boolean).join(', ');
+        addNotification({
+          type: 'warning',
+          title: 'Check-in away from ambulance',
+          message: `${data.message}${who ? ` (${who})` : ''}${data.locationName ? ` - phone was at ${data.locationName}` : ''}.`,
+        });
+      },
+    };
+    for (const [event, fn] of Object.entries(handlers)) socket.on(event, fn);
 
     if (socket.connected) {
       socket.emit('join:room', { userId: user.id, roles: [user.role] });
     }
 
-    socket.on('incident:new', (data) => {
-      addNotification({
-        type: 'warning',
-        title: 'New Incident Submitted',
-        message: `Incident #${data.id.substring(0, 4)} reported at ${data.locationName}.`,
-      });
-    });
-
-    socket.on('fleet:offline', (data) => {
-      addNotification({
-        type: 'error',
-        title: 'Vehicle Offline',
-        message: `Unit ${data.id.substring(0, 4)} has gone offline unexpectedly.`,
-      });
-    });
-
-    socket.on('task:assigned', (task: { id: string; vehicleId: string; incidentId: string }) => {
-      addNotification({
-        type: 'success',
-        title: 'Crew Dispatched',
-        message: `Task ${task.id.substring(0, 6)} - crew assigned and en route.`,
-      });
-    });
-
-    socket.on('incident:escalated', (data: { caseNumber: string; locationName: string; massCasualtyCount: number }) => {
-      addNotification({
-        type: 'error',
-        title: `MCI DECLARED - ${data.caseNumber}`,
-        message: `${data.massCasualtyCount} casualties at ${data.locationName}. Immediate response required.`,
-      });
-    });
-
-    // Crew checked in away from the ambulance's GPS tracker (or with a fake
-    // GPS app). Informational - the vehicle can still be assigned.
-    socket.on('fleet:checkin-alert', (data: { message: string; userName: string | null; role: string; locationName: string | null }) => {
-      const who = [data.userName, data.role?.toLowerCase()].filter(Boolean).join(', ');
-      addNotification({
-        type: 'warning',
-        title: 'Check-in away from ambulance',
-        message: `${data.message}${who ? ` (${who})` : ''}${data.locationName ? ` - phone was at ${data.locationName}` : ''}.`,
-      });
-    });
-
     return () => {
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('connect_error');
-      socket.off('incident:new');
-      socket.off('fleet:offline');
-      socket.off('task:assigned');
-      socket.off('incident:escalated');
-      socket.off('fleet:checkin-alert');
+      for (const [event, fn] of Object.entries(handlers)) socket.off(event, fn);
     };
   }, [addNotification, token, user]);
 

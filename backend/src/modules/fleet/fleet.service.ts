@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { Prisma, type CheckInLocationMatch } from '../../generated/prisma/index.js';
-import { Coordinates, Role, VehicleStatus } from '../../shared/types/index.js';
+import { Coordinates, Role, TaskStatus, VehicleStatus } from '../../shared/types/index.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { reverseGeocodePlace } from '../../shared/utils/geocode.js';
 import { createWriteStream, promises as fs } from 'node:fs';
@@ -42,6 +42,10 @@ export class FleetService {
       throw new NotFoundError(`Vehicle with IMEI ${imei} not found`);
     }
 
+    const onCase = await this.app.prisma.task.findFirst({
+      where: { vehicleId: vehicle.id, status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.HANDED_OVER] } },
+      select: { id: true },
+    });
     const timestamp = new Date().toISOString();
     const place = locationName?.trim() || vehicle.lastLocationName || null;
     const cacheKey = `vehicle:${imei}:location`;
@@ -57,7 +61,8 @@ export class FleetService {
       speed: 0,
       heading: 0,
       ignition: true,
-      dbStatus: vehicle.status,
+      // On a case reads BUSY (red on the map) even if the flag drifted.
+      dbStatus: onCase && vehicle.status !== VehicleStatus.MAINTENANCE ? VehicleStatus.BUSY : vehicle.status,
       hasDriver: !!vehicle.currentDriverId,
       locationName: place,
     };

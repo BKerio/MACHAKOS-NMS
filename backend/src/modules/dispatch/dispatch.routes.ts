@@ -5,6 +5,7 @@ import { requireRole } from '../../shared/guards/requireRole.js';
 import { Role } from '../../shared/types/index.js';
 import { BadRequestError } from '../../shared/errors/AppError.js';
 import { crewInclude, isCrewComplete } from '../fleet/crew.js';
+import { effectiveStatus, onCaseVehicleIds } from '../fleet/onCase.js';
 
 const assignRoles = [Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN];
 
@@ -113,15 +114,22 @@ export const dispatchRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
     '/vehicles',
     { preValidation: [requireRole(assignRoles)] },
     async (request, reply) => {
-      const vehicles = await app.prisma.vehicle.findMany({
-        where: request.query.includeInactive === 'true' ? {} : { isActive: true },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          agency: { select: { id: true, name: true } },
-          ...crewInclude,
-        },
+      const [vehicles, onCase] = await Promise.all([
+        app.prisma.vehicle.findMany({
+          where: request.query.includeInactive === 'true' ? {} : { isActive: true },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            agency: { select: { id: true, name: true } },
+            ...crewInclude,
+          },
+        }),
+        onCaseVehicleIds(app.prisma),
+      ]);
+      // A unit with an open task shows as BUSY (red on the map) even if its flag drifted.
+      return reply.send({
+        ok: true,
+        data: vehicles.map((v) => ({ ...v, status: effectiveStatus(v.id, v.status, onCase), crewComplete: isCrewComplete(v) })),
       });
-      return reply.send({ ok: true, data: vehicles.map((v) => ({ ...v, crewComplete: isCrewComplete(v) })) });
     }
   );
 
