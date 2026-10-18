@@ -50,6 +50,7 @@ import ResponseTimeline from '@/components/dispatcher/ResponseTimeline';
 import AddFacilityModal from '@/components/dispatcher/AddFacilityModal';
 import IdentifyPatient from '@/components/dispatcher/IdentifyPatient';
 import { caseSlug, caseTitle, isIncidentId, unknownLabel } from '@/lib/incidentPath';
+import { type DriveEta, etaTitle, formatEta } from '@/lib/eta';
 
 // Straight-line (great-circle) distance in km between two lat/lng points.
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -61,13 +62,6 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
-}
-
-// "4 min", "1 h 12 min"
-function formatEta(secs: number): string {
-  const mins = Math.max(1, Math.round(secs / 60));
-  if (mins < 60) return `${mins} min`;
-  return `${Math.floor(mins / 60)} h ${mins % 60} min`;
 }
 
 // Friendly labels for the crew's hospital-handover vitals (stored on Task.handoverVitals).
@@ -253,7 +247,7 @@ function IncidentDetailPage() {
     queryKey: ['vehicles', 'etas', incident?.id, incident?.lat, incident?.lng, etaIds],
     queryFn: async () => {
       const res = await api.get(`/dispatch/vehicle-etas?lat=${incident!.lat}&lng=${incident!.lng}&ids=${encodeURIComponent(etaIds)}`);
-      const rows = res.data.data as { vehicleId: string; eta: { durationSecs: number | null; distanceKm: number | null; source: 'google' | 'estimate' } | null }[];
+      const rows = res.data.data as { vehicleId: string; eta: DriveEta | null }[];
       return Object.fromEntries(rows.map(r => [r.vehicleId, r.eta]));
     },
     enabled: !!incident?.lat && !!incident?.lng && etaIds.length > 0,
@@ -1223,9 +1217,9 @@ function IncidentDetailPage() {
                           if (!eta) return <span className="text-xs text-slate-text">No GPS position</span>;
                           if (eta.durationSecs == null) return <span className="text-xs text-status-warning">No road route</span>;
                           return (
-                            <div title={eta.source === 'google' ? 'Driving time with current traffic (Google)' : 'Rough estimate from straight-line distance'}>
+                            <div title={etaTitle(eta)}>
                               <p className="font-semibold text-brand-teal text-sm">
-                                {eta.source === 'estimate' ? '~' : ''}{formatEta(eta.durationSecs)}
+                                {formatEta(eta.durationSecs, eta.source === 'estimate')}
                               </p>
                               {eta.distanceKm != null && (
                                 <p className="text-xs text-slate-text mt-0.5">
@@ -1284,7 +1278,7 @@ function IncidentDetailPage() {
                       {(nearestVehicles || []).map(v => (
                         <option key={v.id} value={v.id}>
                           {v.registrationNumber}
-                          {vehicleEtas?.[v.id]?.durationSecs != null ? ` (${vehicleEtas[v.id]!.source === 'estimate' ? '~' : ''}${formatEta(vehicleEtas[v.id]!.durationSecs!)} away)` : ''}
+                          {vehicleEtas?.[v.id]?.durationSecs != null ? ` (${formatEta(vehicleEtas[v.id]!.durationSecs!, vehicleEtas[v.id]!.source === 'estimate')} away)` : ''}
                           {v.currentDriver ? ` - ${v.currentDriver.name}` : ' - no driver'}
                           {medicsInline(v, ' / ')}
                           {v.currentDriver && !isCrewComplete(v) ? ` · ⚠ crew incomplete (${crewShortfall(v)})` : ''}

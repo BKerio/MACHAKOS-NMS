@@ -15,6 +15,7 @@ import { LiveVehicle, getVehicleTrackingStatus } from '@/hooks/useVehicleTrackin
 import { useNotificationStore } from '@/stores/notificationStore';
 import { CREW_RULE, crewShortfall, isCrewComplete, MIN_MEDICS, vehicleMedics } from '@/utils/crew';
 import LoadingState from '@/components/shared/LoadingState';
+import { type DriveEta, etaTitle, formatEta } from '@/lib/eta';
 
 // ── Haversine (km) ────────────────────────────────────────────────────────────
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -33,15 +34,22 @@ function formatDist(km: number | null): string {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
 }
 
-type ScoredIncident = Incident & { score: number; distKm: number | null };
+type ScoredIncident = Incident & { score: number; distKm: number | null; eta: DriveEta | null };
 
-function scoreIncidents(incidents: Incident[], vLat: number, vLng: number): ScoredIncident[] {
+function scoreIncidents(
+  incidents: Incident[], vLat: number, vLng: number, etas: Record<string, DriveEta | null> | undefined,
+): ScoredIncident[] {
   return incidents
     .map((inc): ScoredIncident => {
       let score = 0;
       let distKm: number | null = null;
+      const eta = etas?.[inc.id] ?? null;
 
-      if (inc.lat != null && inc.lng != null) {
+      if (eta?.durationSecs != null) {
+        // Proximity by drive time once known: 50 pts max → 0 at 50 min+
+        distKm = eta.distanceKm;
+        score += Math.max(0, 50 - eta.durationSecs / 60);
+      } else if (inc.lat != null && inc.lng != null) {
         distKm = haversine(vLat, vLng, inc.lat, inc.lng);
         // Proximity: 50 pts max → 0 at 25 km+
         score += Math.max(0, 50 - distKm * 2);
@@ -51,7 +59,7 @@ function scoreIncidents(incidents: Incident[], vLat: number, vLng: number): Scor
       const waitMins = (Date.now() - new Date(inc.createdAt).getTime()) / 60_000;
       score += Math.min(30, waitMins / 2);
 
-      return { ...inc, score, distKm };
+      return { ...inc, score, distKm, eta };
     })
     .sort((a, b) => b.score - a.score);
 }
@@ -112,7 +120,20 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
   });
   const isLoading = loadingVehicles || loadingIncidents;
 
-  const scoredIncidents = scoreIncidents(incidents, clickedVehicle.lat, clickedVehicle.lng);
+  // Drive time from this unit to each open case (live traffic), refreshed as it moves.
+  const etaIds = incidents.map(i => i.id).join(',');
+  const { data: incidentEtas, isFetching: etasLoading } = useQuery({
+    queryKey: ['dispatch', 'incident-etas', clickedVehicle.vehicleId, etaIds],
+    queryFn: async () => {
+      const res = await api.get('/dispatch/incident-etas', { params: { vehicleId: clickedVehicle.vehicleId, ids: etaIds } });
+      const rows = res.data.data as { incidentId: string; eta: DriveEta | null }[];
+      return Object.fromEntries(rows.map(r => [r.incidentId, r.eta]));
+    },
+    enabled: etaIds.length > 0,
+    refetchInterval: 60_000,
+  });
+
+  const scoredIncidents = scoreIncidents(incidents, clickedVehicle.lat, clickedVehicle.lng, incidentEtas);
 
   const dispatch = useMutation({
     mutationFn: () =>
@@ -330,9 +351,20 @@ function VehicleDispatchPanel({ clickedVehicle, onClose }: Props) {
                           </span>
                         )}
                       </div>
-                      <span className="text-xs font-bold text-slate-500 flex-shrink-0">
-                        {formatDist(inc.distKm)}
-                      </span>
+                      <div className="text-right flex-shrink-0" title={inc.eta ? etaTitle(inc.eta) : undefined}>
+                        <p className="text-sm font-bold text-brand-teal leading-tight">
+                          {inc.eta?.durationSecs != null
+                            ? formatEta(inc.eta.durationSecs, inc.eta.source === 'estimate')
+                            : inc.lat == null || inc.lng == null
+                              ? 'No pin'
+                              : inc.eta && inc.eta.durationSecs == null
+                                ? 'No route'
+                                : etasLoading ? '…' : '-'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 leading-tight">
+                          {inc.eta?.durationSecs != null ? `to scene · ${formatDist(inc.distKm)}` : formatDist(inc.distKm)}
+                        </p>
+                      </div>
                     </div>
                     <p className="text-xs text-slate-600 font-medium line-clamp-1">
                       {inc.chiefComplaint}

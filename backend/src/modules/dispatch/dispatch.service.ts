@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { haversineDistance } from '../../shared/utils/haversine.js';
-import { driveEtas } from '../../shared/utils/driveEta.js';
+import { driveEtas, driveEtasFrom } from '../../shared/utils/driveEta.js';
 import { FleetService } from '../fleet/fleet.service.js';
 import { IncidentStatus, Role, TaskStatus } from '../../shared/types/index.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
@@ -260,13 +260,40 @@ export class DispatchService {
    * Vehicles with no known position come back with eta null.
    */
   async vehicleEtas(lat: number, lng: number, vehicleIds: string[]) {
+    const live = await this.vehiclePositions(vehicleIds);
+    const located = vehicleIds.filter((id) => live.has(id));
+    const etas = await driveEtas(located.map((id) => live.get(id)!), { lat, lng }, this.app.config.GOOGLE_MAPS_KEY);
+    const byId = new Map(located.map((id, i) => [id, etas[i]]));
+    return vehicleIds.map((id) => ({ vehicleId: id, eta: byId.get(id) ?? null }));
+  }
+
+  /**
+   * Drive-time ETA from one vehicle to each of these incidents' scenes - the
+   * dashboard's vehicle panel, picking which case to send a unit to.
+   * Incidents with no pin come back with eta null; all null if the vehicle has no position.
+   */
+  async incidentEtasForVehicle(vehicleId: string, incidentIds: string[]) {
+    const [positions, incidents] = await Promise.all([
+      this.vehiclePositions([vehicleId]),
+      this.app.prisma.incident.findMany({ where: { id: { in: incidentIds } }, select: { id: true, lat: true, lng: true } }),
+    ]);
+    const origin = positions.get(vehicleId);
+    const scenes = incidents.filter((i) => i.lat != null && i.lng != null);
+    const etas = origin
+      ? await driveEtasFrom(origin, scenes.map((i) => ({ lat: i.lat!, lng: i.lng! })), this.app.config.GOOGLE_MAPS_KEY)
+      : [];
+    const byId = new Map(origin ? scenes.map((s, i) => [s.id, etas[i]]) : []);
+    return incidentIds.map((id) => ({ incidentId: id, eta: byId.get(id) ?? null }));
+  }
+
+  /** Live GPS position per vehicle, else the last position stored on the vehicle. */
+  private async vehiclePositions(vehicleIds: string[]) {
     const live = new Map<string, { lat: number; lng: number }>();
     for (const v of await this.fleetService.getAllActiveVehicleLocations()) {
       if (vehicleIds.includes(v.vehicleId) && Number.isFinite(v.lat) && Number.isFinite(v.lng)) {
         live.set(v.vehicleId, { lat: v.lat, lng: v.lng });
       }
     }
-    // No live GPS in Redis - fall back to the last position stored on the vehicle.
     const missing = vehicleIds.filter((id) => !live.has(id));
     if (missing.length > 0) {
       const rows = await this.app.prisma.vehicle.findMany({
@@ -275,11 +302,7 @@ export class DispatchService {
       });
       for (const r of rows) if (r.lastLat != null && r.lastLng != null) live.set(r.id, { lat: r.lastLat, lng: r.lastLng });
     }
-
-    const located = vehicleIds.filter((id) => live.has(id));
-    const etas = await driveEtas(located.map((id) => live.get(id)!), { lat, lng }, this.app.config.GOOGLE_MAPS_KEY);
-    const byId = new Map(located.map((id, i) => [id, etas[i]]));
-    return vehicleIds.map((id) => ({ vehicleId: id, eta: byId.get(id) ?? null }));
+    return live;
   }
 
   /**

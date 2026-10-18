@@ -171,4 +171,22 @@ export const dispatchRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
       return reply.send({ ok: true, data });
     }
   );
+
+  /**
+   * GET /dispatch/incident-etas?vehicleId=&ids=a,b,c
+   * Drive time (live traffic) from one vehicle to each incident's scene.
+   */
+  app.get<{
+    Querystring: { vehicleId?: string; ids?: string };
+  }>(
+    '/incident-etas',
+    { preValidation: [requireRole(assignRoles)] },
+    async (request, reply) => {
+      const { vehicleId, ids } = request.query;
+      if (!vehicleId) throw new BadRequestError('vehicleId query param is required');
+      const incidentIds = (ids ?? '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 25);
+      const data = await dispatchService.incidentEtasForVehicle(vehicleId, incidentIds);
+      return reply.send({ ok: true, data });
+    }
+  );
 };
