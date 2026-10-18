@@ -170,67 +170,78 @@ function DutyList({ people, empty }: { people: PresenceUser[]; empty: string }) 
   );
 }
 
-function UnitTile({ vehicle, lastFix }: { vehicle: Vehicle; lastFix?: string | null }) {
-  const state = unitState(vehicle);
+/** Coloured pill naming the unit's state - the only place state colour appears on a row. */
+function StatePill({ state }: { state: UnitState }) {
   const { label, color } = STATE[state];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-[11.5px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap"
+      style={{ color, background: `color-mix(in srgb, ${color} 13%, transparent)` }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
+  );
+}
+
+const TH = 'px-4 py-2.5 text-[10.5px] font-bold tracking-[0.1em] text-left whitespace-nowrap';
+const TD = 'px-4 py-3 align-middle';
+
+/** One ambulance as a roster row: plate, state, crew, GPS link, last known place. */
+function UnitRow({ vehicle, lastFix }: { vehicle: Vehicle; lastFix?: string | null }) {
+  const state = unitState(vehicle);
   const live = !!lastFix && Date.now() - new Date(lastFix).getTime() < TRACKER_STALE_MS;
   const medics = vehicleMedics(vehicle);
+  const crewed = !!vehicle.currentDriver;
+  const medicsOk = medics.length >= MIN_MEDICS;
 
   return (
-    <article
-      className="rounded-xl overflow-hidden flex flex-col"
-      style={{ background: C.panel, border: `1px solid ${C.line}`, borderTop: `3px solid ${color}`, boxShadow: C.shadow }}
-    >
-      <div className="px-3.5 pt-3 pb-2.5 flex items-center gap-2">
+    <tr style={{ borderTop: `1px solid ${C.line}` }}>
+      <td className={TD}>
         <span
-          className="text-[13px] font-black tracking-wider px-2 py-0.5 rounded"
-          style={{ background: '#F7D23E', color: '#111', border: '1.5px solid #111' }}
+          className="inline-block mono text-[12.5px] font-bold tracking-wider px-2 py-0.5 rounded-md whitespace-nowrap"
+          style={{ background: '#F7D23E', color: '#111', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.55)' }}
         >
           {vehicle.registrationNumber.toUpperCase()}
         </span>
-        <span className="ml-auto text-[11px] font-bold" style={{ color }}>{label}</span>
-      </div>
-
-      <div className="px-3.5 pb-3 flex flex-col gap-1.5 text-[12.5px]">
-        {vehicle.currentDriver ? (
-          <div className="flex items-center gap-2 min-w-0" style={{ color: C.soft }}>
-            <Car size={13} color={C.muted} className="shrink-0" />
-            <span className="truncate">{vehicle.currentDriver.name}</span>
+      </td>
+      <td className={TD}><StatePill state={state} /></td>
+      <td className={`${TD} min-w-0`}>
+        {crewed ? (
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[13.5px] font-semibold truncate" style={{ color: C.ink }}>
+              <Car size={13} color={C.muted} className="shrink-0" />
+              <span className="truncate">{vehicle.currentDriver!.name}</span>
+            </div>
+            <div className="flex items-center gap-2 text-[12px] mt-0.5 truncate" style={{ color: medicsOk ? C.muted : C.amber }}>
+              <BriefcaseMedical size={12} className="shrink-0" />
+              <span className="truncate">
+                {medics.length > 0 ? medics.map((m) => m.person.name.split(' ')[0]).join(', ') : medicCountLabel(0)}
+              </span>
+            </div>
           </div>
         ) : (
-          <div style={{ color: C.muted }}>No driver checked in</div>
+          <span className="text-[13px]" style={{ color: C.muted }}>No crew checked in</span>
         )}
-        {medics.length > 0 && (
-          <div className="flex items-center gap-2 min-w-0" style={{ color: C.soft }}>
-            <BriefcaseMedical size={13} color={C.muted} className="shrink-0" />
-            <span className="truncate">{medics.map((m) => m.person.name.split(' ')[0]).join(', ')}</span>
-          </div>
-        )}
-        {vehicle.currentDriver && (
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: medics.length >= MIN_MEDICS ? C.green : C.amber }} />
-            <span className="text-[11px] font-semibold" style={{ color: medics.length >= MIN_MEDICS ? C.green : C.amber }}>
-              {medicCountLabel(medics.length)}
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div
-        className="mt-auto px-3.5 py-2 flex items-center gap-1.5 text-[11.5px] min-w-0"
-        style={{ borderTop: `1px solid ${C.line}`, color: C.muted }}
-      >
-        {live ? <Wifi size={12} color={C.green} /> : <WifiOff size={12} />}
-        <span style={{ color: live ? C.green : C.muted }}>{live ? 'Live' : 'No signal'}</span>
-        <span>· {ago(lastFix)}</span>
-        {vehicle.lastLocationName && (
-          <span className="flex items-center gap-1 ml-auto min-w-0 truncate" title={vehicle.lastLocationName}>
-            <MapPin size={11} className="shrink-0" />
+      </td>
+      <td className={`${TD} whitespace-nowrap`}>
+        <div className="flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: live ? C.green : C.muted }}>
+          {live ? <Wifi size={13} /> : <WifiOff size={13} />}
+          {live ? 'Live' : 'No signal'}
+        </div>
+        <div className="mono tnum text-[11.5px] mt-0.5" style={{ color: C.muted }}>{ago(lastFix)}</div>
+      </td>
+      <td className={`${TD} hidden md:table-cell`}>
+        {vehicle.lastLocationName ? (
+          <div className="flex items-center gap-1.5 text-[12.5px] min-w-0 max-w-[280px]" style={{ color: C.soft }} title={vehicle.lastLocationName}>
+            <MapPin size={12} color={C.muted} className="shrink-0" />
             <span className="truncate">{vehicle.lastLocationName}</span>
-          </span>
+          </div>
+        ) : (
+          <span className="text-[12.5px]" style={{ color: C.muted }}>-</span>
         )}
-      </div>
-    </article>
+      </td>
+    </tr>
   );
 }
 
@@ -382,19 +393,52 @@ function WallboardPage() {
       <Panel
         title="Ambulances"
         Icon={Car}
-        right={<span className="text-[11.5px]" style={{ color: C.muted }}>{active.length} active · on a case first</span>}
+        right={
+          <div className="flex items-center gap-3 text-[11.5px]" style={{ color: C.muted }}>
+            {STATE_ORDER.filter((s) => byState(s).length > 0).map((s) => (
+              <span key={s} className="hidden sm:inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ background: STATE[s].color }} />
+                {STATE[s].label} <b className="mono tnum" style={{ color: C.ink }}>{byState(s).length}</b>
+              </span>
+            ))}
+            <span className="sm:hidden">{active.length} active</span>
+          </div>
+        }
       >
-        <div className="p-4">
-          {sorted.length === 0 ? (
-            <p className="text-[13px]" style={{ color: C.muted }}>No active ambulances configured.</p>
-          ) : (
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
-              {sorted.map((v) => (
-                <UnitTile key={v.id} vehicle={v} lastFix={liveById.get(v.id)?.timestamp ?? v.lastLocationAt} />
+        {sorted.length === 0 ? (
+          <p className="text-[13px] p-4" style={{ color: C.muted }}>No active ambulances configured.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr style={{ background: C.chip, color: C.muted }}>
+                  <th className={TH}>UNIT</th>
+                  <th className={TH}>STATUS</th>
+                  <th className={TH}>CREW</th>
+                  <th className={TH}>GPS</th>
+                  <th className={`${TH} hidden md:table-cell`}>LAST LOCATION</th>
+                </tr>
+              </thead>
+              {/* Grouped by state, busiest first; each group gets a quiet heading row. */}
+              {STATE_ORDER.filter((s) => byState(s).length > 0).map((s) => (
+                <tbody key={s}>
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-4 pt-3 pb-1.5 text-[10.5px] font-bold tracking-[0.1em]"
+                      style={{ color: C.muted, borderTop: `1px solid ${C.line}` }}
+                    >
+                      {STATE[s].label.toUpperCase()} · {byState(s).length}
+                    </td>
+                  </tr>
+                  {sorted.filter((v) => unitState(v) === s).map((v) => (
+                    <UnitRow key={v.id} vehicle={v} lastFix={liveById.get(v.id)?.timestamp ?? v.lastLocationAt} />
+                  ))}
+                </tbody>
               ))}
-            </div>
-          )}
-        </div>
+            </table>
+          </div>
+        )}
       </Panel>
     </div>
   );
