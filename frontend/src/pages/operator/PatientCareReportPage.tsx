@@ -12,6 +12,7 @@ import {
 } from '@/api/responder';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { confirmDialog } from '@/lib/alert';
+import { ratingPath } from '@/utils/caseFlow';
 
 type FileKind = 'image' | 'pdf' | 'docx' | 'unknown';
 
@@ -38,6 +39,15 @@ function PatientCareReportPage() {
   const { taskId } = useParams<{ taskId: string }>();
   const [searchParams] = useSearchParams();
   const caseNumber = searchParams.get('caseNumber') ?? '';
+  // End-of-case flow: after the PCR (handover), rate the receiving facility.
+  const rateFacility = searchParams.get('rateFacility');
+  const goOn = () =>
+    navigate(
+      rateFacility && taskId
+        ? ratingPath(taskId, { caseNumber, facility: rateFacility, next: 'history' })
+        : '/operator/history',
+      { replace: true },
+    );
   const { addNotification } = useNotificationStore();
 
   const [note, setNote] = useState('');
@@ -82,9 +92,9 @@ function PatientCareReportPage() {
       addNotification({
         type: 'success',
         title: file ? 'PCR uploaded' : 'Vitals saved',
-        message: 'Case saved to History.',
+        message: rateFacility ? `Now rate ${rateFacility}.` : 'Case saved to History.',
       });
-      navigate('/operator/history', { replace: true });
+      goOn();
     },
     onError: (err) => addNotification({ type: 'error', title: 'Upload failed', message: getErrorMessage(err) }),
   });
@@ -109,7 +119,7 @@ function PatientCareReportPage() {
       cancelLabel: 'Continue',
       danger: true,
     });
-    if (confirmed) navigate('/operator/history', { replace: true });
+    if (confirmed) goOn();
   };
 
   return (

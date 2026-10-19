@@ -16,8 +16,8 @@ const tagOptions = (stars: number) =>
   stars === 0 ? [] : stars >= 4 ? GOOD_TAGS : stars <= 2 ? POOR_TAGS : [...GOOD_TAGS.slice(0, 3), ...POOR_TAGS.slice(0, 3)];
 
 /**
- * After a case the crew rates the facility they handed the patient to -
- * 1 to 5 stars, one-tap tags and an optional note (the app's
+ * After the handover (PCR) the crew rates the facility they handed the patient
+ * to - 1 to 5 stars, one-tap tags and an optional note (the app's
  * FacilityRatingScreen). Skippable. `next=pcr` continues to the PCR upload,
  * `next=history` returns to History; otherwise it goes back.
  */

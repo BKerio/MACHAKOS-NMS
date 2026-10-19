@@ -68,6 +68,7 @@ export class IncidentService {
       massCasualtyCount?: number;
       watcherComments?: string;
       preHospitalManagement?: string;
+      dispatcherAdvice?: string;
       alertNature?: string;
       alertNatureDetail?: string;
       originOfAlert?: string;
@@ -187,6 +188,7 @@ export class IncidentService {
         massCasualtyCount: data.massCasualtyCount,
         watcherComments: data.watcherComments,
         preHospitalManagement: data.preHospitalManagement,
+        dispatcherAdvice: data.dispatcherAdvice,
         alertNature: data.alertNature,
         alertNatureDetail: data.alertNatureDetail,
         originOfAlert: data.originOfAlert,
@@ -482,6 +484,7 @@ export class IncidentService {
       healthcareWorkerName?: string;
       healthcareWorkerContact?: string;
       preHospitalManagement?: string;
+      dispatcherAdvice?: string;
       partnerNotes?: string;
       vitals?: Record<string, unknown>;
       maternityVitals?: Record<string, unknown>;
@@ -518,7 +521,7 @@ export class IncidentService {
       'alertNatureDetail', 'placeOfReferral', 'referralReasons', 'referralReasonOther',
       'targetFacilityId', 'hospitalLevelRequired',
       'healthcareWorkerName', 'healthcareWorkerContact',
-      'preHospitalManagement', 'partnerNotes', 'pcrUrl', 'vitals', 'maternityVitals',
+      'preHospitalManagement', 'dispatcherAdvice', 'partnerNotes', 'pcrUrl', 'vitals', 'maternityVitals',
     ] as const;
 
     for (const field of editableFields) {

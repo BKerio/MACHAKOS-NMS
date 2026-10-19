@@ -86,7 +86,7 @@ export interface SystemReportDetails {
     patientName: string | null; patientAge: string | null; patientGender: string | null;
     patientContact: string | null; patientNationalId: string | null; patientNhif: string | null;
     nextOfKin: string | null; nextOfKinPhone: string | null;
-    vitals: string | null; maternityVitals: string | null; preHospitalManagement: string | null;
+    vitals: string | null; maternityVitals: string | null; preHospitalManagement: string | null; dispatcherAdvice: string | null;
     hospitalLevelRequired: number | null; targetFacility: string | null; placeOfReferral: string | null;
     ambulanceUsed: string | null; latestVehicle: string | null; latestTaskStatus: string | null; taskCount: number;
     watcher: string; dispatcher: string | null; agency: string; healthcareWorker: string | null;

@@ -117,6 +117,7 @@ function IncidentDetailPage() {
   const [escalateCasualtyCount, setEscalateCasualtyCount] = useState('');
   const [escalateNotes, setEscalateNotes] = useState('');
   const [editedPreHospital, setEditedPreHospital] = useState('');
+  const [editedAdvice, setEditedAdvice] = useState('');
   const [editedChallenges, setEditedChallenges] = useState('');
   const [editedOtherNotes, setEditedOtherNotes] = useState('');
   const [showReassignModal, setShowReassignModal] = useState(false);
@@ -138,6 +139,7 @@ function IncidentDetailPage() {
       setEditedDispatcherChallenges(data.dispatcherChallenges ?? '');
       setEditedPcrUrl(data.pcrUrl ?? '');
       setEditedPreHospital(data.preHospitalManagement ?? '');
+      setEditedAdvice(data.dispatcherAdvice ?? '');
       setEditedChallenges(data.dispatcherChallenges ?? '');
       setEditedOtherNotes(data.partnerNotes ?? '');
       return data;
@@ -209,6 +211,7 @@ function IncidentDetailPage() {
   const clinicalNotesMutation = useMutation({
     mutationFn: () => api.patch(`/incidents/${id}`, {
       preHospitalManagement: editedPreHospital || undefined,
+      dispatcherAdvice: editedAdvice || undefined,
       dispatcherChallenges: editedChallenges || undefined,
       partnerNotes: editedOtherNotes || undefined,
     }),
@@ -1606,18 +1609,35 @@ function IncidentDetailPage() {
                 <p className="text-xs font-semibold text-slate-600 tracking-wide">Clinical Notes</p>
               </div>
               <div className="p-5 flex flex-col gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 tracking-widest block mb-1.5">
-                    Management Given
-                  </label>
-                  <textarea
-                    rows={3}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-brand-teal resize-none outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green transition-all placeholder:text-slate-300"
-                    placeholder="Document interventions, medications administered, patient condition on scene..."
-                    value={editedPreHospital}
-                    onChange={e => setEditedPreHospital(e.target.value)}
-                  />
-                </div>
+                {/* Referrals start at a facility - no first responder / phone first aid. */}
+                {incident.incidentType !== 'REFERRAL' && (
+                  <>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-400 tracking-widest block mb-1.5">
+                        First Responder Management
+                      </label>
+                      <textarea
+                        rows={3}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-brand-teal resize-none outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green transition-all placeholder:text-slate-300"
+                        placeholder="What was done for the patient before the ambulance arrived..."
+                        value={editedPreHospital}
+                        onChange={e => setEditedPreHospital(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-400 tracking-widest block mb-1.5">
+                        First Aid Advice Given by Dispatcher
+                      </label>
+                      <textarea
+                        rows={3}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-brand-teal resize-none outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green transition-all placeholder:text-slate-300"
+                        placeholder="Advice given to the caller, e.g. apply pressure to the wound, keep the patient still, start CPR..."
+                        value={editedAdvice}
+                        onChange={e => setEditedAdvice(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="text-xs font-semibold text-slate-400 tracking-widest block mb-1.5">
                     Challenges Experienced

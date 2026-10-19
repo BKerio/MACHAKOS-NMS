@@ -10,6 +10,10 @@ import {
   RotateCw as ArrowClockwise,
   Circle,
   X,
+  Bookmark,
+  BookmarkCheck,
+  Star,
+  ClipboardCheck,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import { formatDistanceToNow } from 'date-fns';
@@ -21,6 +25,10 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { socket } from '@/lib/socket';
 import LoadingState from '@/components/shared/LoadingState';
 import { incidentPath } from '@/lib/incidentPath';
+import { useAuthStore } from '@/stores/authStore';
+
+type Folder = 'all' | 'pending' | 'done';
+const SCORE_WORDS = ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 
 const DIRECTION_ICONS: Record<CallDirection, ReactElement> = {
   INBOUND: <PhoneIncoming size={15} color="var(--green)" />,
@@ -54,13 +62,23 @@ function CallLogPage() {
   const [daysBack, setDaysBack] = useState('7');
   const [linkModal, setLinkModal] = useState<{ callId: string; logId: string } | null>(null);
   const [caseNumber, setCaseNumber] = useState('');
+  // Call quality review: which folder is open, and the flag / score dialogs.
+  const [folder, setFolder] = useState<Folder>('all');
+  const [flagFor, setFlagFor] = useState<CallLog | null>(null);
+  const [flagReason, setFlagReason] = useState('');
+  const [evalFor, setEvalFor] = useState<CallLog | null>(null);
+  const [evalScore, setEvalScore] = useState(0);
+  const [evalNotes, setEvalNotes] = useState('');
+  const role = useAuthStore((s) => s.user?.role);
+  const canScore = role === 'ADMIN' || role === 'SUPER_ADMIN';
 
   const from = new Date(Date.now() - parseInt(daysBack) * 86_400_000).toISOString();
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['pbx', 'cdr', direction, status, daysBack, search],
+    queryKey: ['pbx', 'cdr', direction, status, daysBack, search, folder],
     queryFn: async () => {
-      const params = new URLSearchParams({ from, limit: '100' });
+      // The evaluation folders show every flagged call, whatever its date.
+      const params = new URLSearchParams(folder === 'all' ? { from, limit: '100' } : { limit: '100', evaluation: folder });
       if (direction) params.set('direction', direction);
       if (status) params.set('status', status);
       if (search) params.set('search', search);
@@ -75,6 +93,44 @@ function CallLogPage() {
     socket.on('pbx:call:ended', handler);
     return () => { socket.off('pbx:call:ended', handler); };
   }, [queryClient]);
+
+  const { data: pendingEval = 0 } = useQuery({
+    queryKey: ['pbx', 'cdr', 'evaluation-count'],
+    queryFn: async () => (await api.get('/pbx/cdr/evaluation-count')).data.data.pending as number,
+  });
+
+  const flagMutation = useMutation({
+    mutationFn: ({ id, flagged, reason }: { id: string; flagged: boolean; reason?: string }) =>
+      api.patch(`/pbx/cdr/${id}/evaluation-flag`, { flagged, reason }),
+    onSuccess: (_res, { flagged }) => {
+      queryClient.invalidateQueries({ queryKey: ['pbx', 'cdr'] });
+      setFlagFor(null);
+      setFlagReason('');
+      addNotification({
+        type: 'success',
+        title: flagged ? 'Added for evaluation' : 'Removed from evaluation',
+        message: flagged ? 'The call is in the For evaluation folder.' : 'The call was taken out of the evaluation folder.',
+      });
+    },
+    onError: (err: any) => addNotification({ type: 'error', title: 'Could not update', message: err?.response?.data?.message || 'Please try again.' }),
+  });
+
+  const evalMutation = useMutation({
+    mutationFn: ({ id, score, notes }: { id: string; score: number; notes?: string }) =>
+      api.patch(`/pbx/cdr/${id}/evaluation`, { score, notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pbx', 'cdr'] });
+      setEvalFor(null);
+      addNotification({ type: 'success', title: 'Evaluation saved', message: 'The call has been scored.' });
+    },
+    onError: (err: any) => addNotification({ type: 'error', title: 'Could not save', message: err?.response?.data?.message || 'Please try again.' }),
+  });
+
+  function openEval(log: CallLog) {
+    setEvalFor(log);
+    setEvalScore(log.evalScore ?? 0);
+    setEvalNotes(log.evalNotes ?? '');
+  }
 
   const linkMutation = useMutation({
     mutationFn: async ({ logId, incidentId }: { logId: string; incidentId: string }) =>
@@ -150,6 +206,28 @@ function CallLogPage() {
         </div>
       )}
 
+      {/* Folders: every call, or the calls flagged for quality review */}
+      <div className="row" style={{ gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {([
+          { key: 'all', label: 'All calls' },
+          { key: 'pending', label: 'For evaluation', count: pendingEval },
+          { key: 'done', label: 'Evaluated' },
+        ] as { key: Folder; label: string; count?: number }[]).map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFolder(f.key)}
+            className={`btn btn-sm ${folder === f.key ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ height: 32 }}
+          >
+            {f.key !== 'all' && <ClipboardCheck size={13} />}
+            {f.label}
+            {!!f.count && (
+              <span className="pill pill-amber" style={{ fontSize: 10.5, padding: '1px 7px', marginLeft: 2 }}>{f.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {/* Filters */}
       <div className="card card-pad" style={{ marginBottom: 16 }}>
         <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
@@ -175,7 +253,7 @@ function CallLogPage() {
             <option value="BUSY">Busy</option>
             <option value="FAILED">Failed</option>
           </select>
-          <select className="eoc-select" style={{ height: 36, width: 'auto', padding: '0 10px' }} value={daysBack} onChange={(e) => setDaysBack(e.target.value)}>
+          <select className="eoc-select" style={{ height: 36, width: 'auto', padding: '0 10px' }} value={daysBack} onChange={(e) => setDaysBack(e.target.value)} disabled={folder !== 'all'} title={folder !== 'all' ? 'Evaluation folders show every flagged call' : undefined}>
             <option value="1">Today</option>
             <option value="7">Last 7 days</option>
             <option value="30">Last 30 days</option>
@@ -189,7 +267,11 @@ function CallLogPage() {
         {isLoading ? (
           <LoadingState minHeight={160} label="Loading call logs…" />
         ) : logs.length === 0 ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--muted)' }}>No call records found</div>
+          <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--muted)' }}>
+            {folder === 'pending' ? 'No calls waiting for evaluation. Flag a call from All calls to add it here.'
+              : folder === 'done' ? 'No calls have been evaluated yet.'
+              : 'No call records found'}
+          </div>
         ) : (
           <div className="tbl-wrap">
             <table className="tbl">
@@ -203,6 +285,7 @@ function CallLogPage() {
                   <th>Talk</th>
                   <th>Status</th>
                   <th>Incident</th>
+                  {folder !== 'all' && <th>Evaluation</th>}
                   <th></th>
                 </tr>
               </thead>
@@ -237,8 +320,54 @@ function CallLogPage() {
                         <span className="muted">-</span>
                       )}
                     </td>
+                    {folder !== 'all' && (
+                      <td style={{ maxWidth: 260 }}>
+                        {log.evalScore != null ? (
+                          <div title={log.evalNotes ?? undefined}>
+                            <div className="row" style={{ gap: 2 }}>
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <Star key={n} size={13} fill={n <= log.evalScore! ? 'var(--gold, #f59e0b)' : 'none'} color={n <= log.evalScore! ? 'var(--gold, #f59e0b)' : 'var(--muted)'} />
+                              ))}
+                              <span className="strong" style={{ fontSize: 12, marginLeft: 4 }}>{SCORE_WORDS[log.evalScore - 1]}</span>
+                            </div>
+                            <div className="muted truncate" style={{ fontSize: 11.5, marginTop: 2 }}>
+                              {log.evaluatedBy ?? 'Evaluated'}{log.evalNotes ? ` · ${log.evalNotes}` : ''}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="pill pill-amber" style={{ fontSize: 11 }}>Waiting</span>
+                            <div className="muted truncate" style={{ fontSize: 11.5, marginTop: 2 }} title={log.evalReason ?? undefined}>
+                              {log.evalReason || 'No reason given'}{log.evalFlaggedBy ? ` · ${log.evalFlaggedBy}` : ''}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    )}
                     <td>
                       <div className="row" style={{ gap: 8 }}>
+                        {canScore && log.forEvaluation && (
+                          <button
+                            className="btn btn-soft btn-sm"
+                            style={{ height: 28, padding: '0 8px', fontSize: 12 }}
+                            onClick={() => openEval(log)}
+                          >
+                            <Star size={12} /> {log.evalScore != null ? 'Re-score' : 'Evaluate'}
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ height: 28, padding: '0 8px', fontSize: 12 }}
+                          title={log.forEvaluation ? 'Remove from the evaluation folder' : 'Add to the For evaluation folder'}
+                          disabled={flagMutation.isPending}
+                          onClick={() => {
+                            if (log.forEvaluation) flagMutation.mutate({ id: log.id, flagged: false });
+                            else { setFlagFor(log); setFlagReason(''); }
+                          }}
+                        >
+                          {log.forEvaluation ? <BookmarkCheck size={12} color="var(--amber)" /> : <Bookmark size={12} />}
+                          {log.forEvaluation ? 'Flagged' : 'Flag'}
+                        </button>
                         {log.recording && (
                           <a href={log.recording} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ height: 28, padding: '0 8px', fontSize: 12 }}>
                             <PhoneDisconnect size={12} /> Play
@@ -267,6 +396,110 @@ function CallLogPage() {
           </div>
         )}
       </div>
+
+      {/* Flag for evaluation */}
+      {flagFor && (
+        <>
+          <div className="drawer-back" onClick={() => setFlagFor(null)} />
+          <div style={{ position: 'fixed', inset: 0, zIndex: 61, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', padding: 16 }}>
+            <div className="card" style={{ width: '100%', maxWidth: 420, padding: 24, pointerEvents: 'all', animation: 'fadeUp .3s both' }}>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+                <div className="card-title">Flag call for evaluation</div>
+                <button className="icon-btn" onClick={() => setFlagFor(null)}><X size={16} /></button>
+              </div>
+              <p className="muted" style={{ fontSize: 13.5, marginBottom: 14 }}>
+                <span className="mono strong">{flagFor.callFrom}</span> → <span className="mono strong">{flagFor.callTo}</span>
+                {' · '}{fmtDate(flagFor.startedAt)} {fmtTime(flagFor.startedAt)}
+              </p>
+              <div className="field" style={{ marginBottom: 16 }}>
+                <label className="label">Why should this call be reviewed? (optional)</label>
+                <textarea
+                  className="input"
+                  rows={3}
+                  autoFocus
+                  placeholder="e.g. Long delay before dispatch, caller was given unclear advice, good example for training..."
+                  value={flagReason}
+                  onChange={(e) => setFlagReason(e.target.value)}
+                  style={{ height: 'auto', paddingTop: 8 }}
+                />
+              </div>
+              <div className="row" style={{ gap: 10 }}>
+                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setFlagFor(null)}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                  disabled={flagMutation.isPending}
+                  onClick={() => flagMutation.mutate({ id: flagFor.id, flagged: true, reason: flagReason })}
+                >
+                  {flagMutation.isPending ? <><AppLoader size={16} /> Saving…</> : 'Add to folder'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Score a flagged call */}
+      {evalFor && (
+        <>
+          <div className="drawer-back" onClick={() => setEvalFor(null)} />
+          <div style={{ position: 'fixed', inset: 0, zIndex: 61, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', padding: 16 }}>
+            <div className="card" style={{ width: '100%', maxWidth: 460, padding: 24, pointerEvents: 'all', animation: 'fadeUp .3s both' }}>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+                <div className="card-title">Evaluate call</div>
+                <button className="icon-btn" onClick={() => setEvalFor(null)}><X size={16} /></button>
+              </div>
+              <p className="muted" style={{ fontSize: 13.5, marginBottom: 6 }}>
+                <span className="mono strong">{evalFor.callFrom}</span> → <span className="mono strong">{evalFor.callTo}</span>
+                {' · '}{fmtDate(evalFor.startedAt)} {fmtTime(evalFor.startedAt)} · talk {formatDuration(evalFor.talkDuration)}
+              </p>
+              {evalFor.evalReason && (
+                <p style={{ fontSize: 13, marginBottom: 12, color: 'var(--ink-2)' }}>
+                  <span className="muted">Flagged{evalFor.evalFlaggedBy ? ` by ${evalFor.evalFlaggedBy}` : ''}:</span> {evalFor.evalReason}
+                </p>
+              )}
+              {evalFor.recording ? (
+                <audio controls src={evalFor.recording} style={{ width: '100%', marginBottom: 14 }} />
+              ) : (
+                <p className="muted" style={{ fontSize: 12.5, marginBottom: 14 }}>No recording for this call.</p>
+              )}
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label className="label">Score</label>
+                <div className="row" style={{ gap: 4 }}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button key={n} type="button" onClick={() => setEvalScore(n)} aria-label={`${n} - ${SCORE_WORDS[n - 1]}`} style={{ padding: 2 }}>
+                      <Star size={26} fill={n <= evalScore ? 'var(--gold, #f59e0b)' : 'none'} color={n <= evalScore ? 'var(--gold, #f59e0b)' : 'var(--muted)'} />
+                    </button>
+                  ))}
+                  <span className="strong" style={{ fontSize: 13, marginLeft: 8 }}>{evalScore ? SCORE_WORDS[evalScore - 1] : 'Tap to score'}</span>
+                </div>
+              </div>
+              <div className="field" style={{ marginBottom: 16 }}>
+                <label className="label">Notes / feedback</label>
+                <textarea
+                  className="input"
+                  rows={4}
+                  placeholder="What went well, what to improve - e.g. location confirmed quickly; first aid advice was clear..."
+                  value={evalNotes}
+                  onChange={(e) => setEvalNotes(e.target.value)}
+                  style={{ height: 'auto', paddingTop: 8 }}
+                />
+              </div>
+              <div className="row" style={{ gap: 10 }}>
+                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setEvalFor(null)}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                  disabled={!evalScore || evalMutation.isPending}
+                  onClick={() => evalMutation.mutate({ id: evalFor.id, score: evalScore, notes: evalNotes })}
+                >
+                  {evalMutation.isPending ? <><AppLoader size={16} /> Saving…</> : 'Save evaluation'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Link to incident modal */}
       {linkModal && (

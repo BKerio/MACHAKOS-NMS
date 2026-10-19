@@ -6,7 +6,8 @@ import { BadRequestError } from '../shared/errors/AppError.js';
 import { SmsGatewayService } from '../modules/settings/sms-gateway.service.js';
 import { sendAdvantaSmsWithCreds, type AdvantaCreds } from './sms.js';
 
-const smsRoles = [Role.ADMIN, Role.SUPER_ADMIN];
+// Dispatchers send bulk SMS too (e.g. alerting callers); gateway settings stay admin-only elsewhere.
+const smsRoles = [Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN];
 
 const sendSchema = z.object({
   message: z.string().min(1, 'Message is required'),

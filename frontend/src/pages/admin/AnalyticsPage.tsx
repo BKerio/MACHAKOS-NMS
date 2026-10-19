@@ -129,7 +129,7 @@ function AnalyticsPage() {
       ['Sub-County', 'Incidents'],
       ...data.bySubCounty.map(r => [r.subCounty, r.count]),
       [],
-      ['Nature of Alert', 'Incidents'],
+      ['Nature of Incident', 'Incidents'],
       ...data.byNature.map(r => [r.nature, r.count]),
       [],
       ['Gender', 'Count'],
@@ -367,11 +367,11 @@ function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Nature of Alert Breakdown */}
+      {/* Nature of Incident Breakdown */}
       <div className="card" style={{ height: 340, display: 'flex', flexDirection: 'column' }}>
         <div className="card-head">
           <div>
-            <div className="card-title">Cases by Nature of Alert</div>
+            <div className="card-title">Cases by Nature of Incident</div>
             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Incident volume by clinical category</div>
           </div>
         </div>

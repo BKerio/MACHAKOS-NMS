@@ -127,7 +127,7 @@ export const router = createBrowserRouter([
       {
         path: 'admin/sms',
         element: (
-          <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN']}>
+          <RoleGuard allowed={['SUPER_ADMIN', 'ADMIN', 'DISPATCHER']}>
             <BulkSmsPage />
           </RoleGuard>
         ),

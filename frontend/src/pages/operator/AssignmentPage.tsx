@@ -69,7 +69,7 @@ function AssignmentPage() {
     // Same follow-ups as the app's case screen after each step is saved.
     onSuccess: async (_updated, status) => {
       if (status === 'COMPLETED') {
-        addNotification({ type: 'success', title: 'Case completed', message: 'Rate the facility, then file the PCR.' });
+        addNotification({ type: 'success', title: 'Case completed', message: 'File the PCR, then rate the facility.' });
         queryClient.invalidateQueries({ queryKey: ['operator', 'active-task'] });
         navigate(afterCompletePath(task!));
         return;

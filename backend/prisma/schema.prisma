@@ -235,6 +235,8 @@ model Incident {
   dispatcherComments    String? @map("dispatcher_comments") @db.Text
   dispatcherChallenges  String? @map("dispatcher_challenges") @db.Text
   preHospitalManagement String? @map("pre_hospital_management") @db.Text
+  // First-aid advice the dispatcher gave the caller while help was on the way.
+  dispatcherAdvice      String? @map("dispatcher_advice") @db.Text
   hospitalLevelRequired Int?    @map("hospital_level_required")
 
   // Extended alert/referral fields
@@ -738,9 +740,21 @@ model CallLog {
   notes        String?
   createdAt    DateTime      @default(now()) @map("created_at")
 
+  // Call quality review: a call is flagged into the "For evaluation" folder,
+  // then a supervisor scores it. Names are snapshots, kept if the user goes.
+  forEvaluation   Boolean   @default(false) @map("for_evaluation")
+  evalReason      String?   @map("eval_reason")
+  evalFlaggedAt   DateTime? @map("eval_flagged_at")
+  evalFlaggedBy   String?   @map("eval_flagged_by")
+  evalScore       Int?      @map("eval_score")
+  evalNotes       String?   @map("eval_notes")
+  evaluatedAt     DateTime? @map("evaluated_at")
+  evaluatedBy     String?   @map("evaluated_by")
+
   incidentId String?   @map("incident_id")
   incident   Incident? @relation(fields: [incidentId], references: [id])
 
+  @@index([forEvaluation, startedAt])
   @@map("call_logs")
 }
 

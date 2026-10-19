@@ -233,9 +233,10 @@ function ChipPicker({
   );
 }
 
-const AGE_PRESETS = ['Below 1 Month', '1-6 Months', '6-12 Months', 'Unknown'] as const;
+// Age groups for when the caller can't give an exact age, then infant bands.
+const AGE_PRESETS = ['Child', 'Adult', 'Elderly', 'Below 1 Month', '1-6 Months', '6-12 Months', 'Unknown'] as const;
 
-/** Type years, or tap an infant / unknown preset. Stores the same strings as before. */
+/** Type years, or tap an age group / infant / unknown preset. Stored as the plain string. */
 function AgePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const years = /^\d+$/.test(value) ? value : '';
   return (
@@ -475,6 +476,7 @@ type FormState = {
   alertNature: string;
   alertNatureDetail: string;
   preHospitalManagement: string;
+  dispatcherAdvice: string;
   referralReasons: string[];
   referralReasonOther: string;
   healthcareWorkerName: string;
@@ -509,6 +511,7 @@ const defaultForm: FormState = {
   alertNature: '',
   alertNatureDetail: '',
   preHospitalManagement: '',
+  dispatcherAdvice: '',
   referralReasons: [],
   referralReasonOther: '',
   healthcareWorkerName: '',
@@ -558,7 +561,7 @@ function NewIncidentWizard() {
   // Provenance of the sub-county: AUTO when detected from the location, MANUAL when the watcher sets it.
   const [subCountySource, setSubCountySource] = useState<'AUTO' | 'MANUAL' | ''>('');
 
-  // ── Nature of alert options (accessible to all roles) ────────────────────
+  // ── Nature of incident options (accessible to all roles) ────────────────────
   const { data: natureOptions = [] } = useQuery<{ nature: string; details: string[] }[]>({
     queryKey: ['nature-options'],
     queryFn: async () => {
@@ -638,11 +641,11 @@ function NewIncidentWizard() {
 
   // ── Step validation (Screen 1: Alert + Location · Screen 2: Patient + Incident · Screen 3: Review) ──
   // The receiving facility of a referral is chosen by the dispatcher at dispatch.
-  const alertOk    = !!form.alertAt && !!form.alertMode;                 // Alert
+  const alertOk    = !!form.alertAt && !!form.alertMode && !!form.alertNature; // Alert (nature follows origin)
   const locationOk = isReferral                                          // Location / transfer
     ? !!form.originFacilityId && referralReasonsOk
     : !!form.locationName.trim() && !!form.subCounty;
-  const incidentOk = !!form.alertNature && !!form.chiefComplaint.trim(); // Incident (Patient has no required fields)
+  const incidentOk = !!form.chiefComplaint.trim();                       // Incident (Patient has no required fields)
   const step1Ok = alertOk && locationOk;    // Screen 1: Alert & Location
   const step2Ok = incidentOk;               // Screen 2: Patient & Incident
   const canSubmit = step1Ok && step2Ok;
@@ -650,7 +653,7 @@ function NewIncidentWizard() {
   const stepOk: Record<number, boolean> = { 1: step1Ok, 2: step2Ok, 3: canSubmit };
   const missingByStep: Record<number, string[]> = {
     1: [
-      !form.alertAt && 'date & time', !form.alertMode && 'alert mode',
+      !form.alertAt && 'date & time', !form.alertMode && 'alert mode', !form.alertNature && 'nature of incident',
       ...(isReferral
         ? [
             !form.originFacilityId && 'referring facility',
@@ -660,7 +663,6 @@ function NewIncidentWizard() {
         : [!form.locationName && 'location', !form.subCounty && 'sub-county']),
     ].filter(Boolean) as string[],
     2: [
-      !form.alertNature && 'nature of alert',
       !form.chiefComplaint && (isReferral ? 'clinical summary' : 'chief complaint'),
     ].filter(Boolean) as string[],
     3: [],
@@ -936,7 +938,9 @@ function NewIncidentWizard() {
     chiefComplaint:        form.chiefComplaint,
     alertNature:           form.alertNature  || undefined,
     alertNatureDetail:     form.alertNatureDetail || undefined,
-    preHospitalManagement: form.preHospitalManagement || undefined,
+    // Referrals come from a facility, so there is no first responder on intake.
+    preHospitalManagement: !isReferral ? form.preHospitalManagement || undefined : undefined,
+    dispatcherAdvice:      !isReferral ? form.dispatcherAdvice || undefined : undefined,
     // The receiving facility (emergency or referral) is chosen by the dispatcher
     // at dispatch; a referral records why the patient is being transferred.
     referralReasons:       isReferral ? form.referralReasons : undefined,
@@ -1167,6 +1171,46 @@ function NewIncidentWizard() {
                     {ORIGIN_OPTIONS.map(o => <option key={o}>{o}</option>)}
                   </select>
                 </Field>
+
+                <div className="iw-row">
+                  <div className="iw-label">
+                    <Label required>Nature of Incident</Label>
+                  </div>
+                  <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>Tap the category, then the specific type.</p>
+                  <div className="flex flex-col gap-3">
+                    <ChipPicker
+                      columns="grid-cols-2 sm:grid-cols-3"
+                      options={uniqueNatures}
+                      value={form.alertNature}
+                      onChange={(v) => set({ alertNature: v, alertNatureDetail: '' })}
+                      icon={natureIcon}
+                      label={chipLabel}
+                    />
+                    {form.alertNature && (
+                      <div className="rounded-lg p-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                        <p className="text-[11.5px] font-medium mb-2" style={{ color: 'var(--muted)' }}>
+                          Specific {chipLabel(form.alertNature).toLowerCase()}
+                        </p>
+                        {detailsForNature.length > 0 && detailsForNature.length <= 12 ? (
+                          <ChipPicker options={detailsForNature} value={form.alertNatureDetail} onChange={(v) => set({ alertNatureDetail: v })} />
+                        ) : detailsForNature.length > 12 ? (
+                          <select className={selectCls} value={form.alertNatureDetail} onChange={e => set({ alertNatureDetail: e.target.value })}>
+                            <option value="">Select specific type...</option>
+                            {detailsForNature.map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            className={inputCls}
+                            placeholder="Describe further..."
+                            value={form.alertNatureDetail}
+                            onChange={e => set({ alertNatureDetail: e.target.value })}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 <Row label="Notifier" hint="Who reported the emergency.">
                   <Field>
@@ -1547,46 +1591,6 @@ function NewIncidentWizard() {
               </SectionCard>
 
               <SectionCard title="Incident details" description="What happened, and the clinical picture." icon={FirstAid}>
-                <div className="iw-row">
-                  <div className="iw-label">
-                    <Label required>Nature of alert</Label>
-                  </div>
-                  <p className="iw-hint text-[11.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>Tap the category, then the specific type.</p>
-                  <div className="flex flex-col gap-3">
-                    <ChipPicker
-                      columns="grid-cols-2 sm:grid-cols-3"
-                      options={uniqueNatures}
-                      value={form.alertNature}
-                      onChange={(v) => set({ alertNature: v, alertNatureDetail: '' })}
-                      icon={natureIcon}
-                      label={chipLabel}
-                    />
-                    {form.alertNature && (
-                      <div className="rounded-lg p-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                        <p className="text-[11.5px] font-medium mb-2" style={{ color: 'var(--muted)' }}>
-                          Specific {chipLabel(form.alertNature).toLowerCase()}
-                        </p>
-                        {detailsForNature.length > 0 && detailsForNature.length <= 12 ? (
-                          <ChipPicker options={detailsForNature} value={form.alertNatureDetail} onChange={(v) => set({ alertNatureDetail: v })} />
-                        ) : detailsForNature.length > 12 ? (
-                          <select className={selectCls} value={form.alertNatureDetail} onChange={e => set({ alertNatureDetail: e.target.value })}>
-                            <option value="">Select specific type...</option>
-                            {detailsForNature.map(d => <option key={d} value={d}>{d}</option>)}
-                          </select>
-                        ) : (
-                          <input
-                            type="text"
-                            className={inputCls}
-                            placeholder="Describe further..."
-                            value={form.alertNatureDetail}
-                            onChange={e => set({ alertNatureDetail: e.target.value })}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 <Field>
                   <Label required>{isReferral ? 'Clinical summary' : 'Chief complaint'}</Label>
                   <textarea
@@ -1602,16 +1606,32 @@ function NewIncidentWizard() {
                 </Field>
 
 
-                <Field>
-                  <Label>Pre-hospital management given</Label>
-                  <textarea
-                    rows={3}
-                    placeholder="e.g. Tourniquet applied, IV access obtained..."
-                    className={textareaCls}
-                    value={form.preHospitalManagement}
-                    onChange={e => set({ preHospitalManagement: e.target.value })}
-                  />
-                </Field>
+                {/* Not asked on a referral: the patient is already under a facility's care. */}
+                {!isReferral && (
+                  <>
+                    <Field>
+                      <Label>First responder management</Label>
+                      <textarea
+                        rows={3}
+                        placeholder="What was done before the ambulance arrived, e.g. bleeding controlled with cloth, placed in recovery position..."
+                        className={textareaCls}
+                        value={form.preHospitalManagement}
+                        onChange={e => set({ preHospitalManagement: e.target.value })}
+                      />
+                    </Field>
+
+                    <Field>
+                      <Label>First aid advice given by dispatcher</Label>
+                      <textarea
+                        rows={3}
+                        placeholder="Advice given to the caller, e.g. apply firm pressure to the wound, do not move the patient, start CPR..."
+                        className={textareaCls}
+                        value={form.dispatcherAdvice}
+                        onChange={e => set({ dispatcherAdvice: e.target.value })}
+                      />
+                    </Field>
+                  </>
+                )}
 
 
               </SectionCard>
@@ -1818,7 +1838,8 @@ function NewIncidentWizard() {
               <ReviewCard title="Incident Details" onEdit={() => setStep(2)}>
                 <ReviewRow label="Nature"    value={[form.alertNature, form.alertNatureDetail].filter(Boolean).join(' → ') || undefined} />
                 <ReviewRow label={isReferral ? 'Clinical' : 'Complaint'} value={form.chiefComplaint} />
-                <ReviewRow label="Pre-hosp." value={form.preHospitalManagement} />
+                {!isReferral && <ReviewRow label="First resp." value={form.preHospitalManagement} />}
+                {!isReferral && <ReviewRow label="Advice"      value={form.dispatcherAdvice} />}
               </ReviewCard>
 
               {isMaternity && (

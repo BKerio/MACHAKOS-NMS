@@ -348,6 +348,7 @@ export interface Incident {
   dispatcherComments?: string;
   dispatcherChallenges?: string;
   preHospitalManagement?: string;
+  dispatcherAdvice?: string;
   partnerNotes?: string;
   pcrUrl?: string;
   closureReason?: string;
@@ -577,6 +578,15 @@ export interface CallLog {
   createdAt: string;
   incidentId?: string;
   incident?: { id: string; caseNumber: string };
+  // Call quality review ("For evaluation" folder)
+  forEvaluation?: boolean;
+  evalReason?: string | null;
+  evalFlaggedAt?: string | null;
+  evalFlaggedBy?: string | null;
+  evalScore?: number | null;
+  evalNotes?: string | null;
+  evaluatedAt?: string | null;
+  evaluatedBy?: string | null;
 }
 
 export interface ActiveCall {

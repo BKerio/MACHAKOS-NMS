@@ -299,7 +299,7 @@ function QueuePage() {
                       </td>
                       <td>
                         <div style={{ fontSize: 13.5, fontWeight: 500 }}>{inc.chiefComplaint}</div>
-                        {(inc.watcherComments || inc.preHospitalManagement) && (
+                        {(inc.watcherComments || inc.preHospitalManagement || inc.dispatcherAdvice) && (
                           <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Notes available</div>
                         )}
                       </td>

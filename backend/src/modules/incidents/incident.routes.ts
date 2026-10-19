@@ -27,6 +27,7 @@ const createIncidentSchema = z.object({
   massCasualtyCount: z.number().int().positive().optional(),
   watcherComments: z.string().optional(),
   preHospitalManagement: z.string().optional(),
+  dispatcherAdvice: z.string().optional(),
   alertNature: z.string().optional(),
   alertNatureDetail: z.string().optional(),
   originOfAlert: z.string().optional(),
@@ -97,6 +98,7 @@ const updateIncidentSchema = z.object({
   healthcareWorkerName: z.string().optional(),
   healthcareWorkerContact: z.string().optional(),
   preHospitalManagement: z.string().optional(),
+  dispatcherAdvice: z.string().optional(),
   partnerNotes: z.string().optional(),
   vitals: z.object({
   temperature: z.string().optional(),
@@ -283,7 +285,7 @@ export const incidentRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
       };
 
       const headers = [
-        'No', 'Date', 'Alert Time', 'Nature of Alert', 'Incidence Location',
+        'No', 'Date', 'Alert Time', 'Nature of Incident', 'Incidence Location',
         'Referral Place', 'Ambulance used', 'Case Outcome',
       ];
 

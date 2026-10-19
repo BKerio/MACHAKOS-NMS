@@ -497,6 +497,7 @@ export class AdminService {
         vitals: flattenJson(i.vitals),
         maternityVitals: flattenJson(i.maternityVitals),
         preHospitalManagement: i.preHospitalManagement,
+        dispatcherAdvice: i.dispatcherAdvice,
         hospitalLevelRequired: i.hospitalLevelRequired,
         targetFacility: i.targetFacility?.name ?? null,
         placeOfReferral: i.placeOfReferral,

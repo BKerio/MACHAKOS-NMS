@@ -85,6 +85,10 @@ export const pbxRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       ];
     }
     if (q.unlinked === 'true') where.incidentId = null;
+    // "For evaluation" folder: pending = flagged, not scored yet; done = scored.
+    if (q.evaluation === 'pending') Object.assign(where, { forEvaluation: true, evalScore: null });
+    if (q.evaluation === 'done') Object.assign(where, { forEvaluation: true, evalScore: { not: null } });
+    if (q.evaluation === 'all') where.forEvaluation = true;
 
     const [total, records] = await Promise.all([
       app.prisma.callLog.count({ where }),
@@ -114,6 +118,65 @@ export const pbxRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     const updated = await app.prisma.callLog.update({
       where: { id },
       data: { incidentId: parsed.data.incidentId },
+      include: { incident: { select: { id: true, caseNumber: true } } },
+    });
+    return reply.send({ ok: true, data: updated });
+  });
+
+  // Calls waiting in the "For evaluation" folder (badge count)
+  app.get('/cdr/evaluation-count', {
+    preValidation: [app.authenticate, requireRole([Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])],
+  }, async (_request, reply) => {
+    const pending = await app.prisma.callLog.count({ where: { forEvaluation: true, evalScore: null } });
+    return reply.send({ ok: true, data: { pending } });
+  });
+
+  // Put a call in (or take it out of) the "For evaluation" folder
+  app.patch('/cdr/:id/evaluation-flag', {
+    preValidation: [app.authenticate, requireRole([Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN])],
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = z.object({ flagged: z.boolean(), reason: z.string().max(500).optional() }).safeParse(request.body);
+    if (!parsed.success) throw new BadRequestError(parsed.error.issues[0].message);
+
+    const existing = await app.prisma.callLog.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundError('Call log not found');
+    const me = await app.prisma.user.findUnique({ where: { id: request.user.userId }, select: { name: true } });
+
+    const updated = await app.prisma.callLog.update({
+      where: { id },
+      data: parsed.data.flagged
+        ? { forEvaluation: true, evalReason: parsed.data.reason?.trim() || null, evalFlaggedAt: new Date(), evalFlaggedBy: me?.name ?? null }
+        // Removing it also clears any score, so a re-flag starts a fresh review.
+        : { forEvaluation: false, evalReason: null, evalFlaggedAt: null, evalFlaggedBy: null, evalScore: null, evalNotes: null, evaluatedAt: null, evaluatedBy: null },
+      include: { incident: { select: { id: true, caseNumber: true } } },
+    });
+    return reply.send({ ok: true, data: updated });
+  });
+
+  // Score a flagged call - supervisors (admins) only
+  app.patch('/cdr/:id/evaluation', {
+    preValidation: [app.authenticate, requireRole([Role.ADMIN, Role.SUPER_ADMIN])],
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = z.object({ score: z.number().int().min(1).max(5), notes: z.string().max(2000).optional() }).safeParse(request.body);
+    if (!parsed.success) throw new BadRequestError(parsed.error.issues[0].message);
+
+    const existing = await app.prisma.callLog.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundError('Call log not found');
+    const me = await app.prisma.user.findUnique({ where: { id: request.user.userId }, select: { name: true } });
+
+    const updated = await app.prisma.callLog.update({
+      where: { id },
+      data: {
+        forEvaluation: true,
+        evalFlaggedAt: existing.evalFlaggedAt ?? new Date(),
+        evalFlaggedBy: existing.evalFlaggedBy ?? me?.name ?? null,
+        evalScore: parsed.data.score,
+        evalNotes: parsed.data.notes?.trim() || null,
+        evaluatedAt: new Date(),
+        evaluatedBy: me?.name ?? null,
+      },
       include: { incident: { select: { id: true, caseNumber: true } } },
     });
     return reply.send({ ok: true, data: updated });

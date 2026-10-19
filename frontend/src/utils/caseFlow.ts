@@ -5,9 +5,14 @@ export function formatKm(km: number): string {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
 }
 
-/** The PCR upload page for a case. */
-export function pcrPath(taskId: string, caseNumber: string): string {
-  return `/operator/tasks/${taskId}/patient-care-report?caseNumber=${encodeURIComponent(caseNumber)}`;
+/**
+ * The PCR upload page for a case. With `rateFacility`, saving or skipping the
+ * PCR continues to rating that facility (the end-of-case flow).
+ */
+export function pcrPath(taskId: string, caseNumber: string, rateFacility?: string): string {
+  const q = new URLSearchParams({ caseNumber });
+  if (rateFacility) q.set('rateFacility', rateFacility);
+  return `/operator/tasks/${taskId}/patient-care-report?${q.toString()}`;
 }
 
 /** The facility rating page; `next=pcr` continues to the PCR afterwards. */
@@ -22,14 +27,11 @@ export function ratingPath(
 }
 
 /**
- * Where the crew goes once a case is completed - same order as the app:
- * rate the receiving facility while it's fresh, then file the PCR.
+ * Where the crew goes once a case is completed: file the PCR (the handover
+ * record) first, then rate the receiving facility.
  */
 export function afterCompletePath(task: CrewTask): string {
-  const facility = task.incident.targetFacility?.name;
-  return facility
-    ? ratingPath(task.id, { caseNumber: task.incident.caseNumber, facility, next: 'pcr' })
-    : pcrPath(task.id, task.incident.caseNumber);
+  return pcrPath(task.id, task.incident.caseNumber, task.incident.targetFacility?.name);
 }
 
 /** Navigate-page URL for the hospital leg: routed from the scene, not from where the ambulance is. */

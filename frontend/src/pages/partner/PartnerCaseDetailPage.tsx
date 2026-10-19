@@ -151,7 +151,7 @@ function PartnerCaseDetailPage() {
             </div>
             {incident.alertNature && (
               <div>
-                <p className="text-xs font-medium text-slate-400 mb-1">Alert Nature</p>
+                <p className="text-xs font-medium text-slate-400 mb-1">Nature of Incident</p>
                 <p className="text-sm text-brand-teal">{incident.alertNature}{incident.alertNatureDetail ? ` - ${incident.alertNatureDetail}` : ''}</p>
               </div>
             )}
