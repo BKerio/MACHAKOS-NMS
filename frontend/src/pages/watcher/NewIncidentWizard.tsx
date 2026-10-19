@@ -38,6 +38,7 @@ import {
   Info,
   Mars,
   Venus,
+  VenusAndMars,
   Users,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
@@ -1479,12 +1480,13 @@ function NewIncidentWizard() {
                 <Field>
                   <Label>Sex</Label>
                   <TileGroup
-                    cols="grid-cols-2 max-w-[340px]"
+                    cols="grid-cols-3 max-w-[480px]"
                     value={form.patientGender}
                     onChange={(v) => set({ patientGender: form.patientGender === v ? '' : v })}
                     options={[
                       { value: 'Male', label: 'Male', Icon: Mars },
                       { value: 'Female', label: 'Female', Icon: Venus },
+                      { value: 'Other', label: 'Other', Icon: VenusAndMars },
                     ]}
                   />
                 </Field>

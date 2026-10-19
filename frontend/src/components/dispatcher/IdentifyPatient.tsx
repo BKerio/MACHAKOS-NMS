@@ -123,6 +123,7 @@ function IdentifyModal({ incident, label, onClose }: { incident: Incident; label
               <option value="">Not recorded</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
+              <option value="Other">Other</option>
             </select>
           </label>
           <label className="flex flex-col gap-1">
