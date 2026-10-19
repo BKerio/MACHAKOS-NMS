@@ -23,8 +23,14 @@ export async function deactivateSmsGateway(provider: SmsProvider): Promise<SmsGa
   return res.data.data as SmsGatewaySummary;
 }
 
-export async function testSmsGateway(provider: SmsProvider): Promise<{ ok: boolean; message: string; credit?: number }> {
-  const res = await api.post(`/settings/sms-gateways/${provider}/test`);
+export async function setSmsGatewayBackup(provider: SmsProvider, useAsBackup: boolean): Promise<SmsGatewaySummary> {
+  const res = await api.post(`/settings/sms-gateways/${provider}/backup`, { useAsBackup });
+  return res.data.data as SmsGatewaySummary;
+}
+
+/** Checks the credentials; with a phone number also sends a real test SMS through this provider. */
+export async function testSmsGateway(provider: SmsProvider, phone?: string): Promise<{ ok: boolean; message: string; credit?: number }> {
+  const res = await api.post(`/settings/sms-gateways/${provider}/test`, phone?.trim() ? { phone: phone.trim() } : {});
   return res.data.data as { ok: boolean; message: string; credit?: number };
 }
 

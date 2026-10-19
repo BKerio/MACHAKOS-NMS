@@ -1,13 +1,21 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PlugZap, CheckCircle2, CircleSlash, FlaskConical, Save } from 'lucide-react';
+import { PlugZap, CheckCircle2, CircleSlash, FlaskConical, Save, Send, ShieldCheck } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { activateSmsGateway, deactivateSmsGateway, listSmsGateways, testSmsGateway, updateSmsGateway } from '@/api/settings';
+import {
+  activateSmsGateway, deactivateSmsGateway, listSmsGateways, setSmsGatewayBackup, testSmsGateway, updateSmsGateway,
+} from '@/api/settings';
 import type { SmsGatewaySummary } from '@/types/api';
 import LoadingState from '@/components/shared/LoadingState';
 
-/** Admin panel for configuring which gateway Bulk SMS actually sends through - one card per known provider. */
+/**
+ * Admin panel for the SMS gateways every text goes through - login codes,
+ * Bulk SMS and alerts. One card per provider. The active gateway is tried
+ * first; if it can't send (bad key, unapproved sender ID, no credit) the
+ * other configured gateways marked as backup are tried, then the server's
+ * own Advanta account.
+ */
 function SmsGatewaySettings() {
   const { data: gateways = [], isLoading } = useQuery({ queryKey: ['sms-gateways'], queryFn: listSmsGateways });
 
@@ -20,8 +28,25 @@ function SmsGatewaySettings() {
     );
   }
 
+  const active = gateways.find((g) => g.isActive);
+  const backups = gateways.filter((g) => !g.isActive && g.configured && g.useAsBackup);
+
   return (
     <div className="col" style={{ gap: 16, maxWidth: 720 }}>
+      <div className="card card-pad text-sm" style={{ color: 'var(--ink-2)' }}>
+        <div className="flex items-center gap-2 font-semibold" style={{ color: 'var(--ink)' }}>
+          <ShieldCheck size={16} /> Send order
+        </div>
+        <p className="mt-1.5">
+          Every SMS (crew login codes, Bulk SMS, alerts) goes through{' '}
+          <b>{active?.label ?? 'no active gateway'}</b>
+          {backups.length > 0 && <>, then {backups.map((b) => b.label).join(', ')} if it can't send</>}
+          , then the server's own Advanta account (if one is set on the server).
+        </p>
+        <p className="mt-1.5" style={{ color: 'var(--muted)' }}>
+          Use <b>Send test SMS</b> after changing credentials: the balance check alone can't tell whether the provider approved your sender ID.
+        </p>
+      </div>
       {gateways.map((g) => (
         <GatewayCard key={`${g.provider}-${g.updatedAt ?? 'new'}`} gateway={g} />
       ))}
@@ -37,22 +62,25 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
     for (const f of gateway.fields) init[f.key] = f.secret ? '' : (gateway.values[f.key] ?? '');
     return init;
   });
+  const [testPhone, setTestPhone] = useState('');
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['sms-gateways'] });
+  const failed = (title: string) => (err: any) =>
+    addNotification({ type: 'error', title, message: err?.response?.data?.message || 'Please try again.' });
 
   const saveMutation = useMutation({
     mutationFn: () => updateSmsGateway(gateway.provider, values),
     onSuccess: () => {
       invalidate();
       setTestResult(null);
-      addNotification({ type: 'success', title: 'Settings saved', message: `${gateway.label} credentials were updated.` });
+      addNotification({ type: 'success', title: 'Settings saved', message: `${gateway.label} credentials were updated. Send a test SMS to confirm they work.` });
     },
-    onError: (err: any) => addNotification({ type: 'error', title: 'Save failed', message: err?.response?.data?.message || 'Please try again.' }),
+    onError: failed('Save failed'),
   });
 
   const testMutation = useMutation({
-    mutationFn: () => testSmsGateway(gateway.provider),
+    mutationFn: (withSms: boolean) => testSmsGateway(gateway.provider, withSms ? testPhone : undefined),
     onSuccess: (result) => setTestResult(result),
     onError: (err: any) => setTestResult({ ok: false, message: err?.response?.data?.message || 'Test failed. Please try again.' }),
   });
@@ -61,30 +89,36 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
     mutationFn: () => activateSmsGateway(gateway.provider),
     onSuccess: () => {
       invalidate();
-      addNotification({ type: 'success', title: 'Gateway activated', message: `Bulk SMS will now send through ${gateway.label}.` });
+      addNotification({ type: 'success', title: 'Gateway activated', message: `SMS will now go through ${gateway.label} first.` });
     },
-    onError: (err: any) => addNotification({ type: 'error', title: 'Could not activate', message: err?.response?.data?.message || 'Please try again.' }),
+    onError: failed('Could not activate'),
   });
 
   const deactivateMutation = useMutation({
     mutationFn: () => deactivateSmsGateway(gateway.provider),
     onSuccess: () => {
       invalidate();
-      addNotification({ type: 'success', title: 'Gateway deactivated', message: `${gateway.label} will no longer be used for sending.` });
+      addNotification({ type: 'success', title: 'Gateway deactivated', message: `${gateway.label} is no longer the main gateway.` });
     },
-    onError: (err: any) => addNotification({ type: 'error', title: 'Could not deactivate', message: err?.response?.data?.message || 'Please try again.' }),
+    onError: failed('Could not deactivate'),
   });
 
-  const busy = saveMutation.isPending || testMutation.isPending || activateMutation.isPending || deactivateMutation.isPending;
+  const backupMutation = useMutation({
+    mutationFn: (on: boolean) => setSmsGatewayBackup(gateway.provider, on),
+    onSuccess: invalidate,
+    onError: failed('Could not change backup'),
+  });
+
+  const busy = saveMutation.isPending || testMutation.isPending || activateMutation.isPending || deactivateMutation.isPending || backupMutation.isPending;
 
   return (
     <div className="card">
       <div className="card-head">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="card-title">{gateway.label}</span>
-          {gateway.isActive && <span className="pill pill-green"><CheckCircle2 size={12} /> Active</span>}
-          {!gateway.isActive && gateway.configured && <span className="pill pill-gray">Configured</span>}
-          {!gateway.implemented && <span className="pill pill-amber">Not yet supported for sending</span>}
+          {gateway.isActive && <span className="pill pill-green"><CheckCircle2 size={12} /> Active · sends first</span>}
+          {!gateway.isActive && gateway.configured && gateway.useAsBackup && <span className="pill pill-blue">Backup</span>}
+          {!gateway.isActive && gateway.configured && !gateway.useAsBackup && <span className="pill pill-gray">Configured · not used</span>}
         </div>
         {gateway.updatedAt && (
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Updated {new Date(gateway.updatedAt).toLocaleString()}</span>
@@ -114,6 +148,35 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
           </div>
         ))}
 
+        {gateway.configured && (
+          <div className="field">
+            <label className="label" htmlFor={`${gateway.provider}-test-phone`}>Test it</label>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                id={`${gateway.provider}-test-phone`}
+                className="input"
+                style={{ flex: '1 1 180px' }}
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                placeholder="Your phone, e.g. 0712345678"
+                inputMode="tel"
+              />
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={busy || !testPhone.trim()}
+                onClick={() => testMutation.mutate(true)}
+                title="Sends a real SMS through this gateway only"
+              >
+                {testMutation.isPending && testMutation.variables ? <AppLoader size={18} /> : <Send size={14} />} Send test SMS
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => testMutation.mutate(false)}>
+                {testMutation.isPending && !testMutation.variables ? <AppLoader size={18} /> : <FlaskConical size={14} />} Check balance only
+              </button>
+            </div>
+          </div>
+        )}
+
         {testResult && (
           <div
             className="text-sm"
@@ -129,19 +192,21 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
         )}
 
         <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginTop: 4 }}>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
             <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
               {saveMutation.isPending ? <AppLoader size={18} /> : <Save size={14} />} Save
             </button>
-            <button
-              type="button"
-              className="btn btn-soft btn-sm"
-              disabled={busy || !gateway.configured}
-              onClick={() => testMutation.mutate()}
-              title={!gateway.configured ? 'Save credentials first' : undefined}
-            >
-              {testMutation.isPending ? <AppLoader size={18} /> : <FlaskConical size={14} />} Test connection
-            </button>
+            {gateway.configured && !gateway.isActive && (
+              <label className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--ink-2)' }}>
+                <input
+                  type="checkbox"
+                  checked={gateway.useAsBackup}
+                  disabled={busy}
+                  onChange={(e) => backupMutation.mutate(e.target.checked)}
+                />
+                Use as backup
+              </label>
+            )}
           </div>
           {gateway.isActive ? (
             <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => deactivateMutation.mutate()}>
@@ -151,8 +216,8 @@ function GatewayCard({ gateway }: { gateway: SmsGatewaySummary }) {
             <button
               type="button"
               className="btn btn-soft btn-sm"
-              disabled={busy || !gateway.implemented || !gateway.configured}
-              title={!gateway.implemented ? 'This provider is not yet wired up for sending' : !gateway.configured ? 'Save all required fields first' : undefined}
+              disabled={busy || !gateway.configured}
+              title={!gateway.configured ? 'Save all required fields first' : undefined}
               onClick={() => activateMutation.mutate()}
             >
               {activateMutation.isPending ? <AppLoader size={18} /> : <PlugZap size={14} />} Set as active

@@ -5,6 +5,8 @@ export interface ProviderField {
   label: string;
   secret: boolean;
   placeholder?: string;
+  /** Not needed to send (e.g. Africa's Talking's sender ID falls back to the shared one). */
+  optional?: boolean;
 }
 
 /**
@@ -21,9 +23,9 @@ export const PROVIDER_FIELDS: Record<SmsProvider, ProviderField[]> = {
     { key: 'shortcode', label: 'Shortcode / Sender ID', secret: false },
   ],
   AFRICAS_TALKING: [
-    { key: 'username', label: 'Username', secret: false },
+    { key: 'username', label: 'Username', secret: false, placeholder: 'sandbox for testing' },
     { key: 'apiKey', label: 'API Key', secret: true },
-    { key: 'senderId', label: 'Sender ID (optional)', secret: false },
+    { key: 'senderId', label: 'Sender ID (optional)', secret: false, optional: true },
   ],
   TWILIO: [
     { key: 'accountSid', label: 'Account SID', secret: false },
@@ -38,15 +40,9 @@ export const PROVIDER_LABELS: Record<SmsProvider, string> = {
   TWILIO: 'Twilio',
 };
 
-/** Providers with an actual send client wired up (see modules/sms/). Others can be configured/tested but not activated yet. */
-export const IMPLEMENTED_PROVIDERS: SmsProvider[] = ['ADVANTA'];
-
-export function isProviderImplemented(provider: SmsProvider): boolean {
-  return IMPLEMENTED_PROVIDERS.includes(provider);
-}
-
+/** Every provider has a send driver (modules/sms/drivers.ts); optional fields aren't required. */
 export function requiredFieldsPresent(provider: SmsProvider, fields: Record<string, string>): boolean {
-  return PROVIDER_FIELDS[provider].every((f) => Boolean(fields[f.key]?.trim()));
+  return PROVIDER_FIELDS[provider].every((f) => f.optional || Boolean(fields[f.key]?.trim()));
 }
 
 /** Masks secret fields for API responses - e.g. "a03277821205" -> "••••••••1205". Non-secret fields pass through untouched. */

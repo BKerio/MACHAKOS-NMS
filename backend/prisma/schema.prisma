@@ -855,6 +855,7 @@ model SmsMessage {
   channel           String   @default("SMS")           // SMS | WHATSAPP
   category          String   @default("MANUAL")       // MANUAL | AUTO_PARTNER | SURVEILLANCE
   status            String   @default("SENT")          // SENT | FAILED
+  provider          String?                            // gateway that sent it: ADVANTA | AFRICAS_TALKING | TWILIO | ADVANTA_ENV
   providerMessageId String?  @map("provider_message_id")
   error             String?  @db.Text
   groupLabel        String?  @map("group_label")       // e.g. recipient group / niche tag
@@ -892,11 +893,11 @@ model SmsTemplate {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SmsGateway - DB-backed, encrypted credentials per SMS provider, configured
-// from the admin Bulk SMS settings UI. Exactly one row may be isActive at a
-// time (enforced in SmsGatewayService, not the DB) - that's the provider
-// POST /sms/send actually sends through. Only ADVANTA has a real client
-// wired up right now; other providers can be configured/tested ahead of
-// their client shipping. See modules/settings/sms-gateway.service.ts.
+// from the admin SMS Gateway settings. Exactly one row may be isActive at a
+// time (enforced in SmsGatewayService, not the DB): every SMS (login codes,
+// bulk, alerts) goes through it first, then through the other configured
+// gateways marked useAsBackup, then the ADVANTA_* env account. See
+// modules/settings/sms-gateway.service.ts and modules/sms/drivers.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 model SmsGateway {
@@ -904,6 +905,7 @@ model SmsGateway {
   provider    SmsProvider @unique
   configEnc   String      @db.Text                      // AES-256-GCM JSON blob of credential fields
   isActive    Boolean     @default(false) @map("is_active")
+  useAsBackup Boolean     @default(true) @map("use_as_backup") // tried when the active gateway can't send
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
   updatedById String?     @map("updated_by_id")          // soft link (no FK) to the admin who last saved it

@@ -88,11 +88,24 @@ export const settingsRoutes: FastifyPluginAsync = async (app: FastifyInstance) =
     return reply.send({ ok: true, data });
   });
 
+  app.post('/sms-gateways/:provider/backup', async (request, reply) => {
+    const params = providerParamSchema.safeParse(request.params);
+    if (!params.success) throw new BadRequestError(params.error.issues[0].message);
+    const body = z.object({ useAsBackup: z.boolean() }).safeParse(request.body);
+    if (!body.success) throw new BadRequestError('useAsBackup must be true or false');
+
+    const data = await smsGateway.setBackup(params.data.provider, body.data.useAsBackup, request.user.userId);
+    return reply.send({ ok: true, data });
+  });
+
+  // Checks the credentials; with { phone } also sends a real test SMS through this provider alone.
   app.post('/sms-gateways/:provider/test', async (request, reply) => {
     const params = providerParamSchema.safeParse(request.params);
     if (!params.success) throw new BadRequestError(params.error.issues[0].message);
+    const body = z.object({ phone: z.string().optional() }).safeParse(request.body ?? {});
+    if (!body.success) throw new BadRequestError('phone must be text');
 
-    const data = await smsGateway.testConnection(params.data.provider);
+    const data = await smsGateway.testConnection(params.data.provider, body.data.phone, request.user.userId);
     return reply.send({ ok: true, data });
   });
 };

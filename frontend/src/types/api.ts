@@ -213,6 +213,7 @@ export interface SmsGatewayField {
   label: string;
   secret: boolean;
   placeholder?: string;
+  optional?: boolean;
 }
 
 export interface SmsGatewaySummary {
@@ -221,9 +222,33 @@ export interface SmsGatewaySummary {
   implemented: boolean;
   configured: boolean;
   isActive: boolean;
+  /** Tried when the active gateway can't send. */
+  useAsBackup: boolean;
   fields: SmsGatewayField[];
   values: Record<string, string>;
   updatedAt: string | null;
+}
+
+/** A logged SMS (GET /sms/messages). */
+export interface SmsLogEntry {
+  id: string;
+  recipient: string;
+  message: string;
+  category: string;
+  status: 'SENT' | 'FAILED';
+  provider: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+/** POST /sms/send result. */
+export interface BulkSmsResult {
+  total: number;
+  duplicatesRemoved: number;
+  sent: number;
+  failed: number;
+  byProvider: Record<string, number>;
+  errors: { number: string; error: string }[];
 }
 
 /** GET/PUT /settings/push-gateway - the Firebase gateway new-case mobile alerts send through. */

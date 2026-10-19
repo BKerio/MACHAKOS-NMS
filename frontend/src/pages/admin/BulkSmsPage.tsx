@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   MessageSquareText as ChatText,
   Send as PaperPlaneRight,
+  History,
 } from 'lucide-react';
 import AppLoader from '@/components/shared/AppLoader';
 import api from '@/api/client';
-import { Incident } from '@/types/api';
+import { BulkSmsResult, Incident, SmsLogEntry } from '@/types/api';
 import { useNotificationStore } from '@/stores/notificationStore';
 
 // Canned starting points for common alert types. Purely client-side text -
@@ -46,6 +47,16 @@ function fillFromCase(body: string, c: Incident): string {
   return body.replace(/\{\{(\w+)\}\}/g, (_m, k) => vars[k] ?? '').replace(/\s{2,}/g, ' ').trim();
 }
 
+const GATEWAY_LABELS: Record<string, string> = {
+  ADVANTA: 'Advanta',
+  AFRICAS_TALKING: "Africa's Talking",
+  TWILIO: 'Twilio',
+  ADVANTA_ENV: 'Advanta (server)',
+};
+const gatewayLabel = (key: string | null) => (key ? GATEWAY_LABELS[key] ?? key : '-');
+
+const CATEGORY_LABELS: Record<string, string> = { OTP: 'Login code', MANUAL: 'Bulk', TEST: 'Test', SYSTEM: 'System' };
+
 const inputCls = 'w-full border rounded-xl px-4 py-3 text-sm font-semibold outline-none transition-all';
 const inputStyle = { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--ink)' };
 const card = 'rounded-xl border shadow-sm';
@@ -57,7 +68,14 @@ function BulkSmsPage() {
   const [message, setMessage] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState('');
   const [numbersText, setNumbersText] = useState('');
-  const [lastResult, setLastResult] = useState<{ total: number; sent: number; failed: number; errors: { number: string; error: string }[] } | null>(null);
+  const [lastResult, setLastResult] = useState<BulkSmsResult | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: recent = [], isLoading: recentLoading } = useQuery({
+    queryKey: ['sms', 'messages'],
+    queryFn: async () => (await api.get('/sms/messages?limit=50')).data.data as SmsLogEntry[],
+    refetchInterval: 30_000,
+  });
 
   const { data: cases = [] } = useQuery({
     queryKey: ['sms', 'cases'],
@@ -80,14 +98,16 @@ function BulkSmsPage() {
   const sendMutation = useMutation({
     mutationFn: () => api.post('/sms/send', { message, numbers: parsedNumbers }),
     onSuccess: (res) => {
-      const result = res.data.data as { total: number; sent: number; failed: number; errors: { number: string; error: string }[] };
+      const result = res.data.data as BulkSmsResult;
       setLastResult(result);
-      const firstError = result.errors?.[0];
+      queryClient.invalidateQueries({ queryKey: ['sms', 'messages'] });
+      const via = Object.entries(result.byProvider ?? {}).map(([k, n]) => `${n} via ${gatewayLabel(k)}`).join(', ');
       addNotification({
         type: result.failed > 0 ? 'warning' : 'success',
-        title: 'SMS Sent',
-        message: `${result.sent}/${result.total} delivered${result.failed ? `, ${result.failed} failed` : ''}.`
-          + (firstError ? ` (${firstError.number}: ${firstError.error})` : ''),
+        title: result.sent > 0 ? 'SMS sent' : 'SMS not sent',
+        message: `${result.sent}/${result.total} accepted${result.failed ? `, ${result.failed} failed` : ''}`
+          + (via ? ` (${via})` : '')
+          + (result.duplicatesRemoved ? `. ${result.duplicatesRemoved} duplicate number(s) skipped.` : '.'),
       });
     },
     onError: (err: any) => {
@@ -214,6 +234,58 @@ function BulkSmsPage() {
             {sendMutation.isPending ? 'Sending…' : 'Send SMS'}
           </button>
         </div>
+      </div>
+
+      {/* Recent sends - bulk, login codes and gateway tests */}
+      <div className={`p-5 ${card}`} style={cardStyle}>
+        <div className="flex items-center gap-2 mb-4">
+          <History size={18} className="text-brand-teal" />
+          <h3 className="font-bold" style={{ color: 'var(--ink)' }}>Recent SMS</h3>
+          <span className="text-xs ml-auto" style={{ color: 'var(--muted)' }}>Bulk sends, crew login codes and gateway tests</span>
+        </div>
+        {recentLoading ? (
+          <div className="py-6 flex justify-center"><AppLoader size={24} /></div>
+        ) : recent.length === 0 ? (
+          <p className="text-sm" style={{ color: 'var(--muted)' }}>Nothing sent yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ color: 'var(--muted)' }} className="text-left">
+                  <th className="py-2 pr-3 font-bold">When</th>
+                  <th className="py-2 pr-3 font-bold">To</th>
+                  <th className="py-2 pr-3 font-bold">Type</th>
+                  <th className="py-2 pr-3 font-bold">Status</th>
+                  <th className="py-2 pr-3 font-bold">Gateway</th>
+                  <th className="py-2 font-bold">Message / reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((m) => (
+                  <tr key={m.id} className="border-t align-top" style={{ borderColor: 'var(--border)', color: 'var(--ink)' }}>
+                    <td className="py-2 pr-3 whitespace-nowrap tabular-nums">
+                      {new Date(m.createdAt).toLocaleString('en-GB', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="py-2 pr-3 whitespace-nowrap tabular-nums">{m.recipient}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{CATEGORY_LABELS[m.category] ?? m.category}</td>
+                    <td className="py-2 pr-3">
+                      <span className={`pill ${m.status === 'SENT' ? 'pill-green' : 'pill-red'}`} style={{ fontSize: 10, padding: '1px 6px' }}>
+                        {m.status === 'SENT' ? 'Sent' : 'Failed'}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{gatewayLabel(m.provider)}</td>
+                    <td className="py-2" style={{ maxWidth: 420 }}>
+                      <span className="line-clamp-2">{m.message}</span>
+                      {m.error && (
+                        <span className="block mt-0.5" style={{ color: m.status === 'SENT' ? 'var(--muted)' : 'var(--red)' }}>{m.error}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

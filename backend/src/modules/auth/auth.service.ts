@@ -236,13 +236,18 @@ export class AuthService {
     await store.set(cooldownKey, '1', OTP_COOLDOWN_SECONDS);
 
     try {
-      await new SmsGatewayService(this.app).sendSystemSms(phone, `Your NMS login code is ${code}. It expires in 5 minutes. Do not share this code.`);
+      // Fails over between gateways; logged without the code itself.
+      await new SmsGatewayService(this.app).send(
+        phone,
+        `Your NMS login code is ${code}. It expires in 5 minutes. Do not share this code.`,
+        { category: 'OTP', logText: 'Login code (hidden)', sentById: user.id },
+      );
     } catch (err) {
       // The code is worthless if the text never left, and keeping the cooldown
       // would lock them out for a minute over a gateway fault they can't fix.
       await store.del(otpKey, cooldownKey);
-      this.app.log.error({ err, phone }, 'OTP SMS send failed');
-      throw new AppError('We could not send the SMS just now. Please try again in a moment.', 502);
+      this.app.log.error({ err, phone }, 'OTP SMS send failed on every gateway');
+      throw new AppError('We could not send the SMS just now. Please try again in a moment, or tell dispatch.', 502);
     }
 
     return { ok: true, expiresIn: OTP_TTL_SECONDS };

@@ -4,21 +4,21 @@ import { requireRole } from '../shared/guards/requireRole.js';
 import { Role } from '../shared/types/index.js';
 import { BadRequestError } from '../shared/errors/AppError.js';
 import { SmsGatewayService } from '../modules/settings/sms-gateway.service.js';
-import { sendAdvantaSmsWithCreds, type AdvantaCreds } from './sms.js';
 
 // Dispatchers send bulk SMS too (e.g. alerting callers); gateway settings stay admin-only elsewhere.
 const smsRoles = [Role.DISPATCHER, Role.ADMIN, Role.SUPER_ADMIN];
 
+const MAX_RECIPIENTS = 1000;
+
 const sendSchema = z.object({
-  message: z.string().min(1, 'Message is required'),
-  numbers: z.array(z.string()).min(1, 'At least one recipient number is required'),
+  message: z.string().trim().min(1, 'Message is required').max(918, 'Message is too long (6 SMS segments max)'),
+  numbers: z.array(z.string()).min(1, 'At least one recipient number is required').max(MAX_RECIPIENTS, `At most ${MAX_RECIPIENTS} numbers per send`),
 });
 
 /**
- * Bulk SMS route: sends a message to a manually-supplied list of numbers
- * through whichever gateway Admin → Bulk SMS → Gateway Settings has marked
- * active (see modules/settings/sms-gateway.service.ts). Distinct from the
- * env-based sendAdvantaSms used for system notifications like OTP.
+ * Bulk SMS: sends a message to a list of numbers through the SMS gateways
+ * (active first, then backups - see SmsGatewayService), and lists what was
+ * sent recently.
  */
 export const smsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   const smsGateway = new SmsGatewayService(app);
@@ -29,28 +29,20 @@ export const smsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post('/send', async (request, reply) => {
     const parsed = sendSchema.safeParse(request.body);
     if (!parsed.success) throw new BadRequestError(parsed.error.issues[0].message);
-    const { message, numbers } = parsed.data;
 
-    const active = await smsGateway.getActiveClient();
-    if (!active) {
-      throw new BadRequestError('No SMS gateway is configured. Set one up in Admin → Bulk SMS → Gateway Settings.');
+    if (!(await smsGateway.isEnabled())) {
+      throw new BadRequestError('No SMS gateway is set up. Add one under Admin → SMS Gateway.');
     }
 
-    let sent = 0;
-    let failed = 0;
-    const errors: { number: string; error: string }[] = [];
-    for (const number of numbers) {
-      try {
-        await sendAdvantaSmsWithCreds(active.fields as unknown as AdvantaCreds, number, message);
-        sent++;
-      } catch (err: any) {
-        failed++;
-        const errorMessage = err?.message || 'Unknown error';
-        errors.push({ number, error: errorMessage });
-        app.log.warn({ err, number }, 'SMS send failed');
-      }
-    }
+    const result = await smsGateway.sendMany(parsed.data.numbers, parsed.data.message, {
+      category: 'MANUAL',
+      sentById: request.user.userId,
+    });
+    return reply.send({ ok: true, data: result });
+  });
 
-    return reply.send({ ok: true, data: { total: numbers.length, sent, failed, errors } });
+  app.get<{ Querystring: { limit?: string } }>('/messages', async (request, reply) => {
+    const data = await smsGateway.recent(Number(request.query.limit) || 50);
+    return reply.send({ ok: true, data });
   });
 };
